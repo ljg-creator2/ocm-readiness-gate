@@ -305,6 +305,7 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 .hm-cell[data-s="1"]{background:var(--green-bg);color:var(--green);border:1px solid #A8D5B8}
 .hm-cell[data-s="2"]{background:var(--amber-bg);color:var(--amber);border:1px solid #E0C97A}
 .hm-cell[data-s="3"]{background:var(--red-bg);color:var(--red);border:1px solid #DCA8A8}
+.hm-cell[data-s="4"]{background:var(--bg-dark);color:var(--ink-35);border:1px solid var(--border-md);text-decoration:line-through;opacity:0.6}
 .note-dot{position:absolute;top:3px;right:4px;width:4px;height:4px;border-radius:50%;background:var(--navy)}
 .hm-legend{display:flex;align-items:center;gap:16px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap}
 .hm-legend-label{font-size:10px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:var(--ink-60);margin-right:3px}
@@ -312,7 +313,11 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 .legend-swatch{width:11px;height:11px;border-radius:2px;flex-shrink:0}
 
 /* Risk flags */
-.risk-flag{border-left:3px solid var(--red);background:var(--red-bg);border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin-bottom:12px}
+.risk-flag{border-left:3px solid var(--red);background:var(--red-bg);border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin-bottom:12px;color:#2c1a1a}
+[data-theme="dark"] .risk-flag{background:#3a1a1a;color:#f0dada}
+[data-theme="dark"] .rf-gate-tag{background:#4a2222;color:#f0dada}
+[data-theme="dark"] .rf-row{color:#f0dada}
+[data-theme="dark"] .rf-row strong{color:#f5c0c0}
 .risk-flag:last-child{margin-bottom:0}
 .rf-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .rf-number{font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--red)}
@@ -703,7 +708,13 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
         <button class="nav-btn" onclick="showTab('adoption',this)">Adoption Scoring</button>
         <button class="nav-btn" onclick="showTab('adopthm',this)">Adoption Map</button>
       </div>
-      <button class="btn-export" onclick="exportSummary()">Export Summary</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" style="padding:5px 10px">
+          <span class="theme-icon" id="proj-theme-icon"></span>
+          <span class="theme-label" id="proj-theme-label"></span>
+        </button>
+        <button class="btn-export" onclick="exportSummary()">Export Summary</button>
+      </div>
     </div>
   </div>
 
@@ -770,6 +781,7 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
             <span class="legend-item"><span class="legend-swatch" style="background:var(--green-bg);border:1px solid #A8D5B8"></span>Complete</span>
             <span class="legend-item"><span class="legend-swatch" style="background:var(--amber-bg);border:1px solid #E0C97A"></span>Partial</span>
             <span class="legend-item"><span class="legend-swatch" style="background:var(--red-bg);border:1px solid #DCA8A8"></span>Blocking</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:var(--bg-dark);border:1px solid var(--border-md);opacity:0.6"></span>N/A</span>
             <span class="legend-item" style="margin-left:auto;font-size:11px;font-style:italic;color:var(--ink-35)">Filled dot = note attached</span>
           </div>
         </div>
@@ -913,7 +925,7 @@ const RISK_CONSEQUENCES={
   g3:['TTT cannot be scheduled. End user training timeline is at risk.','Unvalidated content will be delivered to end users. Accuracy risk is critical.','Tech transfer date unknown. TTT and end user training cannot be sequenced.','TTT scheduling is blocked. Compression to go-live is likely.','Training may not reflect current system state. End users trained on incorrect workflows.','Materials cannot be finalized without active development underway.'],
   g4:['End users receive training without a validated instruction baseline. Adoption risk is critical.','Environment instability means end users are trained on an inaccurate system.','User list gaps create coverage failures at go-live.','Date uncertainty prevents end user training scheduling.','No shared post-release monitoring plan between Implementation and Training.','End users will have no structured support at go-live.']
 };
-const WORKSTREAMS=['OCM Implementation','Development','Project Management','Agency SMEs','Training Environment'];
+const WORKSTREAMS=['OCM Implementation','App Dev','Functional','UAT','PMO','Agency','Training Environment'];
 const GATE_LABELS=['Post-Requirements','Post-Design','Post-Dev / Pre-UAT','Post-UAT / Pre-Go-Live'];
 const ADOPTION_FACTORS=[
   {key:'resistance',label:'Resistance Signals',desc:'Signals surfaced via stakeholder engagement'},
@@ -951,10 +963,13 @@ function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   theme=t;
   localStorage.setItem('ocm_theme',t);
-  const icon=document.getElementById('theme-icon');
-  const label=document.getElementById('theme-label');
-  if(t==='dark'){icon.textContent='☀';label.textContent='Light';}
-  else{icon.innerHTML='&#9790;';label.textContent='Dark';}
+  ['','proj-'].forEach(prefix=>{
+    const icon=document.getElementById(prefix+'theme-icon');
+    const label=document.getElementById(prefix+'theme-label');
+    if(!icon)return;
+    if(t==='dark'){icon.textContent='☀';label.textContent='Light';}
+    else{icon.innerHTML='&#9790;';label.textContent='Dark';}
+  });
 }
 function toggleTheme(){applyTheme(theme==='light'?'dark':'light');}
 applyTheme(theme);
@@ -1381,13 +1396,14 @@ function setGate(gid,idx,color){
   }
   // Full re-render for button state accuracy
   renderGates();
-  updateStatus();updateKPIs();touch();schedSave();
+  if(document.getElementById('flags-panel'))renderFlags();
+  updateStatus();updateKPIs();renderOverview();touch();schedSave();
 }
 
 // ════════════════════════════════════════════════════════
 // PROJECT — DEPENDENCY HM
 // ════════════════════════════════════════════════════════
-const HM_STATUS=['Not Set','Complete','Partial','Blocking'];
+const HM_STATUS=['Not Set','Complete','Partial','Blocking','N/A'];
 function renderDepHM(){
   const p=getProj();if(!p)return;
   const t=document.getElementById('dep-heatmap');
@@ -1408,7 +1424,7 @@ function renderDepHM(){
 }
 function cycleHMCell(k){
   const p=getProj();if(!p)return;
-  p.depHM[k]=((p.depHM[k]||0)+1)%4;
+  p.depHM[k]=((p.depHM[k]||0)+1)%5;
   renderDepHM();touch();schedSave();
 }
 document.addEventListener('click',e=>{
@@ -1441,6 +1457,7 @@ function getFlags(){
   return f;
 }
 function renderFlags(){
+  const p=getProj();
   const f=getFlags(),pan=document.getElementById('flags-panel');
   if(!f.length){
     pan.innerHTML='<div class="no-flags-state"><div class="no-flags-rule"></div><p class="no-flags-text">No active risk flags. Mark gate items Incomplete in the Gate Tracker to generate flags.</p></div>';
@@ -1741,57 +1758,171 @@ function exportSummary(){
   const days=document.getElementById('days-num').textContent;
   const flags=getFlags();
   const avg=adkarAvg(p);
-  let t='OCM READINESS GATE — EXECUTIVE SUMMARY\n';
-  t+='Providence Consulting Firm | CPTM · ATD Master Trainer · Prosci ADKAR-Aligned\n';
-  t+='─'.repeat(60)+'\n\n';
-  t+=`Project:      ${p.name}\nAgency:       ${p.agency}\nSDLC Phase:   ${p.phase||'—'}\nGo-Live:      ${p.golive?fmtDate(p.golive):'—'}   (${days} days remaining)\nGenerated:    ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}\n\n`;
-  t+='GATE READINESS\n'+'─'.repeat(45)+'\n';
-  GATES.forEach(gate=>{
+  const genDate=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const overallGatePct=gateScore(p)??0;
+  const statusInfo=projStatus(p);
+
+  // Gate rows HTML
+  const gateRowsHTML=GATES.map(gate=>{
     const tot=gate.items.length;
     const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
-    const pct=Math.round(grn/tot*100);
-    t+=`\n${gate.label} — ${gate.sub}: ${pct}% (${grn}/${tot})\n`;
-    gate.items.forEach((item,i)=>{
+    const pct=tot?Math.round(grn/tot*100):0;
+    const barColor=pct>=80?'#1D6840':pct>=50?'#8A5C00':'#8B1A1A';
+    const itemsHTML=gate.items.map((item,i)=>{
       const s=p.gateState[gate.id+'_'+i];
-      const sym=s==='green'?'[COMPLETE]   ':s==='yellow'?'[PARTIAL]    ':s==='red'?'[INCOMPLETE] ':'[NOT SET]    ';
-      t+=`  ${sym} ${item}\n`;
-    });
-  });
-  t+='\n\nADKAR ASSESSMENT\n'+'─'.repeat(45)+'\n';
-  t+=`Overall Score: ${avg}/5\n\n`;
-  ADKAR_DIMS.forEach(d=>{t+=`${d.word} (${d.letter}): ${p.adkarScores[d.key]}/5\n`;if(p.adkarNotes[d.key])t+=`  Notes: ${p.adkarNotes[d.key]}\n`;});
-  t+='\n\nACTIVE RISK FLAGS ('+flags.length+')\n'+'─'.repeat(45)+'\n';
-  if(!flags.length){t+='No active risk flags.\n';}
-  else{flags.forEach((fl,i)=>{
-    t+=`\nFlag ${i+1}: ${fl.gate} — ${fl.sub}\n  Gap:          ${fl.item}\n  Consequence:  ${fl.consequence}\n`;
-    const ow=document.getElementById('own_'+fl.key),du=document.getElementById('due_'+fl.key);
-    if(ow?.value)t+=`  Owner:        ${ow.value}\n`;
-    if(du?.value)t+=`  Resolution:   ${du.value}\n`;
-  });}
-  t+='\n\nSTAKEHOLDER ASSESSMENT SUMMARY\n'+'─'.repeat(45)+'\n';
-  if(!p.stakeholders.length){t+='No stakeholder groups scored.\n';}
-  else{p.stakeholders.forEach(sh=>{
-    const sc=adoptScore(sh.factors),{tier}=adoptTier(sc);
-    t+=`\n${sh.name}\n  Adoption Likelihood:     ${sc}% — ${tier}\n`;
-    t+=`  Measurement Framework:   ${badgeLabel(kirkReady(sh))}\n`;
-    t+=`  Reinforcement Plan:      ${badgeLabel(reinReady(sh))}\n`;
-    const los=sh.objectives.filter(o=>o.trim());
-    if(los.length){t+=`  Learning Objectives (${los.length}):\n`;los.forEach((o,i)=>{t+=`    ${i+1}. ${o}\n`;});}
-    ADOPTION_FACTORS.forEach(f=>{t+=`  ${f.label}: ${sh.factors[f.key]}/5 — ${FACTOR_DESC[sh.factors[f.key]]}\n`;});
-    if(sh.kirk.L4.outcome)t+=`  Kirkpatrick L4 Outcome:  ${sh.kirk.L4.outcome}\n`;
-    if(sh.kirk.L4.metric)t+=`  Success Metric:          ${sh.kirk.L4.metric}\n`;
-    if(sh.rein.owner)t+=`  Reinforcement Owner:     ${sh.rein.owner}\n`;
-    if(sh.rein.intervals.length)t+=`  Check-In Intervals:      ${sh.rein.intervals.join(', ')}\n`;
-    if(sh.rein.escalation)t+=`  Escalation Path:         ${sh.rein.escalation}\n`;
-  });}
-  t+='\n'+'─'.repeat(60)+'\nGenerated by OCM Readiness Gate | Providence Consulting Firm\nCPTM · ATD Master Trainer · Prosci ADKAR-Aligned Methodology\n';
-  const blob=new Blob([t],{type:'text/plain'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`OCM-Readiness-Gate-${p.name.replace(/[^a-z0-9]/gi,'-')}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
+      const bg=s==='green'?'#EAF4EE':s==='yellow'?'#FDF3DC':s==='red'?'#FAE8E8':'#f0ede6';
+      const color=s==='green'?'#1D6840':s==='yellow'?'#8A5C00':s==='red'?'#8B1A1A':'#666';
+      const label=s==='green'?'Complete':s==='yellow'?'Partial':s==='red'?'Incomplete':'Not Set';
+      return`<tr><td style="padding:6px 10px;font-size:11px;border-bottom:1px solid #e8e2d4;color:#333">${item}</td><td style="padding:6px 10px;text-align:center;border-bottom:1px solid #e8e2d4"><span style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:${bg};color:${color};padding:3px 8px;border-radius:2px">${label}</span></td></tr>`;
+    }).join('');
+    return`<div style="margin-bottom:20px;break-inside:avoid">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div><span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#0C1F3F">${gate.label}</span><span style="font-size:10px;color:#888;margin-left:8px">— ${gate.sub}</span></div>
+        <span style="font-size:12px;font-weight:700;color:${barColor}">${pct}% (${grn}/${tot})</span>
+      </div>
+      <div style="background:#e8e2d4;border-radius:3px;height:6px;margin-bottom:10px"><div style="background:${barColor};height:6px;border-radius:3px;width:${pct}%"></div></div>
+      <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:4px;overflow:hidden;border:1px solid #e0d9cc">${itemsHTML}</table>
+    </div>`;
+  }).join('');
+
+  // Flags HTML
+  const flagsHTML=!flags.length
+    ?'<p style="font-size:12px;color:#888;font-style:italic">No active risk flags.</p>'
+    :flags.map((fl,i)=>{
+      const fd=p.flagData&&p.flagData[fl.key];
+      return`<div style="border-left:3px solid #8B1A1A;background:#FAE8E8;padding:12px 14px;margin-bottom:10px;border-radius:0 4px 4px 0;break-inside:avoid">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#8B1A1A;margin-bottom:4px">Flag ${i+1} — ${fl.gate}</div>
+        <div style="font-size:12px;font-weight:600;color:#2c1a1a;margin-bottom:3px">${fl.item}</div>
+        <div style="font-size:11px;color:#555;margin-bottom:6px"><em>Consequence:</em> ${fl.consequence}</div>
+        ${fd?.owner?`<div style="font-size:11px;color:#333"><strong>Owner:</strong> ${fd.owner}</div>`:''}
+        ${fd?.due?`<div style="font-size:11px;color:#333"><strong>Resolution:</strong> ${fmtDate(fd.due)}</div>`:''}
+      </div>`;
+    }).join('');
+
+  // ADKAR HTML
+  const adkarHTML=ADKAR_DIMS.map(d=>{
+    const v=p.adkarScores[d.key];
+    const col=v>=4?'#1D6840':v===3?'#8A5C00':v===2?'#7a5500':'#8B1A1A';
+    const bg=v>=4?'#EAF4EE':v===3?'#FDF3DC':v===2?'#FDF3DC':'#FAE8E8';
+    const pct=Math.round(v/5*100);
+    return`<div style="flex:1;min-width:120px;background:#fff;border:1px solid #e0d9cc;border-radius:6px;padding:12px;text-align:center;break-inside:avoid">
+      <div style="width:36px;height:36px;border-radius:50%;background:#0C1F3F;color:#fff;font-family:Georgia,serif;font-size:18px;font-weight:700;line-height:36px;margin:0 auto 6px">${d.letter}</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0C1F3F;margin-bottom:8px">${d.word}</div>
+      <div style="background:#e8e2d4;border-radius:3px;height:5px;margin-bottom:6px"><div style="background:${col};height:5px;border-radius:3px;width:${pct}%"></div></div>
+      <div style="font-size:16px;font-weight:700;color:${col};font-family:Georgia,serif">${v}<span style="font-size:11px;color:#999">/5</span></div>
+      ${p.adkarNotes[d.key]?`<div style="font-size:10px;color:#666;margin-top:6px;font-style:italic;text-align:left">${p.adkarNotes[d.key]}</div>`:''}
+    </div>`;
+  }).join('');
+
+  // Stakeholders HTML
+  const shHTML=!p.stakeholders.length
+    ?'<p style="font-size:12px;color:#888;font-style:italic">No stakeholder groups assessed.</p>'
+    :p.stakeholders.map(sh=>{
+      const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
+      const scColor=sc>=80?'#1D6840':sc>=60?'#8A5C00':sc>=40?'#7a5500':'#8B1A1A';
+      const factorsHTML=ADOPTION_FACTORS.map(f=>{
+        const v=sh.factors[f.key];const pct=Math.round(v/5*100);
+        const fc=v>=4?'#1D6840':v>=3?'#8A5C00':v>=2?'#7a5500':'#8B1A1A';
+        return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <div style="font-size:10px;color:#555;width:130px;flex-shrink:0">${f.label}</div>
+          <div style="flex:1;background:#e8e2d4;border-radius:2px;height:5px"><div style="background:${fc};height:5px;border-radius:2px;width:${pct}%"></div></div>
+          <div style="font-size:10px;font-weight:700;color:${fc};width:22px;text-align:right">${v}/5</div>
+        </div>`;
+      }).join('');
+      const los=sh.objectives.filter(o=>o.trim());
+      return`<div style="border:1px solid #e0d9cc;border-radius:6px;overflow:hidden;margin-bottom:14px;break-inside:avoid">
+        <div style="background:#0C1F3F;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:Georgia,serif;font-size:14px;font-weight:600;color:#fff">${sh.name}</span>
+          <span style="font-size:11px;font-weight:700;color:${scColor};background:${sc>=80?'#EAF4EE':sc>=60?'#FDF3DC':'#FAE8E8'};padding:3px 10px;border-radius:2px">${sc}% — ${tier}</span>
+        </div>
+        <div style="padding:12px 14px">
+          ${factorsHTML}
+          ${los.length?`<div style="margin-top:10px;border-top:1px solid #e8e2d4;padding-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0C1F3F;margin-bottom:5px">Learning Objectives</div>${los.map((o,i)=>`<div style="font-size:11px;color:#333;margin-bottom:3px">${i+1}. ${o}</div>`).join('')}</div>`:''}
+          <div style="display:flex;gap:12px;margin-top:10px;border-top:1px solid #e8e2d4;padding-top:8px">
+            <div style="font-size:10px;color:#555">Measurement: <strong>${badgeLabel(kirkReady(sh))}</strong></div>
+            <div style="font-size:10px;color:#555">Reinforcement: <strong>${badgeLabel(reinReady(sh))}</strong></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+  const statusColor=statusInfo.cls==='on-track'?'#1D6840':statusInfo.cls==='at-risk'?'#8A5C00':'#8B1A1A';
+  const statusBg=statusInfo.cls==='on-track'?'#EAF4EE':statusInfo.cls==='at-risk'?'#FDF3DC':'#FAE8E8';
+
+  const html=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>OCM Readiness — ${p.name}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;background:#F5F0E8;color:#1a1a1a;font-size:12px;line-height:1.5}
+  .page{max-width:820px;margin:0 auto;padding:32px 24px 48px}
+  .hdr{background:#0C1F3F;border-bottom:4px solid #B8922A;padding:20px 28px;display:flex;align-items:center;justify-content:space-between}
+  .hdr-firm{font-family:Georgia,serif;font-size:22px;font-weight:700;color:#fff}
+  .hdr-product{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:3px}
+  .hdr-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right}
+  .meta{background:#fff;border:1px solid #ddd;border-radius:6px;padding:16px 20px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+  .meta-item label{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#888;display:block;margin-bottom:3px}
+  .meta-item .val{font-family:Georgia,serif;font-size:15px;font-weight:600;color:#0C1F3F}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+  .kpi{background:#fff;border:1px solid #ddd;border-radius:6px;padding:12px 14px;text-align:center}
+  .kpi-label{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:5px}
+  .kpi-val{font-family:Georgia,serif;font-size:26px;font-weight:700;color:#0C1F3F;line-height:1}
+  .section{margin-bottom:28px}
+  .section-eyebrow{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#B8922A;margin-bottom:3px}
+  .section-title{font-family:Georgia,serif;font-size:17px;font-weight:600;color:#0C1F3F;border-bottom:2px solid #0C1F3F;padding-bottom:6px;margin-bottom:14px}
+  .adkar-row{display:flex;gap:10px;flex-wrap:wrap}
+  .footer{text-align:center;padding:20px 0 0;border-top:1px solid #ddd;font-size:10px;color:#999;letter-spacing:.06em}
+  @media print{
+    body{background:#fff}
+    .page{padding:0}
+    .hdr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .kpi,.meta,.adkar-row>div{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head><body>
+<div class="hdr">
+  <div><div class="hdr-firm">Providence Consulting Firm</div><div class="hdr-product">OCM Readiness Gate — Executive Summary</div></div>
+  <div class="hdr-date">Generated ${genDate}<br>CPTM &middot; ATD Master Trainer &middot; Prosci ADKAR-Aligned</div>
+</div>
+<div class="page">
+  <div class="meta">
+    <div class="meta-item"><label>Project</label><div class="val">${p.name}</div></div>
+    <div class="meta-item"><label>Agency / Client</label><div class="val">${p.agency||'—'}</div></div>
+    <div class="meta-item"><label>SDLC Phase</label><div class="val">${p.phase||'—'}</div></div>
+    <div class="meta-item"><label>Go-Live</label><div class="val">${p.golive?fmtDate(p.golive):'—'}</div><div style="font-size:10px;color:#888;margin-top:2px">${days} days remaining</div></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">Overall Gate Readiness</div><div class="kpi-val" style="color:${overallGatePct>=80?'#1D6840':overallGatePct>=50?'#8A5C00':'#8B1A1A'}">${overallGatePct}%</div></div>
+    <div class="kpi"><div class="kpi-label">Active Risk Flags</div><div class="kpi-val" style="color:${flags.length?'#8B1A1A':'#1D6840'}">${flags.length}</div></div>
+    <div class="kpi"><div class="kpi-label">ADKAR Score</div><div class="kpi-val">${avg}/5</div></div>
+    <div class="kpi"><div class="kpi-label">Overall Status</div><div class="kpi-val" style="font-size:14px;padding-top:6px"><span style="background:${statusBg};color:${statusColor};padding:4px 12px;border-radius:2px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase">${statusInfo.label}</span></div></div>
+  </div>
+  <div class="section">
+    <div class="section-eyebrow">SDLC Gate Tracker</div>
+    <div class="section-title">Training Readiness Gates</div>
+    ${gateRowsHTML}
+  </div>
+  <div class="section">
+    <div class="section-eyebrow">Risk Intelligence</div>
+    <div class="section-title">Active Risk Flags (${flags.length})</div>
+    ${flagsHTML}
+  </div>
+  <div class="section">
+    <div class="section-eyebrow">Prosci ADKAR Model</div>
+    <div class="section-title">Readiness Assessment — Overall ${avg}/5</div>
+    <div class="adkar-row">${adkarHTML}</div>
+  </div>
+  <div class="section">
+    <div class="section-eyebrow">Post-Training Intelligence</div>
+    <div class="section-title">Stakeholder Adoption Assessment</div>
+    ${shHTML}
+  </div>
+  <div class="footer">OCM Readiness Gate &nbsp;&middot;&nbsp; Providence Consulting Firm &nbsp;&middot;&nbsp; CPTM &middot; ATD Master Trainer &middot; Prosci ADKAR-Aligned</div>
+</div>
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`;
+
+  const w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
 }
 
 // ════════════════════════════════════════════════════════
