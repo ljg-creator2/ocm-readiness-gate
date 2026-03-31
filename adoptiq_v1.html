@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdoptIQ — Adoption Intelligence Platform</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
   --navy:#0C1F3F; --gold:#B8922A; --gold-light:#D4AC4E;
@@ -169,8 +170,13 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 
 /* Release cards */
 .card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:36px}
+.drag-handle{cursor:grab;opacity:0.35;font-size:14px;letter-spacing:2px;user-select:none;padding:2px 6px;border-radius:var(--rs);transition:opacity .15s}
+.drag-handle:hover{opacity:0.7}
+.drag-handle:active{cursor:grabbing}
 .r-card{background:var(--surface);border-radius:var(--r10);box-shadow:var(--shadow);overflow:hidden;cursor:pointer;transition:box-shadow .18s,transform .18s,background .25s;border:1px solid var(--border)}
 .r-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.r-card.dragging{opacity:0.4;transform:scale(0.97)}
+.r-card.drag-over{border-top:3px solid var(--gold);transform:translateY(2px)}
 .r-card:focus{outline:2px solid var(--gold);outline-offset:3px}
 .r-card-hd{background:var(--nav-bg);padding:15px 19px;position:relative;transition:background .25s}
 .r-card-hd::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--gold)}
@@ -259,6 +265,8 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 .proj-card-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
 .pc{background:var(--surface);border-radius:var(--r6);border:1px solid var(--border);overflow:hidden;cursor:pointer;transition:box-shadow .16s,transform .16s,background .25s}
 .pc:hover{box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+.pc.dragging{opacity:0.4;transform:scale(0.97)}
+.pc.drag-over{border-top:3px solid var(--gold);transform:translateY(2px)}
 .pc:focus{outline:2px solid var(--gold);outline-offset:2px}
 .pc-hd{background:var(--nav-bg);padding:12px 16px;position:relative;transition:background .25s}
 .pc-hd::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--gold)}
@@ -488,6 +496,10 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 .res-inp{width:100%;font-family:var(--font-b);font-size:12px;border:1px solid var(--border-md);border-radius:var(--rs);padding:5px 8px;outline:none;color:var(--ink);background:var(--surface);transition:border-color .15s,background .25s}
 .res-inp:focus{border-color:var(--navy)}
 .res-inp::placeholder{font-style:italic;color:var(--ink-35);font-weight:300}
+.res-add-btn{display:inline-block;margin-top:6px;padding:3px 10px;font-size:11px;font-family:var(--font-b);color:var(--navy);background:transparent;border:1px dashed var(--border-md);border-radius:var(--rs);cursor:pointer;transition:background .15s,border-color .15s}
+.res-add-btn:hover{background:var(--surface-2);border-color:var(--navy)}
+.res-remove-btn{position:absolute;top:2px;right:-6px;width:20px;height:20px;border:none;background:var(--red);color:#fff;border-radius:50%;font-size:14px;line-height:18px;text-align:center;cursor:pointer;padding:0;opacity:.7;transition:opacity .15s}
+.res-remove-btn:hover{opacity:1}
 .res-note{font-size:11px;font-style:italic;font-weight:300;color:var(--ink-60);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
 .res-qv{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 .res-qv-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rs);padding:9px 12px;transition:background .25s}
@@ -528,14 +540,165 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 
 /* Footer */
 .page-footer{text-align:center;padding:14px 40px;border-top:1px solid var(--border);font-size:11px;color:var(--ink-35);letter-spacing:0.06em;font-weight:500;transition:border-color .25s,color .25s}
+
+/* ── LOGIN SCREEN ── */
+#v-login{display:none;min-height:100vh;background:var(--navy);align-items:center;justify-content:center;flex-direction:column}
+#v-login.active{display:flex}
+.login-card{background:var(--surface);border-radius:var(--r10);box-shadow:var(--shadow-lg);padding:44px 40px 36px;width:100%;max-width:400px;text-align:center;border-top:4px solid var(--gold)}
+.login-logo{width:64px;height:64px;border-radius:50%;border:3px solid var(--gold);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;background:var(--navy);font-family:var(--font-d);font-size:22px;font-weight:700;color:#fff}
+.login-title{font-family:var(--font-d);font-size:24px;color:var(--ink);margin-bottom:4px}
+.login-sub{font-size:12px;color:var(--ink-60);margin-bottom:28px;letter-spacing:0.04em}
+.login-field{width:100%;margin-bottom:14px}
+.login-field label{display:block;text-align:left;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-60);margin-bottom:5px}
+.login-field input{width:100%;font-family:var(--font-b);font-size:13.5px;padding:10px 14px;border:1px solid var(--border-md);border-radius:var(--r6);background:var(--surface-2);color:var(--ink);outline:none;transition:border-color .18s}
+.login-field input:focus{border-color:var(--gold)}
+.login-btn-row{display:flex;gap:10px;margin-top:20px}
+.login-btn-row .btn-gold,.login-btn-row .btn-ghost{flex:1;padding:11px 16px}
+.login-err{font-size:12px;color:var(--red);margin-top:14px;min-height:18px}
+.login-footer{color:rgba(255,255,255,0.28);font-size:11px;margin-top:24px;letter-spacing:0.06em}
+.btn-signout{font-family:var(--font-b);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;background:transparent;color:rgba(255,255,255,0.44);border:1px solid rgba(255,255,255,0.16);padding:6px 12px;border-radius:var(--rs);cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-signout:hover{color:#fff;border-color:rgba(255,255,255,0.36)}
+
+/* ── ALERT BAR ── */
+.alert-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(184,146,42,0.18);font-size:12.5px;color:var(--ink)}
+.alert-item:last-child{border-bottom:none}
+.alert-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.alert-dot.crit{background:var(--red)}
+.alert-dot.warn{background:var(--gold)}
+.alert-link{font-weight:600;color:var(--navy);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+[data-theme="dark"] .alert-link{color:var(--gold-light)}
+
+/* ── AUDIT LOG ── */
+.audit-row{display:flex;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.audit-row:last-child{border-bottom:none}
+.audit-ts{font-family:var(--font-m);font-size:10.5px;color:var(--ink-35);white-space:nowrap;flex-shrink:0}
+.audit-action{font-weight:600;color:var(--ink);min-width:90px;flex-shrink:0}
+.audit-detail{color:var(--ink-60);flex:1}
+
+/* ── MOBILE ── */
+@media(max-width:900px){
+  .top-bar-i{padding:0 20px;flex-wrap:wrap;height:auto;min-height:64px;gap:8px}
+  .top-right{flex-wrap:wrap;gap:6px}
+  .port-body{padding:20px 16px 48px}
+  .card-grid{grid-template-columns:1fr}
+  .prog-strip{grid-template-columns:repeat(2,1fr)}
+  .breadcrumb{padding:0 16px}
+  .sub-nav-i{padding:0 16px}
+  .info-band-i{padding:12px 16px 16px;flex-direction:column;gap:12px}
+  .two-col{grid-template-columns:1fr}
+  .kpi-strip{grid-template-columns:repeat(2,1fr)}
+  .phm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #alert-bar{padding:0 16px}
+}
+@media(max-width:600px){
+  .prog-strip{grid-template-columns:1fr}
+  .proj-card-grid{grid-template-columns:1fr}
+  .pc-metrics{grid-template-columns:1fr 1fr}
+  .rc-metrics{grid-template-columns:1fr 1fr}
+  .top-firm{font-size:16px}
+  .btn-profile span:last-child{display:none}
+}
+.btn-profile{font-family:var(--font-b);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;background:transparent;color:rgba(255,255,255,0.44);border:1px solid rgba(255,255,255,0.16);padding:6px 12px;border-radius:var(--rs);cursor:pointer;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.btn-profile:hover{color:#fff;border-color:rgba(255,255,255,0.36)}
+.profile-avatar{width:20px;height:20px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:var(--font-d)}
+.profile-field{margin-bottom:16px}
+.profile-field label{display:block;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-60);margin-bottom:5px}
+.profile-field input,.profile-field select{width:100%;font-family:var(--font-b);font-size:13.5px;padding:10px 14px;border:1px solid var(--border-md);border-radius:var(--r6);background:var(--surface-2);color:var(--ink);outline:none;transition:border-color .18s}
+.profile-field input:focus,.profile-field select:focus{border-color:var(--gold)}
+.profile-email{font-size:12px;color:var(--ink-35);margin-bottom:16px;padding:8px 12px;background:var(--surface-2);border-radius:var(--r6);border:1px solid var(--border)}
+.profile-section-title{font-family:var(--font-d);font-size:14px;color:var(--ink);margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--border)}
+.profile-msg{font-size:12px;min-height:18px;margin-top:12px}
 </style>
 </head>
 <body>
 
 <!-- ══════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════ -->
+<div id="v-login" class="active">
+  <div class="login-card">
+    <div class="login-logo">A</div>
+    <div class="login-title">AdoptIQ</div>
+    <div class="login-sub">Where OCM Meets Measurable Readiness</div>
+
+    <!-- SIGN IN FORM -->
+    <div id="login-signin">
+      <div class="login-field">
+        <label for="signin-email">Email</label>
+        <input id="signin-email" type="email" placeholder="you@agency.gov" autocomplete="email">
+      </div>
+      <div class="login-field">
+        <label for="signin-pw">Password</label>
+        <input id="signin-pw" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()">
+      </div>
+      <button class="btn-gold" style="width:100%" onclick="signIn()">Sign In</button>
+      <div style="text-align:center;margin-top:12px;font-size:11px">
+        <span onclick="showForgot()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Forgot password?</span>
+      </div>
+      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
+        Don't have an account? <span onclick="showSignup()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Create one</span>
+      </div>
+      <div class="login-err" id="login-err"></div>
+    </div>
+
+    <!-- CREATE ACCOUNT FORM -->
+    <div id="login-signup" style="display:none">
+      <div class="login-field">
+        <label for="signup-email">Email</label>
+        <input id="signup-email" type="email" placeholder="you@agency.gov" autocomplete="email">
+      </div>
+      <div class="login-field">
+        <label for="signup-pw">Password</label>
+        <input id="signup-pw" type="password" placeholder="Min 12 chars, uppercase, number, special char" autocomplete="new-password" oninput="checkPasswordStrength()" onkeydown="if(event.key==='Enter')createAccount()">
+        <div id="pw-strength" style="font-size:11px;color:var(--amber);margin-top:4px;min-height:16px"></div>
+      </div>
+      <div class="login-field">
+        <label for="signup-confirm">Confirm Password</label>
+        <input id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')createAccount()">
+      </div>
+      <button class="btn-gold" style="width:100%" onclick="createAccount()">Create Account</button>
+      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
+        Already have an account? <span onclick="showSignin()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Sign in</span>
+      </div>
+      <div class="login-err" id="signup-err"></div>
+    </div>
+
+    <!-- FORGOT PASSWORD FORM -->
+    <div id="login-forgot" style="display:none">
+      <p style="font-size:12px;color:var(--ink-60);margin-bottom:16px">Enter your email to receive a password reset link.</p>
+      <div class="login-field">
+        <label for="forgot-email">Email</label>
+        <input id="forgot-email" type="email" placeholder="you@agency.gov" autocomplete="email" onkeydown="if(event.key==='Enter')sendPasswordReset()">
+      </div>
+      <button class="btn-gold" style="width:100%" onclick="sendPasswordReset()">Send Reset Link</button>
+      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
+        <span onclick="showSignin()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Back to sign in</span>
+      </div>
+      <div class="login-err" id="forgot-err"></div>
+    </div>
+
+    <!-- EMAIL VERIFICATION PENDING -->
+    <div id="login-verify" style="display:none">
+      <div style="text-align:center;padding:8px 0 4px">
+        <div style="font-size:36px;margin-bottom:10px">&#9993;</div>
+        <div style="font-family:var(--font-d);font-size:18px;color:var(--ink);margin-bottom:8px">Check Your Email</div>
+        <p style="font-size:12.5px;color:var(--ink-60);line-height:1.7;margin-bottom:20px">
+          We sent a verification link to <strong id="verify-email-display"></strong>.<br>
+          Click the link in the email to activate your account, then return here to sign in.
+        </p>
+        <button class="btn-gold" style="width:100%" onclick="showSignin()">Back to Sign In</button>
+        <div style="margin-top:12px;font-size:11px;color:var(--ink-35)">Didn't receive it? Check spam, or <span onclick="resendVerification()" style="color:var(--gold);cursor:pointer;text-decoration:underline">resend</span></div>
+        <div class="login-err" id="verify-err"></div>
+      </div>
+    </div>
+  </div>
+  <div class="login-footer">Providence Consulting Firm &middot; CPTM &middot; ATD Master Trainer</div>
+</div>
+
+<!-- ══════════════════════════════════════════
      PORTFOLIO VIEW
 ══════════════════════════════════════════ -->
-<div id="v-portfolio" class="active">
+<div id="v-portfolio">
   <div class="top-bar">
     <div class="top-bar-i">
       <div class="top-brand">
@@ -552,9 +715,13 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
           <span id="theme-lbl">Dark</span>
         </button>
         <button class="btn-gold" onclick="openAddRelease()">+ Add Release</button>
+        <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-p"></span><span id="avatar-name-p">Profile</span></button>
+        <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </div>
+
+  <div id="alert-bar" style="display:none;background:var(--amber-bg);border-bottom:2px solid var(--gold);padding:0 40px"></div>
 
   <div class="port-body">
     <div class="prog-strip">
@@ -593,6 +760,15 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
       </div>
     </div>
   </div>
+
+  <!-- Audit Log -->
+  <div id="audit-sec" style="display:none">
+    <div class="sec-head"><div><div class="sec-eye">Activity</div><div class="sec-ttl">Recent Audit Log</div></div><button class="btn-ghost" onclick="renderAuditLog()" style="font-size:10px;padding:6px 12px">Refresh</button></div>
+    <div class="panel">
+      <div class="ph"><div><div class="pt">Last 50 Actions</div><div class="ps-text">Creates, updates, and deletions across your portfolio</div></div></div>
+      <div class="pb" id="audit-log-body"><div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet.</p></div></div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -614,6 +790,8 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
           <span id="theme-icon-r">&#9790;</span>
           <span id="theme-lbl-r">Dark</span>
         </button>
+        <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-r"></span><span id="avatar-name-r">Profile</span></button>
+        <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </div>
@@ -627,7 +805,6 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
       <div class="nav-tabs">
         <button class="nav-btn active" onclick="showRelTab('overview',this)">Overview</button>
         <button class="nav-btn" onclick="showRelTab('projects',this)">Projects</button>
-        <button class="nav-btn" onclick="showRelTab('resources',this)">Resources</button>
       </div>
       <button class="btn-gold" onclick="openAddProject()">+ Add Project</button>
     </div>
@@ -763,18 +940,6 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
       </div>
     </div>
 
-    <!-- RELEASE RESOURCES TAB -->
-    <div class="tab-sec" id="rsec-resources">
-      <div class="tab-eye">Team Assignment</div>
-      <div class="tab-head">Release Resources</div>
-      <div class="panel">
-        <div class="ph"><div><div class="pt">Release Team</div><div class="ps-text">Resources assigned at the release level. These auto-populate as default owners in Risk Flags within each project.</div></div></div>
-        <div class="pb">
-          <div class="res-grid" id="rel-res-grid"></div>
-          <div class="res-note">Names entered here auto-populate as default owners on related risk flags in each project. Override individually in any project's Risk Flags tab.</div>
-        </div>
-      </div>
-    </div>
   </main>
   <div class="page-footer">© 2026 Providence Consulting Firm, LLC &nbsp;|&nbsp; AdoptIQ &nbsp;|&nbsp; CPTM &middot; ATD Master Trainer &middot; CSM &middot; Oracle AI Foundations Associate &nbsp;|&nbsp; Proprietary Methodology</div>
 </div>
@@ -798,6 +963,8 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
           <span id="theme-icon-p">&#9790;</span>
           <span id="theme-lbl-p">Dark</span>
         </button>
+        <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-proj"></span><span id="avatar-name-proj">Profile</span></button>
+        <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </div>
@@ -870,15 +1037,9 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
         <div class="kc cg"><div class="kc-l">Groups Tracked</div><div class="kc-v" id="p-kpi-grps">0</div><div class="kc-s">Stakeholder populations</div></div>
         <div class="kc cb"><div class="kc-l">ADKAR Score</div><div class="kc-v" id="p-kpi-adkar">—</div><div class="kc-s">Overall composite</div></div>
       </div>
-      <div class="two-col">
-        <div class="panel">
-          <div class="ph"><div><div class="pt">Gate Readiness Summary</div><div class="ps-text">Completion percentage per SDLC gate</div></div></div>
-          <div class="pb" id="p-ov-gates"><div class="es"><div class="es-rule"></div><p class="es-txt">Mark gate items in the Gate Tracker to populate this view.</p></div></div>
-        </div>
-        <div class="panel">
-          <div class="ph"><div><div class="pt">Active Risk Flags</div><div class="ps-text">Most recent items requiring action</div></div></div>
-          <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div></div>
-        </div>
+      <div class="panel">
+        <div class="ph"><div><div class="pt">Active Risk Flags</div><div class="ps-text">Most recent items requiring action</div></div></div>
+        <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div></div>
       </div>
       <div class="panel">
         <div class="ph"><div><div class="pt">Assigned Resources</div><div class="ps-text">Edit full resource details in the Resources tab</div></div></div>
@@ -1037,6 +1198,52 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
   </div>
 </div>
 
+<!-- Profile Modal -->
+<div class="modal-ov" id="profile-modal" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:440px">
+    <div class="modal-ttl">My Profile</div>
+    <div class="profile-email" id="profile-email"></div>
+    <div class="profile-field">
+      <label for="profile-name">Full Name</label>
+      <input id="profile-name" type="text" placeholder="Jane Doe">
+    </div>
+    <div class="profile-field">
+      <label for="profile-org">Organization</label>
+      <input id="profile-org" type="text" placeholder="Agency or company name">
+    </div>
+    <div class="profile-field">
+      <label for="profile-role">Role</label>
+      <select id="profile-role">
+        <option value="">Select role</option>
+        <option>OCM Lead</option>
+        <option>Training Lead</option>
+        <option>Project Manager</option>
+        <option>Implementation Lead</option>
+        <option>Change Manager</option>
+        <option>Program Director</option>
+        <option>Executive Sponsor</option>
+        <option>Consultant</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="profile-section-title">Change Password</div>
+    <div class="profile-field">
+      <label for="profile-new-pw">New Password</label>
+      <input id="profile-new-pw" type="password" placeholder="Leave blank to keep current" oninput="checkProfilePwStrength()">
+      <div id="profile-pw-strength" style="font-size:11px;color:var(--amber);margin-top:4px;min-height:16px"></div>
+    </div>
+    <div class="profile-field">
+      <label for="profile-confirm-pw">Confirm New Password</label>
+      <input id="profile-confirm-pw" type="password" placeholder="Confirm new password">
+    </div>
+    <div class="modal-acts">
+      <button class="btn-ghost" onclick="closeModal('profile-modal')">Cancel</button>
+      <button class="btn-gold" onclick="saveProfile()">Save Profile</button>
+    </div>
+    <div class="profile-msg" id="profile-msg"></div>
+  </div>
+</div>
+
 <!-- Note Modal -->
 <div class="modal-ov" id="note-modal" role="dialog" aria-modal="true">
   <div class="note-box">
@@ -1051,6 +1258,190 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 
 <script>
 'use strict';
+// ════════════════════════════════════════════════════════
+// SUPABASE AUTH
+// ════════════════════════════════════════════════════════
+const SUPABASE_URL='https://yufehucjvviwanbulcok.supabase.co';
+const SUPABASE_ANON_KEY='sb_publishable_6YS9ifWHEU53f-H9svKJpg_paNqSFam';
+const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+function showLogin(){document.getElementById('v-login').classList.add('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
+function hideLogin(){document.getElementById('v-login').classList.remove('active');}
+function hideAllLoginPanels(){['login-signin','login-signup','login-forgot','login-verify'].forEach(id=>document.getElementById(id).style.display='none');}
+function showSignin(){hideAllLoginPanels();document.getElementById('login-signin').style.display='block';document.getElementById('login-err').textContent='';}
+function showSignup(){hideAllLoginPanels();document.getElementById('login-signup').style.display='block';document.getElementById('signup-err').textContent='';document.getElementById('signup-email').value='';document.getElementById('signup-pw').value='';document.getElementById('signup-confirm').value='';document.getElementById('pw-strength').textContent='';}
+function showForgot(){hideAllLoginPanels();document.getElementById('login-forgot').style.display='block';document.getElementById('forgot-err').textContent='';document.getElementById('forgot-email').value='';}
+function showVerify(email){hideAllLoginPanels();document.getElementById('login-verify').style.display='block';document.getElementById('verify-email-display').textContent=email;document.getElementById('verify-err').textContent='';}
+
+let pendingVerifyEmail='';
+
+async function signIn(){
+  document.getElementById('login-err').textContent='';
+  const email=document.getElementById('signin-email').value.trim();
+  const pw=document.getElementById('signin-pw').value;
+  if(!email||!pw){document.getElementById('login-err').textContent='Please enter email and password.';return;}
+  const{data,error}=await _supabase.auth.signInWithPassword({email,password:pw});
+  if(error){document.getElementById('login-err').textContent=error.message;return;}
+  if(data.user&&!data.user.email_confirmed_at){
+    pendingVerifyEmail=email;
+    await _supabase.auth.signOut();
+    document.getElementById('login-err').textContent='Please verify your email before signing in. Check your inbox.';
+    return;
+  }
+  currentUserId=data.user.id;
+  hideLogin();await bootApp();updateAvatars();
+}
+
+async function createAccount(){
+  document.getElementById('signup-err').textContent='';
+  const email=document.getElementById('signup-email').value.trim();
+  const pw=document.getElementById('signup-pw').value;
+  const confirm=document.getElementById('signup-confirm').value;
+  if(!email||!pw||!confirm){document.getElementById('signup-err').textContent='Please fill in all fields.';return;}
+  const pwErr=validatePassword(pw);if(pwErr){document.getElementById('signup-err').textContent=pwErr;return;}
+  if(pw!==confirm){document.getElementById('signup-err').textContent='Passwords do not match.';return;}
+  const{error}=await _supabase.auth.signUp({email,password:pw});
+  if(error){document.getElementById('signup-err').textContent=error.message;return;}
+  pendingVerifyEmail=email;
+  showVerify(email);
+}
+
+async function resendVerification(){
+  const errEl=document.getElementById('verify-err');
+  if(!pendingVerifyEmail){errEl.textContent='No email to resend to.';return;}
+  const{error}=await _supabase.auth.resend({type:'signup',email:pendingVerifyEmail});
+  if(error){errEl.textContent=error.message;return;}
+  errEl.style.color='var(--green)';errEl.textContent='Verification email resent. Check your inbox.';
+  setTimeout(()=>{errEl.textContent='';errEl.style.color='';},3000);
+}
+
+async function sendPasswordReset(){
+  document.getElementById('forgot-err').textContent='';
+  const email=document.getElementById('forgot-email').value.trim();
+  if(!email){document.getElementById('forgot-err').textContent='Please enter your email.';return;}
+  const{error}=await _supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'?reset=true'});
+  if(error){document.getElementById('forgot-err').textContent=error.message;return;}
+  document.getElementById('forgot-err').textContent='Check your email for a password reset link.';
+  setTimeout(()=>showSignin(),2000);
+}
+
+let currentUserId=null;
+
+async function signOut(){
+  currentUserId=null;releases=[];
+  await _supabase.auth.signOut();
+  showLogin();showSignin();
+}
+
+async function bootApp(){await loadData();renderPortfolio();renderAlerts();document.getElementById('v-portfolio').classList.add('active');}
+
+function checkPasswordStrength(){
+  const pw=document.getElementById('signup-pw').value;
+  const strength=document.getElementById('pw-strength');
+  const checks={len:pw.length>=12,upper:/[A-Z]/.test(pw),lower:/[a-z]/.test(pw),num:/\d/.test(pw),spec:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw)};
+  const met=Object.values(checks).filter(Boolean).length;
+  if(!pw){strength.textContent='';return;}
+  if(met<5){strength.style.color='var(--amber)';strength.textContent=`Password: ${!checks.len?'12+ chars, ':''} ${!checks.upper?'1 uppercase, ':''} ${!checks.lower?'1 lowercase, ':''} ${!checks.num?'1 number, ':''} ${!checks.spec?'1 special char':''}`;}
+  else{strength.style.color='var(--green)';strength.textContent='\u2713 Strong password';}
+}
+
+function validatePassword(pw){
+  if(pw.length<12)return 'Password must be at least 12 characters.';
+  if(!/[A-Z]/.test(pw))return 'Password must contain at least one uppercase letter.';
+  if(!/[a-z]/.test(pw))return 'Password must contain at least one lowercase letter.';
+  if(!/\d/.test(pw))return 'Password must contain at least one number.';
+  if(!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw))return 'Password must contain at least one special character (!@#$%^&*()_+-=[]{};\':"|,.<>/?).';
+  return '';
+}
+
+async function initAuth(){
+  const{data:{session}}=await _supabase.auth.getSession();
+  if(session&&session.user){
+    if(!session.user.email_confirmed_at){await _supabase.auth.signOut();return;}
+    currentUserId=session.user.id;
+    hideLogin();await bootApp();updateAvatars();
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// USER PROFILE
+// ════════════════════════════════════════════════════════
+function getInitials(name){
+  if(!name)return '?';
+  const parts=name.trim().split(/\s+/);
+  if(parts.length>=2)return(parts[0][0]+parts[parts.length-1][0]).toUpperCase();
+  return parts[0][0].toUpperCase();
+}
+
+function updateAvatars(){
+  _supabase.auth.getUser().then(({data:{user}})=>{
+    if(!user)return;
+    const meta=user.user_metadata||{};
+    const name=meta.full_name||'';
+    const initials=getInitials(name);
+    const display=name||user.email.split('@')[0];
+    ['avatar-p','avatar-r','avatar-proj'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.textContent=initials;
+    });
+    ['avatar-name-p','avatar-name-r','avatar-name-proj'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.textContent=display;
+    });
+  });
+}
+
+async function openProfile(){
+  const{data:{user}}=await _supabase.auth.getUser();
+  if(!user)return;
+  const meta=user.user_metadata||{};
+  document.getElementById('profile-email').textContent=user.email;
+  document.getElementById('profile-name').value=meta.full_name||'';
+  document.getElementById('profile-org').value=meta.organization||'';
+  document.getElementById('profile-role').value=meta.role||'';
+  document.getElementById('profile-new-pw').value='';
+  document.getElementById('profile-confirm-pw').value='';
+  document.getElementById('profile-pw-strength').textContent='';
+  document.getElementById('profile-msg').textContent='';
+  document.getElementById('profile-modal').classList.add('open');
+}
+
+function checkProfilePwStrength(){
+  const pw=document.getElementById('profile-new-pw').value;
+  const el=document.getElementById('profile-pw-strength');
+  if(!pw){el.textContent='';return;}
+  const checks={len:pw.length>=12,upper:/[A-Z]/.test(pw),lower:/[a-z]/.test(pw),num:/\d/.test(pw),spec:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw)};
+  const missing=[];
+  if(!checks.len)missing.push('12+ chars');if(!checks.upper)missing.push('uppercase');if(!checks.lower)missing.push('lowercase');if(!checks.num)missing.push('number');if(!checks.spec)missing.push('special char');
+  if(missing.length){el.style.color='var(--amber)';el.textContent='Needs: '+missing.join(', ');}
+  else{el.style.color='var(--green)';el.textContent='\u2713 Strong password';}
+}
+
+async function saveProfile(){
+  const msgEl=document.getElementById('profile-msg');
+  msgEl.textContent='';msgEl.style.color='';
+  const name=document.getElementById('profile-name').value.trim();
+  const org=document.getElementById('profile-org').value.trim();
+  const role=document.getElementById('profile-role').value;
+  const newPw=document.getElementById('profile-new-pw').value;
+  const confirmPw=document.getElementById('profile-confirm-pw').value;
+
+  // Update metadata
+  const{error:metaErr}=await _supabase.auth.updateUser({data:{full_name:name,organization:org,role:role}});
+  if(metaErr){msgEl.style.color='var(--red)';msgEl.textContent=metaErr.message;return;}
+
+  // Change password if provided
+  if(newPw){
+    const pwErr=validatePassword(newPw);
+    if(pwErr){msgEl.style.color='var(--red)';msgEl.textContent=pwErr;return;}
+    if(newPw!==confirmPw){msgEl.style.color='var(--red)';msgEl.textContent='Passwords do not match.';return;}
+    const{error:pwError}=await _supabase.auth.updateUser({password:newPw});
+    if(pwError){msgEl.style.color='var(--red)';msgEl.textContent=pwError.message;return;}
+  }
+
+  msgEl.style.color='var(--green)';msgEl.textContent='Profile saved successfully.';
+  updateAvatars();
+  setTimeout(()=>{closeModal('profile-modal');},1200);
+}
+
 // ════════════════════════════════════════════════════════
 // CONSTANTS
 // ════════════════════════════════════════════════════════
@@ -1112,7 +1503,7 @@ const RC={
       'No shared post-release monitoring plan between Implementation and Training.',
       'End users will have no structured support at go-live.']
 };
-const WS=['OCM Implementation','Development','Project Management','Agency SMEs','Training Environment'];
+const WS=['OCM Implementation','Project Management','Functional','App Dev','QA','UAT','Training Environment'];
 const GL=['Post-Requirements','Post-Design','Post-Dev / Pre-UAT','Post-UAT / Pre-Go-Live'];
 const AF=[
   {key:'resistance',label:'Resistance Signals',desc:'Signals surfaced via stakeholder engagement'},
@@ -1131,16 +1522,22 @@ const ADKAR_DIMS=[
   {key:'R',letter:'R',word:'Reinforcement',desc:'Reinforcement to sustain the change'},
 ];
 const RES_ROLES=[
-  {key:'train',label:'OCM Training Lead'},
-  {key:'impl',label:'OCM Implementation Lead'},
-  {key:'pm',label:'Project Manager'},
-  {key:'sponsor',label:'Executive Sponsor'},
-  {key:'dev',label:'Development Lead'},
-  {key:'qa',label:'QA Lead'},
+  {key:'ocm_impl',label:'OCM Implementation'},
+  {key:'pm',label:'Project Management'},
+  {key:'func',label:'Functional'},
+  {key:'appdev',label:'App Dev'},
+  {key:'qa',label:'QA'},
+  {key:'uat',label:'UAT'},
+  {key:'train_env',label:'Training Environment'},
 ];
 const TIER_MAP={low:'Low',mod:'Moderate',high:'High',crit:'Critical'};
-const STORAGE_KEY='adoptiq_v1';
+function storageKey(){return currentUserId?'adoptiq_v1_'+currentUserId:'adoptiq_v1';}
 const PROJ_STATUSES=['Not Started','In Progress','Complete','On Hold','Blocked'];
+
+// ════════════════════════════════════════════════════════
+// HTML ESCAPING
+// ════════════════════════════════════════════════════════
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -1152,6 +1549,7 @@ let noteKey=null;
 let delRelTarget=null;
 let delProjTarget=null;
 let saveTimer=null;
+let saveIndTimer=null;
 let theme=localStorage.getItem('ocm_theme')||'light';
 let modalRelAgencies=[];
 let newProjAgencies=[];
@@ -1163,7 +1561,7 @@ function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   theme=t;
   localStorage.setItem('ocm_theme',t);
-  ['','r','p'].forEach(s=>{
+  ['','-r','-p'].forEach(s=>{
     const ic=document.getElementById('theme-icon'+s);
     const lb=document.getElementById('theme-lbl'+s);
     if(ic)ic.textContent=t==='dark'?'☀':'☽';
@@ -1174,16 +1572,45 @@ function toggleTheme(){applyTheme(theme==='light'?'dark':'light');}
 applyTheme(theme);
 
 // ════════════════════════════════════════════════════════
-// PERSISTENCE
+// PERSISTENCE — Supabase primary, localStorage offline cache
 // ════════════════════════════════════════════════════════
-function saveData(){
-  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(releases));}catch(e){}
+function showSaveIndicator(text){
+  clearTimeout(saveIndTimer);
   ['save-ind','save-ind-r','save-ind-p'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el){el.classList.add('vis');clearTimeout(saveTimer);saveTimer=setTimeout(()=>el.classList.remove('vis'),2400);}
+    if(el){el.textContent=text||'Saved';el.classList.add('vis');}
+  });
+  saveIndTimer=setTimeout(()=>{['save-ind','save-ind-r','save-ind-p'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('vis');});},2400);
+}
+
+async function saveData(){
+  try{localStorage.setItem(storageKey(),JSON.stringify(releases));}catch(e){}
+  showSaveIndicator('Saving\u2026');
+  if(currentUserId){
+    const{error}=await _supabase.from('user_data').upsert({user_id:currentUserId,releases:releases,updated_at:new Date().toISOString()});
+    if(error){console.error('Supabase save:',error);showSaveIndicator('Saved locally');return;}
+  }
+  showSaveIndicator('Saved');
+}
+
+async function loadData(){
+  releases=[];
+  if(!currentUserId)return;
+  const{data,error}=await _supabase.from('user_data').select('releases').eq('user_id',currentUserId).maybeSingle();
+  if(!error&&data){
+    releases=data.releases||[];
+    try{localStorage.setItem(storageKey(),JSON.stringify(releases));}catch(e){}
+  } else {
+    // Migrate from localStorage on first Supabase login
+    try{const cached=localStorage.getItem(storageKey());if(cached){releases=JSON.parse(cached);await saveData();}}catch(e){releases=[];}
+  }
+  // Migrate all project resources to array format
+  releases.forEach(r=>{
+    delete r.resources; // remove release-level resources (no longer used)
+    (r.projects||[]).forEach(p=>migrateResources(p));
   });
 }
-function loadData(){try{const d=localStorage.getItem(STORAGE_KEY);if(d)releases=JSON.parse(d);}catch(e){releases=[];}}
+
 function schedSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveData,600);}
 
 // ════════════════════════════════════════════════════════
@@ -1191,16 +1618,16 @@ function schedSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveData,600);
 // ════════════════════════════════════════════════════════
 function newRelease(name,agencies,golive,phase){
   return{id:Date.now(),name,agencies:agencies||[],golive:golive||'',phase:phase||'',
-    modified:new Date().toISOString(),projects:[],
-    resources:{train:{name:'',contact:''},impl:{name:'',contact:''},pm:{name:'',contact:''},sponsor:{name:'',contact:''},dev:{name:'',contact:''},qa:{name:'',contact:''}}
+    modified:new Date().toISOString(),projects:[]
   };
 }
 function newProject(name,agencies,users){
+  const res={};RES_ROLES.forEach(r=>{res[r.key]=[];});
   return{id:Date.now(),name,agencies:agencies||[],estimatedUsers:users||0,
     trainingRequired:true,status:'Not Started',
     gateState:{},depHM:{},depNotes:{},stakeholders:[],
     adkarScores:{A1:3,D:3,K:3,Ab:3,R:3},adkarNotes:{A1:'',D:'',K:'',Ab:'',R:''},
-    resources:{train:{name:'',contact:''},impl:{name:'',contact:''},pm:{name:'',contact:''},sponsor:{name:'',contact:''},dev:{name:'',contact:''},qa:{name:'',contact:''}}
+    resources:res
   };
 }
 
@@ -1212,11 +1639,18 @@ function getProj(){
   const r=getRel();if(!r)return null;
   return r.projects.find(p=>p.id===activeProjId)||null;
 }
+function migrateResources(p){
+  if(!p.resources)p.resources={};
+  RES_ROLES.forEach(role=>{
+    const v=p.resources[role.key];
+    if(!v)p.resources[role.key]=[];
+    else if(!Array.isArray(v))p.resources[role.key]=[v];
+  });
+}
 function getEffectiveRes(proj,key,field){
-  const r=getRel();
-  const pv=proj?.resources?.[key]?.[field]||'';
-  if(pv)return pv;
-  return r?.resources?.[key]?.[field]||'';
+  if(!proj?.resources?.[key])return'';
+  const arr=Array.isArray(proj.resources[key])?proj.resources[key]:[proj.resources[key]];
+  return arr[0]?.[field]||'';
 }
 function touch(target){
   if(target==='proj'){const p=getProj();if(p)p.modified=new Date().toISOString();}
@@ -1370,12 +1804,13 @@ function addModalRelAgency(){
 function removeModalRelAgency(a){modalRelAgencies=modalRelAgencies.filter(x=>x!==a);renderModalRelChips();}
 function renderModalRelChips(){
   document.getElementById('modal-rel-chips').innerHTML=
-    modalRelAgencies.map(a=>`<span class="chip chip-ink">${a}<button class="chip-rm" onclick="removeModalRelAgency('${a}')">&times;</button></span>`).join('');
+    modalRelAgencies.map(a=>`<span class="chip chip-ink">${esc(a)}<button class="chip-rm" onclick="removeModalRelAgency('${esc(a)}')">&times;</button></span>`).join('');
 }
 function createRelease(){
   const name=document.getElementById('new-r-name').value.trim();
   if(!name){document.getElementById('new-r-name').classList.add('err');document.getElementById('err-r-name').classList.add('show');return;}
-  releases.push(newRelease(name,[...modalRelAgencies],document.getElementById('new-r-golive').value,document.getElementById('new-r-phase').value));
+  const nr=newRelease(name,[...modalRelAgencies],document.getElementById('new-r-golive').value,document.getElementById('new-r-phase').value);
+  releases.push(nr);logAudit('release_created','release',name,{agencies:nr.agencies});
   closeModal('add-rel-modal');saveData();renderPortfolio();
 }
 
@@ -1388,6 +1823,8 @@ function openDelRelease(id,name){
 }
 function confirmDelRelease(){
   if(!delRelTarget)return;
+  const r=releases.find(r=>r.id===delRelTarget);
+  if(r)logAudit('release_deleted','release',r.name,{projects:(r.projects||[]).length});
   releases=releases.filter(r=>r.id!==delRelTarget);
   closeModal('del-rel-modal');delRelTarget=null;saveData();renderPortfolio();
 }
@@ -1398,7 +1835,8 @@ function addProject(){
   const r=getRel();if(!r)return;
   const name=document.getElementById('new-p-name').value.trim();if(!name)return;
   const users=parseInt(document.getElementById('new-p-users').value)||0;
-  r.projects.push(newProject(name,[...newProjAgencies],users));
+  const np=newProject(name,[...newProjAgencies],users);
+  r.projects.push(np);logAudit('project_created','project',name,{release:r.name});
   document.getElementById('new-p-name').value='';
   document.getElementById('new-p-users').value='';
   newProjAgencies=[];renderNewProjChips();
@@ -1412,6 +1850,8 @@ function openDelProject(pid,name){
 }
 function confirmDelProject(){
   const r=getRel();if(!r)return;
+  const p=r.projects.find(p=>p.id===delProjTarget);
+  if(p)logAudit('project_deleted','project',p.name,{release:r.name});
   r.projects=r.projects.filter(p=>p.id!==delProjTarget);
   closeModal('del-proj-modal');delProjTarget=null;touch('rel');saveData();renderRelView();
 }
@@ -1425,7 +1865,7 @@ function addNewProjAgency(){
 function removeNewProjAgency(a){newProjAgencies=newProjAgencies.filter(x=>x!==a);renderNewProjChips();}
 function renderNewProjChips(){
   document.getElementById('new-p-agency-chips').innerHTML=
-    newProjAgencies.map(a=>`<span class="chip chip-ink">${a}<button class="chip-rm" onclick="removeNewProjAgency('${a}')">&times;</button></span>`).join('');
+    newProjAgencies.map(a=>`<span class="chip chip-ink">${esc(a)}<button class="chip-rm" onclick="removeNewProjAgency('${esc(a)}')">&times;</button></span>`).join('');
 }
 
 // ════════════════════════════════════════════════════════
@@ -1455,12 +1895,12 @@ function renderPortfolio(){
   wrap.innerHTML=`<div class="card-grid">${releases.map(r=>{
     const rl=relRollup(r);const d=daysTo(r.golive);const modStr=fmtMod(r.modified);
     const tl=r.resources?.train?.name||'';const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
-    return`<div class="r-card" tabindex="0" onclick="openRelease(${r.id})" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button" aria-label="Open ${r.name}">
+    return`<div class="r-card" tabindex="0" draggable="true" data-rel-id="${r.id}" onclick="openRelease(${r.id})" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button" aria-label="Open ${esc(r.name)}">
       <div class="r-card-hd">
-        <div class="rc-name">${r.name}</div>
-        <div class="chip-row">${(r.agencies||[]).map(a=>`<span class="chip chip-white">${a}</span>`).join('')}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div class="rc-name">${esc(r.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
+        <div class="chip-row">${(r.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}</span>`).join('')}</div>
         <div class="rc-gl">Go-Live: ${fmtDate(r.golive)}</div>
-        ${tl?`<div class="rc-owner">Training Lead: ${tl}</div>`:''}
+        ${tl?`<div class="rc-owner">Training Lead: ${esc(tl)}</div>`:''}
         <div class="rc-mod">Updated ${modStr}</div>
       </div>
       <div class="r-card-bd">
@@ -1473,15 +1913,15 @@ function renderPortfolio(){
         <div class="rc-foot">
           <span class="status-chip ${rl.status.cls}">${rl.status.label}</span>
           <div class="rc-acts">
-            <button class="btn-del-sm" onclick="event.stopPropagation();openDelRelease(${r.id},'${r.name.replace(/'/g,"\\'")}')">Remove</button>
+            <button class="btn-del-sm" onclick="event.stopPropagation();openDelRelease(${r.id},'${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
             <button class="btn-sm" onclick="event.stopPropagation();openRelease(${r.id})">Open</button>
           </div>
         </div>
       </div>
     </div>`;
   }).join('')}</div>`;
-  document.getElementById('phm-sec').style.display='block';document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
-  renderPortfolioHM();renderTimeline();
+  document.getElementById('phm-sec').style.display='block';document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';document.getElementById('audit-sec').style.display='block';
+  renderPortfolioHM();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();
 }
 
 function renderPortfolioHM(){
@@ -1496,7 +1936,7 @@ function renderPortfolioHM(){
     const scls=rl.status.cls==='on-track'?'g':rl.status.cls==='at-risk'?'a':'r';
     h+=`<tr>
       <td class="phm-rl" onclick="openRelease(${r.id})" tabindex="0" onkeydown="if(event.key==='Enter')openRelease(${r.id})">
-        ${r.name}<div class="phm-rl-sub">${(r.agencies||[]).join(' · ')||'—'} &nbsp;|&nbsp; ${fmtDate(r.golive)}</div>
+        ${esc(r.name)}<div class="phm-rl-sub">${(r.agencies||[]).map(a=>esc(a)).join(' · ')||'—'} &nbsp;|&nbsp; ${fmtDate(r.golive)}</div>
       </td>
       <td><div class="hmc-w"><div class="hmc ${gcls}">${rl.gateScore!==null?rl.gateScore+'%':'Not Set'}</div></div></td>
       <td><div class="hmc-w"><div class="hmc ${acls}">${rl.adkar!==null?rl.adkar+'/5':'Not Set'}</div></div></td>
@@ -1523,12 +1963,13 @@ function renderTimeline(){
   let html=`<div style="position:relative;margin-left:190px;height:26px;border-bottom:2px solid var(--navy);margin-bottom:0">`;
   ticks.forEach(t=>{const lp=pct(t);html+=`<div style="position:absolute;left:${lp}%;transform:translateX(-50%);font-size:10px;font-weight:700;letter-spacing:0.07em;color:var(--ink-60);white-space:nowrap;padding-top:3px">${t.toLocaleDateString('en-US',{month:'short',year:'2-digit'})}</div>`;if(lp>0)html+=`<div style="position:absolute;left:${lp}%;top:0;bottom:0;width:1px;background:var(--border)"></div>`;});
   html+=`<div style="position:absolute;left:${todayPct}%;top:0;width:2px;height:100%;background:var(--gold);z-index:5"></div></div>`;
-  releases.forEach(r=>{
+  const sorted=[...releases].sort((a,b)=>{if(!a.golive&&!b.golive)return 0;if(!a.golive)return 1;if(!b.golive)return -1;return new Date(a.golive)-new Date(b.golive);});
+  sorted.forEach(r=>{
     const rl=relRollup(r);const bCls=rl.status.cls==='on-track'?'bon':rl.status.cls==='at-risk'?'bat':'bcr';const mCls=rl.status.cls==='on-track'?'mon':rl.status.cls==='at-risk'?'mat':'mcr';
-    html+=`<div class="tl-row"><div class="tl-rl" onclick="openRelease(${r.id})" tabindex="0" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button"><span class="tl-rl-n">${r.name}</span><span class="tl-rl-s">${(r.agencies||[]).join(' · ')||'—'}</span></div>
+    html+=`<div class="tl-row"><div class="tl-rl" onclick="openRelease(${r.id})" tabindex="0" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button"><span class="tl-rl-n">${esc(r.name)}</span><span class="tl-rl-s">${(r.agencies||[]).map(a=>esc(a)).join(' · ')||'—'}</span></div>
     <div class="tl-track"><div class="tl-today" style="left:${todayPct}%;height:100%"><div class="tl-today-l">Today</div></div>`;
     if(r.golive){const gl=new Date(r.golive);gl.setHours(0,0,0,0);const glPct=pct(gl);const passed=gl<today;const bL=passed?glPct:todayPct;const bW=passed?Math.max(todayPct-glPct,0.8):Math.max(glPct-todayPct,0.8);
-      html+=`<div class="tl-bar-w" style="left:${bL}%;width:${bW}%" onclick="openRelease(${r.id})"><div class="tl-bar ${passed?'bnd':bCls}"><span class="tl-bar-l">${passed?r.name+' — passed':r.name}</span></div></div>
+      html+=`<div class="tl-bar-w" style="left:${bL}%;width:${bW}%" onclick="openRelease(${r.id})"><div class="tl-bar ${passed?'bnd':bCls}"><span class="tl-bar-l">${passed?esc(r.name)+' — passed':esc(r.name)}</span></div></div>
       <div class="tl-mkr ${mCls}" style="left:calc(${glPct}% - 5px)"></div><div class="tl-gl-d" style="left:${glPct}%">${fmtDate(r.golive)}</div>`;
     }else{html+=`<div class="tl-bar-w" style="left:0%;width:15%" onclick="openRelease(${r.id})"><div class="tl-bar bnd"><span class="tl-bar-l">No date set</span></div></div>`;}
     html+='</div></div>';
@@ -1542,7 +1983,7 @@ function renderTimeline(){
 function renderRelAgencyChips(){
   const r=getRel();if(!r)return;
   document.getElementById('rel-agency-chips').innerHTML=
-    (r.agencies||[]).map(a=>`<span class="chip chip-white">${a}<button class="chip-rm" onclick="removeRelAgency('${a}')">&times;</button></span>`).join('');
+    (r.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}<button class="chip-rm" onclick="removeRelAgency('${esc(a)}')">&times;</button></span>`).join('');
 }
 function addRelAgency(){
   const r=getRel();if(!r)return;
@@ -1571,11 +2012,11 @@ function updateRelStatusPill(){
 // ════════════════════════════════════════════════════════
 // RELEASE VIEW
 // ════════════════════════════════════════════════════════
-function renderRelView(){renderRelSumBar();renderRelScope();renderRelKPIs();renderRelProjCards();renderRelResources();renderRelOverview();}
+function renderRelView(){renderRelSumBar();renderRelScope();renderRelKPIs();renderRelProjCards();renderRelOverview();}
 function renderRelSumBar(){
   const r=getRel();if(!r)return;
   document.getElementById('rsb-name').textContent=r.name||'—';
-  document.getElementById('rsb-chips').innerHTML=(r.agencies||[]).map(a=>`<span class="chip chip-white" style="margin-right:4px">${a}</span>`).join('');
+  document.getElementById('rsb-chips').innerHTML=(r.agencies||[]).map(a=>`<span class="chip chip-white" style="margin-right:4px">${esc(a)}</span>`).join('');
   document.getElementById('rsb-tl').textContent=r.resources?.train?.name||'Not assigned';
   document.getElementById('rsb-pm').textContent=r.resources?.pm?.name||'Not assigned';
   const rl=relRollup(r);const chip=document.getElementById('rsb-chip');
@@ -1591,8 +2032,8 @@ function renderRelScope(){
   if(!trProjs.length){rows.innerHTML='<div class="scope-empty">No projects marked Training Required.</div>';document.getElementById('scope-total').style.display='none';return;}
   const stMap={'Not Started':'sp-st-n','In Progress':'sp-st-a','Complete':'sp-st-g','On Hold':'sp-st-r','Blocked':'sp-st-r'};
   rows.innerHTML=trProjs.map(p=>`<div class="scope-row">
-    <span class="sp-name">${p.name}</span>
-    ${(p.agencies||[]).length?`<span class="sp-agency">${p.agencies.join(', ')}</span>`:''}
+    <span class="sp-name">${esc(p.name)}</span>
+    ${(p.agencies||[]).length?`<span class="sp-agency">${p.agencies.map(a=>esc(a)).join(', ')}</span>`:''}
     <span class="sp-users">${p.estimatedUsers?p.estimatedUsers+' users':'—'}</span>
     <span class="sp-status ${stMap[p.status]||'sp-st-n'}">${p.status}</span>
   </div>`).join('');
@@ -1626,10 +2067,10 @@ function renderRelProjCards(){
   }
   const cards=r.projects.map(p=>{
     const gs=projGateScore(p);const fl=projFlagCount(p);const adk=projAdkarAvg(p);const st=projStatus(p);
-    return`<div class="pc" tabindex="0" onclick="openProject(${p.id})" onkeydown="if(event.key==='Enter')openProject(${p.id})" role="button" aria-label="Open project ${p.name}">
+    return`<div class="pc" tabindex="0" draggable="true" data-proj-id="${p.id}" onclick="openProject(${p.id})" onkeydown="if(event.key==='Enter')openProject(${p.id})" role="button" aria-label="Open project ${esc(p.name)}">
       <div class="pc-hd">
-        <div class="pc-name">${p.name}</div>
-        <div class="chip-row">${(p.agencies||[]).map(a=>`<span class="chip chip-white">${a}</span>`).join('')}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div class="pc-name">${esc(p.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
+        <div class="chip-row">${(p.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}</span>`).join('')}</div>
         <div class="pc-tr-badge ${p.trainingRequired?'pc-tr-yes':'pc-tr-no'}">${p.trainingRequired?'Training Required':'No Training'}</div>
       </div>
       <div class="pc-bd">
@@ -1641,30 +2082,14 @@ function renderRelProjCards(){
         <div class="pc-foot">
           <span class="status-chip ${st.cls}">${st.label}</span>
           <div class="pc-acts">
-            <button class="btn-del-proj" onclick="event.stopPropagation();openDelProject(${p.id},'${p.name.replace(/'/g,"\\'")}')">Remove</button>
+            <button class="btn-del-proj" onclick="event.stopPropagation();openDelProject(${p.id},'${esc(p.name).replace(/'/g,"\\'")}')">Remove</button>
             <button class="btn-open-sm" onclick="event.stopPropagation();openProject(${p.id})">Open</button>
           </div>
         </div>
       </div>
     </div>`;
   }).join('');
-  grid1.innerHTML=grid2.innerHTML=cards;
-}
-function renderRelResources(){
-  const r=getRel();if(!r)return;
-  document.getElementById('rel-res-grid').innerHTML=RES_ROLES.map(role=>`
-    <div class="res-card">
-      <div class="res-role">${role.label}</div>
-      <div class="res-fields">
-        <div><div class="res-field"><label>Name</label><input class="res-inp" type="text" value="${r.resources?.[role.key]?.name||''}" placeholder="Full name" oninput="updateRelRes('${role.key}','name',this.value)"></div></div>
-        <div><div class="res-field"><label>Contact / Agency</label><input class="res-inp" type="text" value="${r.resources?.[role.key]?.contact||''}" placeholder="Email or agency" oninput="updateRelRes('${role.key}','contact',this.value)"></div></div>
-      </div>
-    </div>`).join('');
-}
-function updateRelRes(key,field,val){
-  const r=getRel();if(!r)return;
-  if(!r.resources)r.resources={};if(!r.resources[key])r.resources[key]={name:'',contact:''};
-  r.resources[key][field]=val;renderRelSumBar();touch('rel');schedSave();
+  grid1.innerHTML=grid2.innerHTML=cards;initProjectDrag();
 }
 function renderRelOverview(){
   renderRelSumBar();renderRelScope();renderRelKPIs();renderRelProjCards();
@@ -1675,7 +2100,7 @@ function renderRelOverview(){
   if(!projs.length){gp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add projects to see gate readiness here.</p></div>';}
   else{gp.innerHTML=projs.map(p=>{
     const gs=projGateScore(p);const col=gs===null?'var(--bg-dark)':gs>=80?'var(--green)':gs>=50?'var(--gold)':'var(--red)';
-    return`<div class="ov-row"><div class="ov-name">${p.name}</div>
+    return`<div class="ov-row"><div class="ov-name">${esc(p.name)}</div>
       <div class="ov-track"><div class="ov-fill" style="width:${gs||0}%;background:${col}"></div></div>
       <div class="ov-score">${gs!==null?gs+'%':'—'}</div></div>`;
   }).join('');}
@@ -1684,7 +2109,7 @@ function renderRelOverview(){
   const allFlags=[];
   projs.forEach(p=>{GATE_DEFS.forEach(gate=>{gate.items.forEach((item,i)=>{if(p.gateState[gate.id+'_'+i]==='red')allFlags.push({gate:gate.label,item:item.text,proj:p.name});});});});
   if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div>';}
-  else{fp.innerHTML=allFlags.slice(0,5).map(f=>`<div class="fpv"><div class="fpv-g">${f.gate} — ${f.proj}</div><div class="fpv-i">${f.item}</div></div>`).join('');}
+  else{fp.innerHTML=allFlags.slice(0,5).map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.proj)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
 }
 
 // ════════════════════════════════════════════════════════
@@ -1693,7 +2118,7 @@ function renderRelOverview(){
 function renderProjAgencyChips(){
   const p=getProj();if(!p)return;
   document.getElementById('proj-agency-chips').innerHTML=
-    (p.agencies||[]).map(a=>`<span class="chip chip-white">${a}<button class="chip-rm" onclick="removeProjAgency('${a}')">&times;</button></span>`).join('');
+    (p.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}<button class="chip-rm" onclick="removeProjAgency('${esc(a)}')">&times;</button></span>`).join('');
 }
 function addProjAgency(){
   const p=getProj();if(!p)return;
@@ -1799,11 +2224,11 @@ function renderPFlags(){
   const f=getPFlags();const pan=document.getElementById('p-flags-panel');
   if(!f.length){pan.innerHTML='<div class="nfs"><div class="nfs-rule"></div><p class="nfs-txt">No active risk flags. Mark gate items Incomplete in the Gate Tracker to generate flags.</p></div>';return;}
   pan.innerHTML=f.map((fl,i)=>`<div class="rf">
-    <div class="rf-meta"><div class="rf-num">Risk Flag ${i+1} of ${f.length}</div><div class="rf-tag">${fl.gate} — ${fl.sub}</div></div>
-    <div class="rf-row"><strong>Gap:</strong> ${fl.item}</div>
-    <div class="rf-row"><strong>Consequence to Training:</strong> ${fl.consequence}</div>
+    <div class="rf-meta"><div class="rf-num">Risk Flag ${i+1} of ${f.length}</div><div class="rf-tag">${esc(fl.gate)} — ${esc(fl.sub)}</div></div>
+    <div class="rf-row"><strong>Gap:</strong> ${esc(fl.item)}</div>
+    <div class="rf-row"><strong>Consequence to Training:</strong> ${esc(fl.consequence)}</div>
     <div class="rf-inputs">
-      <div class="rf-field"><label>Owner</label><input type="text" id="own_${fl.key}" value="${fl.defOwner}" placeholder="Assign responsible party"></div>
+      <div class="rf-field"><label>Owner</label><input type="text" id="own_${fl.key}" value="${esc(fl.defOwner)}" placeholder="Assign responsible party"></div>
       <div class="rf-field"><label>Resolution Date</label><input type="date" id="due_${fl.key}"></div>
     </div>
   </div>`).join('');
@@ -1818,7 +2243,7 @@ function renderPAdkar(){
     <div class="ak-vl" id="pav-${d.key}">${p.adkarScores[d.key]}</div></div>
     <div class="ak-bar"><div class="ak-bar-fill" id="pab-${d.key}" style="width:${p.adkarScores[d.key]/5*100}%;background:${adkarColor(p.adkarScores[d.key])}"></div></div>
     <label style="margin-top:3px">Qualitative Notes</label>
-    <textarea class="ak-notes" placeholder="${d.desc}..." oninput="updatePAdkarNote('${d.key}',this.value)">${p.adkarNotes[d.key]}</textarea>
+    <textarea class="ak-notes" placeholder="${d.desc}..." oninput="updatePAdkarNote('${d.key}',this.value)">${esc(p.adkarNotes[d.key])}</textarea>
     </div></div>`).join('');
   updatePAdkarSummary();
 }
@@ -1860,7 +2285,7 @@ function renderPSH(){
     const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
     const kr=kirkReady(sh),rr=reinReady(sh);const loc=sh.objectives.filter(o=>o.trim()).length;
     return`<div class="sh-card"><div class="sh-hd">
-      <div class="sh-name">${sh.name}</div>
+      <div class="sh-name">${esc(sh.name)}</div>
       <div class="adopt-badge ${cls}">${sc}% — ${tier}</div>
       <button class="btn-rm-sh" onclick="removePSH(${sh.id})">&times;</button>
     </div>
@@ -1886,13 +2311,13 @@ function renderPSH(){
         <div class="exp-body" id="pkirk-${sh.id}">
           <div class="kirk-grid">
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L1</div><div><div class="kirk-name">Reaction</div><div class="kirk-desc-txt">Learner feedback and satisfaction</div></div></div>
-              <div class="kirk-field"><label>Feedback Method</label><input class="kirk-inp" placeholder="e.g. Post-training survey via LMS" value="${sh.kirk.L1.method}" oninput="updatePKirk(${sh.id},'L1','method',this.value)"></div>
-              <div class="kirk-field"><label>Collection Timing</label><input class="kirk-inp" placeholder="e.g. Immediately following each session" value="${sh.kirk.L1.timing}" oninput="updatePKirk(${sh.id},'L1','timing',this.value)"></div></div>
+              <div class="kirk-field"><label>Feedback Method</label><input class="kirk-inp" placeholder="e.g. Post-training survey via LMS" value="${esc(sh.kirk.L1.method)}" oninput="updatePKirk(${sh.id},'L1','method',this.value)"></div>
+              <div class="kirk-field"><label>Collection Timing</label><input class="kirk-inp" placeholder="e.g. Immediately following each session" value="${esc(sh.kirk.L1.timing)}" oninput="updatePKirk(${sh.id},'L1','timing',this.value)"></div></div>
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L2</div><div><div class="kirk-name">Learning</div><div class="kirk-desc-txt">Knowledge and skill transfer confirmation</div></div></div>
-              <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${sh.kirk.L2.method}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
-              <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${sh.kirk.L2.assessment}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
+              <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${esc(sh.kirk.L2.method)}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
+              <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${esc(sh.kirk.L2.assessment)}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L3</div><div><div class="kirk-name">Behavior</div><div class="kirk-desc-txt">Observable behavior change post go-live</div></div></div>
-              <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${sh.kirk.L3.observable}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
+              <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${esc(sh.kirk.L3.observable)}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
               <div class="kirk-field"><label>Measurement Interval</label>
                 <select class="kirk-inp" style="width:auto" onchange="updatePKirk(${sh.id},'L3','interval',this.value)">
                   <option ${sh.kirk.L3.interval==='14'?'selected':''}>14 days post go-live</option>
@@ -1901,8 +2326,8 @@ function renderPSH(){
                   <option ${sh.kirk.L3.interval==='90'?'selected':''}>90 days post go-live</option>
                 </select></div></div>
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L4</div><div><div class="kirk-name">Results</div><div class="kirk-desc-txt">Organizational outcome alignment</div></div></div>
-              <div class="kirk-field"><label>Targeted Organizational Outcome</label><input class="kirk-inp" placeholder="e.g. Reduction in case processing errors" value="${sh.kirk.L4.outcome}" oninput="updatePKirk(${sh.id},'L4','outcome',this.value)"></div>
-              <div class="kirk-field"><label>Success Metric</label><input class="kirk-inp" placeholder="e.g. Error rate below 5% at 60-day review" value="${sh.kirk.L4.metric}" oninput="updatePKirk(${sh.id},'L4','metric',this.value)"></div></div>
+              <div class="kirk-field"><label>Targeted Organizational Outcome</label><input class="kirk-inp" placeholder="e.g. Reduction in case processing errors" value="${esc(sh.kirk.L4.outcome)}" oninput="updatePKirk(${sh.id},'L4','outcome',this.value)"></div>
+              <div class="kirk-field"><label>Success Metric</label><input class="kirk-inp" placeholder="e.g. Error rate below 5% at 60-day review" value="${esc(sh.kirk.L4.metric)}" oninput="updatePKirk(${sh.id},'L4','metric',this.value)"></div></div>
           </div>
         </div>
       </div>
@@ -1911,10 +2336,10 @@ function renderPSH(){
         <span class="exp-arr" id="parr-rein-${sh.id}">&#9660;</span></button>
         <div class="exp-body" id="prein-${sh.id}">
           <div class="rein-grid">
-            <div class="rein-field"><label>Reinforcement Owner</label><input class="rein-inp" placeholder="e.g. Direct supervisor, change champion" value="${sh.rein.owner}" oninput="updatePRein(${sh.id},'owner',this.value)"></div>
-            <div class="rein-field"><label>Escalation Path</label><input class="rein-inp" placeholder="e.g. Escalate to OCM lead if metrics fall below threshold" value="${sh.rein.escalation}" oninput="updatePRein(${sh.id},'escalation',this.value)"></div>
+            <div class="rein-field"><label>Reinforcement Owner</label><input class="rein-inp" placeholder="e.g. Direct supervisor, change champion" value="${esc(sh.rein.owner)}" oninput="updatePRein(${sh.id},'owner',this.value)"></div>
+            <div class="rein-field"><label>Escalation Path</label><input class="rein-inp" placeholder="e.g. Escalate to OCM lead if metrics fall below threshold" value="${esc(sh.rein.escalation)}" oninput="updatePRein(${sh.id},'escalation',this.value)"></div>
             <div class="rein-field" style="grid-column:1/-1"><label>Reinforcement Activities</label>
-              <textarea class="rein-ta" placeholder="e.g. Job aids at go-live, 2-week floor support, 30-day check-in..." oninput="updatePRein(${sh.id},'activities',this.value)">${sh.rein.activities}</textarea></div>
+              <textarea class="rein-ta" placeholder="e.g. Job aids at go-live, 2-week floor support, 30-day check-in..." oninput="updatePRein(${sh.id},'activities',this.value)">${esc(sh.rein.activities)}</textarea></div>
             <div class="rein-field" style="grid-column:1/-1"><label>Post Go-Live Check-In Intervals</label>
               <div class="rein-intervals">${['2 Weeks','30 Days','60 Days','90 Days','6 Months'].map(iv=>`<label class="intv-cb"><input type="checkbox" ${sh.rein.intervals.includes(iv)?'checked':''} onchange="updatePReinIv(${sh.id},'${iv}',this.checked)"> ${iv}</label>`).join('')}</div></div>
           </div>
@@ -1942,7 +2367,7 @@ function renderPAHM(){
   p.stakeholders.forEach(sh=>{
     const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
     const kr=kirkReady(sh),rr=reinReady(sh);const krCls=kr==='ready'?'low':kr==='partial'?'mod':'crit';const rrCls=rr==='ready'?'low':rr==='partial'?'mod':'crit';
-    h+=`<tr><td class="ahm-rl">${sh.name}</td>`;
+    h+=`<tr><td class="ahm-rl">${esc(sh.name)}</td>`;
     AF.forEach(f=>{const v=sh.factors[f.key],t=facTier(v);h+=`<td class="ahm-cw"><div class="ahm-cell ${t}">${TIER_MAP[t]}<br><span style="font-size:9px;opacity:0.65">${v}/5</span></div></td>`;});
     h+=`<td class="ahm-cw"><div class="ahm-cell ${krCls}">${badgeLabel(kr)}</div></td>`;
     h+=`<td class="ahm-cw"><div class="ahm-cell ${rrCls}">${badgeLabel(rr)}</div></td>`;
@@ -1952,25 +2377,37 @@ function renderPAHM(){
 }
 
 function renderPResources(){
-  const p=getProj();if(!p)return;const r=getRel();
-  document.getElementById('p-res-grid').innerHTML=RES_ROLES.map(role=>`
-    <div class="res-card">
+  const p=getProj();if(!p)return;
+  migrateResources(p);
+  document.getElementById('p-res-grid').innerHTML=RES_ROLES.map(role=>{
+    const arr=p.resources[role.key]||[];
+    const entries=arr.length?arr:[{name:'',contact:''}];
+    return`<div class="res-card">
       <div class="res-role">${role.label}</div>
-      <div class="res-fields">
-        <div><div class="res-field"><label>Name</label><input class="res-inp" type="text" value="${p.resources?.[role.key]?.name||''}" placeholder="${r?.resources?.[role.key]?.name?'Inheriting: '+r.resources[role.key].name:'Full name'}" oninput="updatePRes('${role.key}','name',this.value)"></div></div>
-        <div><div class="res-field"><label>Contact / Agency</label><input class="res-inp" type="text" value="${p.resources?.[role.key]?.contact||''}" placeholder="Email or agency" oninput="updatePRes('${role.key}','contact',this.value)"></div></div>
-      </div>
-    </div>`).join('');
-  const shown=RES_ROLES.filter(role=>getEffectiveRes(p,role.key,'name'));
+      ${entries.map((entry,i)=>`<div class="res-fields" style="margin-bottom:6px;position:relative">
+        <div><div class="res-field"><label>Name</label><input class="res-inp" type="text" value="${esc(entry.name||'')}" placeholder="Full name" oninput="updatePRes('${role.key}',${i},'name',this.value)"></div></div>
+        <div><div class="res-field"><label>Contact / Agency</label><input class="res-inp" type="text" value="${esc(entry.contact||'')}" placeholder="Email or agency" oninput="updatePRes('${role.key}',${i},'contact',this.value)"></div></div>
+        ${entries.length>1?`<button class="res-remove-btn" onclick="removePRes('${role.key}',${i})" title="Remove">&times;</button>`:''}
+      </div>`).join('')}
+      <button class="res-add-btn" onclick="addPRes('${role.key}')">+ Add Resource</button>
+    </div>`;
+  }).join('');
+  // Quick-view on overview tab
+  const allRes=RES_ROLES.filter(role=>(p.resources[role.key]||[]).some(e=>e.name));
   const qv=document.getElementById('p-res-qv');
-  if(!shown.length){qv.innerHTML='<div class="es" style="padding:16px"><div class="es-rule"></div><p class="es-txt">No resources assigned. Add assignments in the Resources tab or the release-level Resources.</p></div>';return;}
-  qv.innerHTML=shown.map(role=>`<div class="res-qv-card">
-    <div class="res-qv-role">${role.label}</div>
-    <div class="res-qv-name">${getEffectiveRes(p,role.key,'name')}</div>
-    ${getEffectiveRes(p,role.key,'contact')?`<div class="res-qv-contact">${getEffectiveRes(p,role.key,'contact')}</div>`:''}
-  </div>`).join('');
+  if(!allRes.length){qv.innerHTML='<div class="es" style="padding:16px"><div class="es-rule"></div><p class="es-txt">No resources assigned. Add assignments in the Resources tab.</p></div>';return;}
+  qv.innerHTML=allRes.map(role=>{
+    const arr=p.resources[role.key].filter(e=>e.name);
+    return arr.map(entry=>`<div class="res-qv-card">
+      <div class="res-qv-role">${role.label}</div>
+      <div class="res-qv-name">${esc(entry.name)}</div>
+      ${entry.contact?`<div class="res-qv-contact">${esc(entry.contact)}</div>`:''}
+    </div>`).join('');
+  }).join('');
 }
-function updatePRes(key,field,val){const p=getProj();if(!p)return;if(!p.resources)p.resources={};if(!p.resources[key])p.resources[key]={name:'',contact:''};p.resources[key][field]=val;renderPResources();touch('proj');schedSave();}
+function updatePRes(key,idx,field,val){const p=getProj();if(!p)return;migrateResources(p);if(!p.resources[key][idx])p.resources[key][idx]={name:'',contact:''};p.resources[key][idx][field]=val;touch('proj');schedSave();}
+function addPRes(key){const p=getProj();if(!p)return;migrateResources(p);p.resources[key].push({name:'',contact:''});renderPResources();touch('proj');schedSave();}
+function removePRes(key,idx){const p=getProj();if(!p)return;migrateResources(p);if(p.resources[key].length>1){p.resources[key].splice(idx,1);renderPResources();touch('proj');schedSave();}}
 
 function renderPKPIs(){
   const p=getProj();if(!p)return;
@@ -1987,18 +2424,9 @@ function renderPKPIs(){
 function renderPOverview(){
   const p=getProj();if(!p)return;
   renderPKPIs();
-  const gp=document.getElementById('p-ov-gates');
-  if(!Object.keys(p.gateState).length){gp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Mark gate items in the Gate Tracker to populate this view.</p></div>';}
-  else{gp.innerHTML=GATE_DEFS.map(gate=>{
-    const tot=gate.items.length;const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;const red=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='red').length;
-    const pct=Math.round(grn/tot*100);const col=(grn===0&&red===0)?'var(--bg-dark)':pct>=80?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
-    return`<div class="ov-row"><div class="ov-name">${gate.label} — ${gate.sub}</div>
-      <div class="ov-track"><div class="ov-fill" style="width:${pct}%;background:${col}"></div></div>
-      <div class="ov-score">${(grn===0&&red===0)?'—':pct+'%'}</div></div>`;
-  }).join('');}
   const fp=document.getElementById('p-ov-flags');const flags=getPFlags().slice(0,4);
   if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div>';}
-  else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${f.gate} — ${f.sub}</div><div class="fpv-i">${f.item}</div></div>`).join('');}
+  else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.sub)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
   renderPResources();
 }
 
@@ -2013,8 +2441,9 @@ function exportProjectSummary(){
   t+='─'.repeat(60)+'\n\n';
   t+=`Release:      ${r.name}\nProject:      ${p.name}\nAgencies:     ${(p.agencies||[]).join(', ')||'—'}\nTraining:     ${p.trainingRequired?'Required':'Not Required'}\nStatus:       ${p.status}\nEst. Users:   ${p.estimatedUsers||0}\nGenerated:    ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}\n\n`;
   // Resources
-  const effRes=RES_ROLES.filter(ro=>getEffectiveRes(p,ro.key,'name'));
-  if(effRes.length){t+='PROJECT TEAM\n'+'─'.repeat(45)+'\n';effRes.forEach(ro=>{t+=`${ro.label}: ${getEffectiveRes(p,ro.key,'name')}${getEffectiveRes(p,ro.key,'contact')?' — '+getEffectiveRes(p,ro.key,'contact'):''}\n`;});t+='\n';}
+  migrateResources(p);
+  const effRes=RES_ROLES.filter(ro=>(p.resources[ro.key]||[]).some(e=>e.name));
+  if(effRes.length){t+='PROJECT TEAM\n'+'─'.repeat(45)+'\n';effRes.forEach(ro=>{const arr=p.resources[ro.key].filter(e=>e.name);arr.forEach(e=>{t+=`${ro.label}: ${e.name}${e.contact?' — '+e.contact:''}\n`;});});t+='\n';}
   // Gates
   t+='GATE READINESS\n'+'─'.repeat(45)+'\n';
   GATE_DEFS.forEach(gate=>{
@@ -2036,10 +2465,88 @@ function exportProjectSummary(){
 }
 
 // ════════════════════════════════════════════════════════
+// DRAG-TO-REORDER
+// ════════════════════════════════════════════════════════
+let dragSrcEl=null;let dragType=null;
+function initReleaseDrag(){
+  document.querySelectorAll('.r-card[draggable]').forEach(card=>{
+    card.addEventListener('dragstart',e=>{dragSrcEl=card;dragType='release';card.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',card.dataset.relId);});
+    card.addEventListener('dragend',()=>{dragSrcEl=null;dragType=null;document.querySelectorAll('.r-card').forEach(c=>{c.classList.remove('dragging','drag-over');});});
+    card.addEventListener('dragover',e=>{if(dragType!=='release')return;e.preventDefault();e.dataTransfer.dropEffect='move';card.classList.add('drag-over');});
+    card.addEventListener('dragleave',()=>{card.classList.remove('drag-over');});
+    card.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();card.classList.remove('drag-over');if(!dragSrcEl||dragSrcEl===card||dragType!=='release')return;
+      const fromId=parseInt(dragSrcEl.dataset.relId);const toId=parseInt(card.dataset.relId);
+      const fromIdx=releases.findIndex(r=>r.id===fromId);const toIdx=releases.findIndex(r=>r.id===toId);
+      if(fromIdx<0||toIdx<0)return;const[moved]=releases.splice(fromIdx,1);releases.splice(toIdx,0,moved);
+      schedSave();renderPortfolio();});
+  });
+}
+function initProjectDrag(){
+  document.querySelectorAll('.pc[draggable]').forEach(card=>{
+    card.addEventListener('dragstart',e=>{dragSrcEl=card;dragType='project';card.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',card.dataset.projId);});
+    card.addEventListener('dragend',()=>{dragSrcEl=null;dragType=null;document.querySelectorAll('.pc').forEach(c=>{c.classList.remove('dragging','drag-over');});});
+    card.addEventListener('dragover',e=>{if(dragType!=='project')return;e.preventDefault();e.dataTransfer.dropEffect='move';card.classList.add('drag-over');});
+    card.addEventListener('dragleave',()=>{card.classList.remove('drag-over');});
+    card.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();card.classList.remove('drag-over');if(!dragSrcEl||dragSrcEl===card||dragType!=='project')return;
+      const r=getRel();if(!r)return;
+      const fromId=parseInt(dragSrcEl.dataset.projId);const toId=parseInt(card.dataset.projId);
+      const fromIdx=r.projects.findIndex(p=>p.id===fromId);const toIdx=r.projects.findIndex(p=>p.id===toId);
+      if(fromIdx<0||toIdx<0)return;const[moved]=r.projects.splice(fromIdx,1);r.projects.splice(toIdx,0,moved);
+      schedSave();renderRelProjCards();initProjectDrag();});
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// AUDIT TRAIL
+// ════════════════════════════════════════════════════════
+function logAudit(action,entityType,entityName,details){
+  if(!currentUserId)return;
+  _supabase.from('audit_log').insert({user_id:currentUserId,action,entity_type:entityType,entity_name:entityName||'',details:details||{}}).then(({error})=>{if(error)console.warn('Audit log:',error);});
+}
+
+async function renderAuditLog(){
+  const container=document.getElementById('audit-log-body');if(!container)return;
+  container.innerHTML='<div style="color:var(--ink-60);font-size:12px;padding:8px 0">Loading\u2026</div>';
+  const{data,error}=await _supabase.from('audit_log').select('*').eq('user_id',currentUserId).order('created_at',{ascending:false}).limit(50);
+  if(error||!data||!data.length){container.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet.</p></div>';return;}
+  const ACTION_LABELS={release_created:'Release Created',release_deleted:'Release Removed',project_created:'Project Added',project_deleted:'Project Removed',gate_updated:'Gate Updated',adkar_updated:'ADKAR Updated'};
+  container.innerHTML=data.map(row=>{
+    const ts=new Date(row.created_at);
+    const tsStr=ts.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+ts.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    return`<div class="audit-row"><span class="audit-ts">${tsStr}</span><span class="audit-action">${ACTION_LABELS[row.action]||row.action}</span><span class="audit-detail">${esc(row.entity_name)}${row.details&&row.details.release?' &mdash; '+esc(row.details.release):''}</span></div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// IN-APP ALERTS
+// ════════════════════════════════════════════════════════
+function renderAlerts(){
+  const bar=document.getElementById('alert-bar');if(!bar)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  const alerts=[];
+  releases.forEach(r=>{
+    const rl=relRollup(r);
+    if(r.golive){
+      const d=daysTo(r.golive);
+      if(d!==null&&d>=0&&d<=30&&rl.status.cls!=='on-track')
+        alerts.push({cls:'warn',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} days</strong> and is ${rl.status.label}.`});
+      if(d!==null&&d>=0&&d<=7)
+        alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} day${d===1?'':'s'}</strong> — final readiness check required.`});
+    }
+    if(rl.status.cls==='critical')
+      alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> is <strong>Critical</strong> — ${rl.flags} active risk flag${rl.flags===1?'':'s'} require attention.`});
+  });
+  // Deduplicate (7-day alert supersedes 30-day)
+  const seen=new Set();const deduped=alerts.filter(a=>{const k=a.msg;if(seen.has(k))return false;seen.add(k);return true;});
+  if(!deduped.length){bar.style.display='none';return;}
+  bar.style.display='block';
+  bar.innerHTML=`<div style="max-width:1440px;margin:0 auto;padding:4px 0">${deduped.map(a=>`<div class="alert-item"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span></div>`).join('')}</div>`;
+}
+
+// ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-loadData();
-renderPortfolio();
+initAuth();
 </script>
 </body>
 </html>
