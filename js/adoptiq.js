@@ -8,7 +8,7 @@ const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 function showLogin(){document.getElementById('v-login').classList.add('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
 function hideLogin(){document.getElementById('v-login').classList.remove('active');}
-function hideAllLoginPanels(){['login-signin','login-signup','login-forgot','login-verify'].forEach(id=>document.getElementById(id).style.display='none');}
+function hideAllLoginPanels(){['login-signin','login-signup','login-forgot','login-verify'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
 function showSignin(){hideAllLoginPanels();document.getElementById('login-signin').style.display='block';document.getElementById('login-err').textContent='';}
 function showSignup(){hideAllLoginPanels();document.getElementById('login-signup').style.display='block';document.getElementById('signup-err').textContent='';document.getElementById('signup-email').value='';document.getElementById('signup-pw').value='';document.getElementById('signup-confirm').value='';document.getElementById('pw-strength').textContent='';}
 function showForgot(){hideAllLoginPanels();document.getElementById('login-forgot').style.display='block';document.getElementById('forgot-err').textContent='';document.getElementById('forgot-email').value='';}
@@ -76,7 +76,7 @@ async function signOut(){
 
 async function bootApp(){
   await loadData();renderPortfolio();renderAlerts();document.getElementById('v-portfolio').classList.add('active');
-  checkPendingInvites();
+  checkPendingInvites();autoSnapshot();
   // Show onboarding for new users
   const{data:{user}}=await _supabase.auth.getUser();
   if(user&&!user.user_metadata?.onboarded&&releases.length===0){
@@ -196,35 +196,35 @@ async function saveProfile(){
 // ════════════════════════════════════════════════════════
 const GATE_DEFS=[
   {id:'g1',label:'Gate 1',sub:'Post-Requirements / Pre-Design',items:[
-    {text:'Impacted user groups identified via Impact Analysis',owner:'impl'},
-    {text:'Preliminary stakeholder matrix drafted and shared with Training',owner:'impl'},
-    {text:'High-level scope of system changes documented',owner:'dev'},
-    {text:'Training approach approved (ILT, vILT, eLearning, job aids)',owner:'train'},
-    {text:'Training budget and resourcing confirmed',owner:'train'}
+    {text:'Impacted user groups identified via Impact Analysis',owner:'ocm_impl'},
+    {text:'Preliminary stakeholder matrix drafted and shared with Training',owner:'ocm_impl'},
+    {text:'High-level scope of system changes documented',owner:'func'},
+    {text:'Training approach approved (ILT, vILT, eLearning, job aids)',owner:'train_env'},
+    {text:'Training resources confirmed',owner:'train_env'}
   ]},
   {id:'g2',label:'Gate 2',sub:'Post-Design / Pre-Development',items:[
-    {text:'Finalized stakeholder matrix with role-level mapping',owner:'impl'},
-    {text:'Training environment plan confirmed (ownership, access, timeline)',owner:'dev'},
-    {text:'SME assignments confirmed and communicated',owner:'pm'},
-    {text:'Curriculum outline approved',owner:'train'},
+    {text:'Finalized stakeholder matrix with role-level mapping',owner:'ocm_impl'},
+    {text:'Training environment plan confirmed (ownership, access, timeline)',owner:'func'},
+    {text:'SME assignments confirmed and communicated',owner:'smes'},
+    {text:'Curriculum outline approved',owner:'train_env'},
     {text:'Training calendar windows identified and protected',owner:'pm'},
-    {text:'Communications plan aligned with Training delivery schedule',owner:'impl'}
+    {text:'Communications plan aligned with Training delivery schedule',owner:'ocm_impl'}
   ]},
   {id:'g3',label:'Gate 3',sub:'Post-Dev / Pre-UAT',items:[
-    {text:'Training environment accessible and stable',owner:'dev'},
-    {text:'SMEs available and confirmed for content validation',owner:'pm'},
-    {text:'Tech transfer date locked or within confirmed window',owner:'dev'},
-    {text:'TTT schedule drafted and distributed',owner:'train'},
-    {text:'System changes from Development documented and communicated to Training',owner:'dev'},
-    {text:'End user training materials in active development',owner:'train'}
+    {text:'Training environment accessible and stable',owner:'func'},
+    {text:'SMEs available and confirmed for content validation',owner:'smes'},
+    {text:'Tech transfer date locked or within confirmed window',owner:'func'},
+    {text:'TTT schedule drafted and distributed',owner:'train_env'},
+    {text:'System changes from Development documented and communicated to Training',owner:'func'},
+    {text:'End user training materials in active development',owner:'train_env'}
   ]},
   {id:'g4',label:'Gate 4',sub:'Post-UAT / Pre-Go-Live',items:[
-    {text:'TTT complete with documented sign-off',owner:'train'},
-    {text:'Training environment mirrors production as closely as possible',owner:'dev'},
+    {text:'TTT complete with documented sign-off',owner:'train_env'},
+    {text:'Training environment mirrors production as closely as possible',owner:'func'},
     {text:'Final user list confirmed by role and population',owner:'pm'},
     {text:'Go-live date locked with change freeze window communicated',owner:'pm'},
-    {text:'Post-release monitoring plan confirmed between Implementation and Training',owner:'impl'},
-    {text:'Floor support and help desk coverage plan in place',owner:'train'}
+    {text:'Post-release monitoring plan confirmed between Implementation and Training',owner:'ocm_impl'},
+    {text:'Floor support and help desk coverage plan in place',owner:'train_env'}
   ]}
 ];
 const RC={
@@ -232,7 +232,7 @@ const RC={
       'Training cannot determine who requires training or at what scale.',
       'Training scope is undefined. Curriculum development cannot be initiated.',
       'Delivery format unknown. Materials development and vendor sourcing are blocked.',
-      'Training cannot be adequately staffed. Schedule risk is elevated.'],
+      'Training resources are unconfirmed. Schedule risk is elevated.'],
   g2:['Training cannot confirm who to train or sequence delivery by role.',
       'No environment plan means TTT and end user training have no operational foundation.',
       'Content cannot be validated without confirmed SMEs. Accuracy and credibility are at risk.',
@@ -252,7 +252,7 @@ const RC={
       'No shared post-release monitoring plan between Implementation and Training.',
       'End users will have no structured support at go-live.']
 };
-const WS=['OCM Implementation','Project Management','Functional','App Dev','QA','UAT','Training Environment'];
+const WS=['OCM Training','OCM Implementation','Project Manager','Functional','QA','UAT','SMEs','Training Environment'];
 const GL=['Post-Requirements','Post-Design','Post-Dev / Pre-UAT','Post-UAT / Pre-Go-Live'];
 const AF=[
   {key:'resistance',label:'Resistance Signals',desc:'Signals surfaced via stakeholder engagement'},
@@ -271,12 +271,13 @@ const ADKAR_DIMS=[
   {key:'R',letter:'R',word:'Reinforcement',desc:'Reinforcement to sustain the change'},
 ];
 const RES_ROLES=[
+  {key:'ocm_train',label:'OCM Training'},
   {key:'ocm_impl',label:'OCM Implementation'},
-  {key:'pm',label:'Project Management'},
+  {key:'pm',label:'Project Manager'},
   {key:'func',label:'Functional'},
-  {key:'appdev',label:'App Dev'},
   {key:'qa',label:'QA'},
   {key:'uat',label:'UAT'},
+  {key:'smes',label:'SMEs'},
   {key:'train_env',label:'Training Environment'},
 ];
 const TIER_MAP={low:'Low',mod:'Moderate',high:'High',crit:'Critical'};
@@ -313,11 +314,11 @@ function applyTheme(t){
   ['','-r','-p'].forEach(s=>{
     const ic=document.getElementById('theme-icon'+s);
     const lb=document.getElementById('theme-lbl'+s);
-    if(ic)ic.textContent=t==='dark'?'☀':'☽';
-    if(lb)lb.textContent=t==='dark'?'Light':'Dark';
+    if(ic)ic.textContent=t==='dark'?'☽':'☀';
+    if(lb)lb.textContent=t==='dark'?'Dark':'Light';
   });
 }
-function toggleTheme(){applyTheme(theme==='light'?'dark':'light');}
+function toggleTheme(){applyTheme(theme==='light'?'dark':'light');setTimeout(()=>{if(releases.length)renderPortfolioCharts();const p=getProj();if(p)renderProjCharts();},300);}
 applyTheme(theme);
 
 // ════════════════════════════════════════════════════════
@@ -365,15 +366,17 @@ function schedSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveData,600);
 // ════════════════════════════════════════════════════════
 // DATA FACTORIES
 // ════════════════════════════════════════════════════════
+let _idSeq=0;
+function uid(){return Date.now()*1000+(_idSeq++);}
 function newRelease(name,agencies,golive,phase){
-  return{id:Date.now(),name,agencies:agencies||[],golive:golive||'',phase:phase||'',
+  return{id:uid(),name,agencies:agencies||[],golive:golive||'',phase:phase||'',
     modified:new Date().toISOString(),projects:[]
   };
 }
 function newProject(name,agencies,users){
   const res={};RES_ROLES.forEach(r=>{res[r.key]=[];});
-  return{id:Date.now(),name,agencies:agencies||[],estimatedUsers:users||0,
-    trainingRequired:true,status:'Not Started',
+  return{id:uid(),name:name||'Untitled Project',agencies:agencies||[],estimatedUsers:users||0,
+    trainingRequired:true,status:'Not Started',golive:'',
     gateState:{},depHM:{},depNotes:{},stakeholders:[],
     adkarScores:{A1:3,D:3,K:3,Ab:3,R:3},adkarNotes:{A1:'',D:'',K:'',Ab:'',R:''},
     resources:res
@@ -390,6 +393,12 @@ function getProj(){
 }
 function migrateResources(p){
   if(!p.resources)p.resources={};
+  // Migrate old keys to new keys
+  if(p.resources.pmo&&!p.resources.pm)p.resources.pm=p.resources.pmo;
+  delete p.resources.pmo;
+  if(p.resources.appdev&&!p.resources.dev)p.resources.dev=p.resources.appdev;
+  delete p.resources.appdev;
+  delete p.resources.dev;
   RES_ROLES.forEach(role=>{
     const v=p.resources[role.key];
     if(!v)p.resources[role.key]=[];
@@ -451,7 +460,8 @@ function facTier(v){if(v>=4)return'low';if(v>=3)return'mod';if(v>=2)return'high'
 function kirkReady(sh){let f=0;const k=sh.kirk;if(k.L1.method)f++;if(k.L1.timing)f++;if(k.L2.method)f++;if(k.L2.assessment)f++;if(k.L3.observable)f++;if(k.L3.interval)f++;if(k.L4.outcome)f++;if(k.L4.metric)f++;return Math.round(f/8*100)>=75?'ready':Math.round(f/8*100)>=40?'partial':'needed';}
 function reinReady(sh){let f=0;if(sh.rein.owner)f++;if(sh.rein.activities)f++;if(sh.rein.intervals.length)f++;if(sh.rein.escalation)f++;return f>=3?'ready':f>=1?'partial':'needed';}
 function badgeLabel(r){return r==='ready'?'Ready':r==='partial'?'In Progress':'Not Started';}
-function daysTo(d){if(!d)return null;const r=Math.ceil((new Date(d)-new Date())/86400000);return r>0?r:0;}
+function daysTo(d){if(!d)return null;const t=new Date();t.setHours(0,0,0,0);const g=new Date(d);g.setHours(0,0,0,0);return Math.ceil((g-t)/86400000);}
+function fmtDays(d){if(d===null)return'—';if(d<0)return Math.abs(d)+' days overdue';if(d===0)return'Today';return d+' days';}
 function fmtDate(d){if(!d)return'—';const[y,m,dy]=d.split('-');return`${m}/${dy}/${y}`;}
 function fmtMod(iso){try{const d=new Date(iso);const now=new Date();const diff=Math.floor((now-d)/60000);if(diff<1)return'Just now';if(diff<60)return`${diff}m ago`;const h=Math.floor(diff/60);if(h<24)return`${h}h ago`;const dy=Math.floor(h/24);if(dy<7)return`${dy}d ago`;return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}catch(e){return'—';}}
 function adkarColor(v){return v>=4?'var(--green)':v===3?'var(--gold)':v===2?'#C28E00':'var(--red)';}
@@ -496,6 +506,7 @@ function openProject(pid){
   document.getElementById('bc-rel-p').textContent=r.name||'Release';
   document.getElementById('bc-proj').textContent=p.name||'Project';
   document.getElementById('p-name').value=p.name||'';
+  document.getElementById('p-golive').value=p.golive||'';
   document.getElementById('p-users').value=p.estimatedUsers||0;
   document.getElementById('p-status').value=p.status||'Not Started';
   renderProjAgencyChips();
@@ -634,16 +645,29 @@ function renderPortfolio(){
   const scores=releases.map(r=>relRollup(r).gateScore).filter(s=>s!==null);
   document.getElementById('ps-gate').textContent=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length)+'%':'—';
   const wd=releases.filter(r=>r.golive).sort((a,b)=>new Date(a.golive)-new Date(b.golive));
-  if(wd.length){const n=wd[0];const d=daysTo(n.golive);document.getElementById('ps-near-d').textContent=d!==null?d+' days':'Passed';document.getElementById('ps-near-r').textContent=n.name;}
+  const future=wd.filter(r=>daysTo(r.golive)>=0);const nearest=future.length?future[0]:wd[wd.length-1];
+  if(nearest){const d=daysTo(nearest.golive);document.getElementById('ps-near-d').textContent=fmtDays(d);document.getElementById('ps-near-r').textContent=nearest.name;}
   else{document.getElementById('ps-near-d').textContent='—';document.getElementById('ps-near-r').textContent='No go-live dates set';}
   const wrap=document.getElementById('rel-grid-wrap');
   if(!releases.length){
-    wrap.innerHTML=`<div class="port-empty"><div class="pe-rule"></div><div class="pe-h">No releases added yet</div><div class="pe-s">Add your first release to begin tracking readiness and adoption across your portfolio.</div><button class="btn-gold" onclick="openAddRelease()">+ Add First Release</button></div>`;
-    document.getElementById('phm-sec').style.display='none';document.getElementById('tl-sec').style.display='none';return;
+    wrap.innerHTML=`<div class="hero-empty">
+      <div class="hero-badge">ADOPTION INTELLIGENCE PLATFORM</div>
+      <div class="hero-h">Enterprise-Grade Change Readiness,<br>Measured and Managed</div>
+      <div class="hero-sub">AdoptIQ integrates ADKAR, Kirkpatrick, and SDLC gate methodology into a single command center — giving OCM leaders the visibility to drive adoption at scale.</div>
+      <div class="hero-features">
+        <div class="hero-feat"><div class="hero-feat-icon">&#9632;</div><div><div class="hero-feat-t">4-Gate Readiness Tracker</div><div class="hero-feat-d">Map training dependencies across the full SDLC lifecycle</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon">&#9650;</div><div><div class="hero-feat-t">ADKAR Assessment Engine</div><div class="hero-feat-d">Score awareness, desire, knowledge, ability, and reinforcement</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon">&#9679;</div><div><div class="hero-feat-t">Adoption Risk Scoring</div><div class="hero-feat-d">Quantify stakeholder readiness with 6-factor analysis</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon">&#9733;</div><div><div class="hero-feat-t">Kirkpatrick Measurement</div><div class="hero-feat-d">L1–L4 evaluation framework built into every stakeholder group</div></div></div>
+      </div>
+      <button class="btn-gold" onclick="openAddRelease()" style="padding:14px 32px;font-size:13px">+ Create Your First Release</button>
+      <div class="hero-cred">Providence Consulting Firm &middot; CPTM &middot; ATD Master Trainer &middot; ADKAR-Aligned</div>
+    </div>`;
+    document.getElementById('phm-sec').style.display='none';document.getElementById('tl-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
   }
   wrap.innerHTML=`<div class="card-grid">${releases.map(r=>{
     const rl=relRollup(r);const d=daysTo(r.golive);const modStr=fmtMod(r.modified);
-    const tl=r.resources?.train?.name||'';const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
+    const tl='';const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
     return`<div class="r-card" tabindex="0" draggable="true" data-rel-id="${r.id}" onclick="openRelease(${r.id})" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button" aria-label="Open ${esc(r.name)}">
       <div class="r-card-hd">
         <div style="display:flex;align-items:center;justify-content:space-between"><div class="rc-name">${esc(r.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
@@ -669,8 +693,8 @@ function renderPortfolio(){
       </div>
     </div>`;
   }).join('')}</div>`;
-  document.getElementById('phm-sec').style.display='block';document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';document.getElementById('audit-sec').style.display='block';
-  renderPortfolioHM();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();
+  document.getElementById('phm-sec').style.display='block';document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
+  renderPortfolioHM();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();
 }
 
 function renderPortfolioHM(){
@@ -681,7 +705,7 @@ function renderPortfolioHM(){
     const gcls=hmCellCls(rl.gateScore,[80,50]);
     const acls=rl.adkar?hmCellCls(parseFloat(rl.adkar),[4,3]):'n';
     const fcls=rl.flags===0?'g':rl.flags<=2?'a':'r';
-    const dcls=d===null?'n':hmCellCls(d,[30,14]);
+    const dcls=d===null?'n':d<0?'r':hmCellCls(d,[30,14]);
     const scls=rl.status.cls==='on-track'?'g':rl.status.cls==='at-risk'?'a':'r';
     h+=`<tr>
       <td class="phm-rl" onclick="openRelease(${r.id})" tabindex="0" onkeydown="if(event.key==='Enter')openRelease(${r.id})">
@@ -690,7 +714,7 @@ function renderPortfolioHM(){
       <td><div class="hmc-w"><div class="hmc ${gcls}">${rl.gateScore!==null?rl.gateScore+'%':'Not Set'}</div></div></td>
       <td><div class="hmc-w"><div class="hmc ${acls}">${rl.adkar!==null?rl.adkar+'/5':'Not Set'}</div></div></td>
       <td><div class="hmc-w"><div class="hmc ${fcls}">${rl.flags}</div></div></td>
-      <td><div class="hmc-w"><div class="hmc ${dcls}">${d!==null?d+' days':'—'}</div></div></td>
+      <td><div class="hmc-w"><div class="hmc ${dcls}">${fmtDays(d)}</div></div></td>
       <td><div class="hmc-w"><div class="hmc ${scls}">${rl.status.label}</div></div></td>
     </tr>`;
   });
@@ -716,10 +740,10 @@ function renderTimeline(){
   sorted.forEach(r=>{
     const rl=relRollup(r);const bCls=rl.status.cls==='on-track'?'bon':rl.status.cls==='at-risk'?'bat':'bcr';const mCls=rl.status.cls==='on-track'?'mon':rl.status.cls==='at-risk'?'mat':'mcr';
     html+=`<div class="tl-row"><div class="tl-rl" onclick="openRelease(${r.id})" tabindex="0" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button"><span class="tl-rl-n">${esc(r.name)}</span><span class="tl-rl-s">${(r.agencies||[]).map(a=>esc(a)).join(' · ')||'—'}</span></div>
-    <div class="tl-track"><div class="tl-today" style="left:${todayPct}%;height:100%"><div class="tl-today-l">Today</div></div>`;
-    if(r.golive){const gl=new Date(r.golive);gl.setHours(0,0,0,0);const glPct=pct(gl);const passed=gl<today;const bL=passed?glPct:todayPct;const bW=passed?Math.max(todayPct-glPct,0.8):Math.max(glPct-todayPct,0.8);
-      html+=`<div class="tl-bar-w" style="left:${bL}%;width:${bW}%" onclick="openRelease(${r.id})"><div class="tl-bar ${passed?'bnd':bCls}"><span class="tl-bar-l">${passed?esc(r.name)+' — passed':esc(r.name)}</span></div></div>
-      <div class="tl-mkr ${mCls}" style="left:calc(${glPct}% - 5px)"></div><div class="tl-gl-d" style="left:${glPct}%">${fmtDate(r.golive)}</div>`;
+    <div class="tl-track"><div class="tl-today" style="left:${todayPct}%;height:100%"><div class="tl-today-l">TODAY</div></div>`;
+    if(r.golive){const gl=new Date(r.golive);gl.setHours(0,0,0,0);const glPct=pct(gl);const passed=gl<today;const bL=passed?glPct:todayPct;const bW=passed?Math.max(todayPct-glPct,2):Math.max(glPct-todayPct,2);
+      html+=`<div class="tl-bar-w" style="left:${bL}%;width:${bW}%" onclick="openRelease(${r.id})"><div class="tl-bar ${passed?'bcr':bCls}"><span class="tl-bar-l">${passed?esc(r.name)+' — overdue':esc(r.name)}</span></div></div>
+      <div class="tl-mkr ${passed?'mcr':mCls}" style="left:calc(${glPct}% - 5px)"></div><div class="tl-gl-d" style="left:${glPct}%">${fmtDate(r.golive)}</div>`;
     }else{html+=`<div class="tl-bar-w" style="left:0%;width:15%" onclick="openRelease(${r.id})"><div class="tl-bar bnd"><span class="tl-bar-l">No date set</span></div></div>`;}
     html+='</div></div>';
   });
@@ -748,7 +772,7 @@ function removeRelAgency(a){
 function updateRelDays(){
   const v=document.getElementById('r-golive').value;
   if(!v){document.getElementById('rel-days-num').textContent='—';return;}
-  const d=daysTo(v);document.getElementById('rel-days-num').textContent=d!==null?d:'—';
+  const d=daysTo(v);document.getElementById('rel-days-num').textContent=fmtDays(d);
   updateRelStatusPill();
 }
 function updateRelStatusPill(){
@@ -766,8 +790,8 @@ function renderRelSumBar(){
   const r=getRel();if(!r)return;
   document.getElementById('rsb-name').textContent=r.name||'—';
   document.getElementById('rsb-chips').innerHTML=(r.agencies||[]).map(a=>`<span class="chip chip-white" style="margin-right:4px">${esc(a)}</span>`).join('');
-  document.getElementById('rsb-tl').textContent=r.resources?.train?.name||'Not assigned';
-  document.getElementById('rsb-pm').textContent=r.resources?.pm?.name||'Not assigned';
+  document.getElementById('rsb-phase').textContent=r.phase||'—';
+  document.getElementById('rsb-golive').textContent=r.golive?fmtDate(r.golive):'Not set';
   const rl=relRollup(r);const chip=document.getElementById('rsb-chip');
   chip.className='rsb-chip '+rl.status.cls;chip.textContent=rl.status.label;
   const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
@@ -915,6 +939,7 @@ function renderPGates(){
           <button class="ss-btn ${st==='green'?'sc':''}" onclick="setPGate('${gate.id}',${i},'green')">Complete</button>
           <button class="ss-btn ${st==='yellow'?'sp':''}" onclick="setPGate('${gate.id}',${i},'yellow')">Partial</button>
           <button class="ss-btn ${st==='red'?'si':''}" onclick="setPGate('${gate.id}',${i},'red')">Incomplete</button>
+          <button class="ss-btn ${st==='gray'?'sn':''}" onclick="setPGate('${gate.id}',${i},'gray')">Not Started</button>
         </div></div>`;}).join('')}</div>`;
     c.appendChild(div);
   });
@@ -933,7 +958,7 @@ function setPGate(gid,idx,color){
   renderPGates();renderPKPIs();touch('proj');schedSave();
 }
 
-const HMS=['Not Set','Complete','Partial','Blocking'];
+const HMS=['Not Started','Complete','Partial','Blocking'];
 function renderPDepHM(){
   const p=getProj();if(!p)return;
   const t=document.getElementById('p-dep-hm');
@@ -963,7 +988,7 @@ function getPFlags(){
     gate.items.forEach((item,i)=>{
       if(p.gateState[gate.id+'_'+i]==='red'){
         const defOwner=getEffectiveRes(p,item.owner||'','name');
-        f.push({gate:gate.label,sub:gate.sub,item:item.text,consequence:RC[gate.id]?.[i]||'Training delivery is at risk.',key:gate.id+'_'+i,defOwner});
+        f.push({gate:gate.label,sub:gate.sub,item:item.text,consequence:RC[gate.id]?.[i]||'Change readiness is at risk.',key:gate.id+'_'+i,defOwner});
       }
     });
   });
@@ -1018,7 +1043,7 @@ function updatePAdkarSummary(){
 function addPSH(){
   const p=getProj();if(!p)return;
   const inp=document.getElementById('p-sh-inp');const name=inp.value.trim();if(!name)return;
-  p.stakeholders.push({id:Date.now(),name,
+  p.stakeholders.push({id:uid(),name,
     factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},objectives:[],
     kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
     rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''}});
@@ -1049,7 +1074,7 @@ function renderPSH(){
         <div class="exp-body" id="plo-${sh.id}">
           <div class="lo-hint">Write in performance terms: the learner will be able to [verb] [skill/behavior] [condition/standard].</div>
           <ul class="lo-list">${sh.objectives.map((o,i)=>`<li class="lo-item"><span class="lo-num">0${i+1}</span>
-            <input class="lo-inp" value="${o.replace(/"/g,'&quot;')}" placeholder="The learner will be able to..." oninput="updatePLO(${sh.id},${i},this.value)">
+            <input class="lo-inp" value="${esc(o)}" placeholder="The learner will be able to..." oninput="updatePLO(${sh.id},${i},this.value)">
             <button class="btn-lo-rm" onclick="removePLO(${sh.id},${i})">&times;</button></li>`).join('')}</ul>
           <button class="btn-lo-add" onclick="addPLO(${sh.id})">+ Add Objective</button>
         </div>
@@ -1102,7 +1127,12 @@ function renderPSH(){
 function updatePFac(id,key,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.factors[key]=parseInt(val);const ve=document.getElementById(`pfv-${id}-${key}`);const de=document.getElementById(`pfd-${id}-${key}`);if(ve)ve.textContent=val;if(de)de.textContent=FD[parseInt(val)];renderPSH();renderPKPIs();touch('proj');schedSave();}
 function addPLO(id){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives.push('');renderPSH();const b=document.getElementById('plo-'+id);if(b){b.classList.add('open');const a=document.getElementById('parr-lo-'+id);if(a)a.classList.add('open');}touch('proj');schedSave();}
 function removePLO(id,idx){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives.splice(idx,1);renderPSH();touch('proj');schedSave();}
-function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives[idx]=val;touch('proj');schedSave();}
+function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives[idx]=val;
+  // Update badge count live
+  const loc=sh.objectives.filter(o=>o.trim()).length;
+  const badge=document.querySelector(`#plo-${id}`)?.closest('.exp-sec')?.querySelector('.exp-badge');
+  if(badge){badge.textContent=loc>0?loc+' Defined':'Not Started';badge.className='exp-badge '+(loc>0?'ready':'needed');}
+  touch('proj');schedSave();}
 function updatePKirk(id,level,field,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.kirk[level][field]=val;touch('proj');schedSave();}
 function updatePRein(id,field,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.rein[field]=val;touch('proj');schedSave();}
 function updatePReinIv(id,iv,checked){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;if(checked&&!sh.rein.intervals.includes(iv))sh.rein.intervals.push(iv);if(!checked)sh.rein.intervals=sh.rein.intervals.filter(x=>x!==iv);touch('proj');schedSave();}
@@ -1131,11 +1161,12 @@ function renderPResources(){
   document.getElementById('p-res-grid').innerHTML=RES_ROLES.map(role=>{
     const arr=p.resources[role.key]||[];
     const entries=arr.length?arr:[{name:'',contact:''}];
+    const showContact=role.key==='smes';
     return`<div class="res-card">
       <div class="res-role">${role.label}</div>
       ${entries.map((entry,i)=>`<div class="res-fields" style="margin-bottom:6px;position:relative">
         <div><div class="res-field"><label>Name</label><input class="res-inp" type="text" value="${esc(entry.name||'')}" placeholder="Full name" oninput="updatePRes('${role.key}',${i},'name',this.value)"></div></div>
-        <div><div class="res-field"><label>Contact / Agency</label><input class="res-inp" type="text" value="${esc(entry.contact||'')}" placeholder="Email or agency" oninput="updatePRes('${role.key}',${i},'contact',this.value)"></div></div>
+        ${showContact?`<div><div class="res-field"><label>Contact / Agency</label><input class="res-inp" type="text" value="${esc(entry.contact||'')}" placeholder="Email or agency" oninput="updatePRes('${role.key}',${i},'contact',this.value)"></div></div>`:''}
         ${entries.length>1?`<button class="res-remove-btn" onclick="removePRes('${role.key}',${i})" title="Remove">&times;</button>`:''}
       </div>`).join('')}
       <button class="res-add-btn" onclick="addPRes('${role.key}')">+ Add Resource</button>
@@ -1177,6 +1208,231 @@ function renderPOverview(){
   if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div>';}
   else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.sub)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
   renderPResources();
+  renderProjCharts();
+  renderRecommendations();
+}
+
+// ════════════════════════════════════════════════════════
+// CHARTS (Chart.js)
+// ════════════════════════════════════════════════════════
+let chartInstances={};
+function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
+function chartTextColor(){return getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()||'#0C1F3F';}
+function chartSubColor(){return getComputedStyle(document.documentElement).getPropertyValue('--ink-60').trim()||'#666';}
+function chartGridColor(){const t=document.documentElement.getAttribute('data-theme');return t==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';}
+const CHART_NAVY='rgba(12,31,63,0.85)';const CHART_GOLD='rgba(184,146,42,0.85)';
+const CHART_GREEN='rgba(29,104,64,0.85)';const CHART_AMBER='rgba(138,92,0,0.85)';
+const CHART_RED='rgba(139,26,26,0.85)';const CHART_BLUE='rgba(74,111,165,0.85)';
+const CHART_GRAY='rgba(180,180,180,0.5)';
+
+function renderProjCharts(){
+  const p=getProj();if(!p)return;
+  // Gate Readiness Donut
+  destroyChart('proj-gates');
+  const gc=document.getElementById('chart-proj-gates');if(!gc)return;
+  const gateData=GATE_DEFS.map(gate=>{
+    const tot=gate.items.length;
+    const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
+    return{label:gate.label,pct:Math.round(grn/tot*100)};
+  });
+  const avgGate=Math.round(gateData.reduce((a,g)=>a+g.pct,0)/gateData.length);
+  chartInstances['proj-gates']=new Chart(gc,{type:'doughnut',data:{
+    labels:gateData.map(g=>g.label),
+    datasets:[{data:gateData.map(g=>g.pct),
+      backgroundColor:[CHART_NAVY,CHART_GOLD,CHART_GREEN,CHART_BLUE],
+      borderWidth:0,borderRadius:3}]
+  },options:{responsive:true,maintainAspectRatio:false,cutout:'70%',
+    plugins:{legend:{position:'bottom',labels:{font:{size:10,family:"'DM Sans',sans-serif"},padding:12,usePointStyle:true,pointStyleWidth:8,color:chartTextColor()}},
+      tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+'%'}}
+    }},
+    plugins:[{id:'centerText',afterDraw(chart){
+      const{ctx,width,height}=chart;ctx.save();
+      ctx.font='bold 28px "DM Serif Display",Georgia,serif';ctx.fillStyle=chartTextColor();
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(avgGate+'%',width/2,height/2-8);
+      ctx.font='500 10px "DM Sans",sans-serif';ctx.fillStyle=chartSubColor();
+      ctx.fillText('Overall',width/2,height/2+12);ctx.restore();
+    }}]
+  });
+
+  // ADKAR Bar Chart
+  destroyChart('proj-adkar');
+  const ac=document.getElementById('chart-proj-adkar');if(!ac)return;
+  const adkarLabels=ADKAR_DIMS.map(d=>d.word);
+  const adkarValues=ADKAR_DIMS.map(d=>p.adkarScores[d.key]);
+  const adkarColors=adkarValues.map(v=>v>=4?CHART_GREEN:v>=3?CHART_GOLD:v>=2?CHART_AMBER:CHART_RED);
+  chartInstances['proj-adkar']=new Chart(ac,{type:'bar',data:{
+    labels:adkarLabels,datasets:[{data:adkarValues,backgroundColor:adkarColors,borderRadius:4,barPercentage:0.6}]
+  },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+    scales:{x:{min:0,max:5,ticks:{stepSize:1,font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
+      y:{ticks:{font:{size:10,family:"'DM Sans',sans-serif",weight:'600'},color:chartTextColor()},grid:{display:false}}},
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+'/5'}}}
+  }});
+}
+
+function renderPortfolioCharts(){
+  if(!releases.length){document.getElementById('exec-dash').style.display='none';return;}
+  document.getElementById('exec-dash').style.display='block';
+
+  // Overall Readiness Donut
+  destroyChart('port-readiness');
+  const rc=document.getElementById('chart-port-readiness');if(!rc)return;
+  let totalGate=0,countGate=0;
+  releases.forEach(r=>r.projects.forEach(p=>{const gs=projGateScore(p);if(gs!==null){totalGate+=gs;countGate++;}}));
+  const avgGate=countGate?Math.round(totalGate/countGate):0;
+  const remainder=100-avgGate;
+  chartInstances['port-readiness']=new Chart(rc,{type:'doughnut',data:{
+    labels:['Ready','Remaining'],datasets:[{data:[avgGate,remainder],
+      backgroundColor:[avgGate>=70?CHART_GREEN:avgGate>=40?CHART_GOLD:CHART_RED,CHART_GRAY],borderWidth:0,borderRadius:3}]
+  },options:{responsive:true,maintainAspectRatio:false,cutout:'75%',
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+'%'}}}},
+    plugins:[{id:'centerText2',afterDraw(chart){
+      const{ctx,width,height}=chart;ctx.save();
+      ctx.font='bold 32px "DM Serif Display",Georgia,serif';ctx.fillStyle=chartTextColor();
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(avgGate+'%',width/2,height/2-10);
+      ctx.font='500 10px "DM Sans",sans-serif';ctx.fillStyle=chartSubColor();
+      ctx.fillText('Portfolio Readiness',width/2,height/2+14);ctx.restore();
+    }}]
+  });
+
+  // Risk Distribution
+  destroyChart('port-risk');
+  const rkc=document.getElementById('chart-port-risk');if(!rkc)return;
+  let low=0,mod=0,high=0,crit=0;
+  releases.forEach(r=>r.projects.forEach(p=>{
+    p.stakeholders.forEach(sh=>{const sc=adoptScore(sh.factors);const{cls}=adoptTier(sc);
+      if(cls==='low')low++;else if(cls==='mod')mod++;else if(cls==='high')high++;else crit++;
+    });
+  }));
+  const totalSH=low+mod+high+crit;
+  if(totalSH){
+    chartInstances['port-risk']=new Chart(rkc,{type:'doughnut',data:{
+      labels:['Low Risk','Moderate','High Risk','Critical'],
+      datasets:[{data:[low,mod,high,crit],backgroundColor:[CHART_GREEN,CHART_GOLD,CHART_AMBER,CHART_RED],borderWidth:0,borderRadius:3}]
+    },options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',align:'center',labels:{font:{size:10,family:"'DM Sans',sans-serif"},padding:10,boxWidth:10,usePointStyle:true,pointStyleWidth:8,color:chartTextColor()}},
+        tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+' group'+(ctx.raw!==1?'s':'')}}}}
+    });
+  } else {
+    rkc.parentElement.innerHTML='<div class="es" style="padding:40px"><p class="es-txt">Add stakeholder groups to see risk distribution.</p></div>';
+  }
+
+  // Attention Required
+  renderExecAttention();
+}
+
+function renderExecAttention(){
+  const el=document.getElementById('exec-attention');if(!el)return;
+  const items=[];
+  // Critical flags
+  releases.forEach(r=>{r.projects.forEach(p=>{
+    GATE_DEFS.forEach(gate=>{gate.items.forEach((item,i)=>{
+      if(p.gateState[gate.id+'_'+i]==='red'){
+        items.push({sev:'crit',label:`${esc(r.name)} › ${esc(p.name)}`,sub:`${gate.label}: ${esc(item.text)}`});
+      }
+    });});
+  });});
+  // Go-live within 14 days
+  const today=new Date();today.setHours(0,0,0,0);
+  releases.forEach(r=>{if(r.golive){const gl=new Date(r.golive+'T00:00:00');const days=Math.ceil((gl-today)/(86400000));
+    if(days<=14&&days>=0)items.push({sev:'warn',label:esc(r.name),sub:`Go-live in ${days} day${days!==1?'s':''}`});
+    if(days<0)items.push({sev:'crit',label:esc(r.name),sub:`Go-live was ${Math.abs(days)} day${Math.abs(days)!==1?'s':''} ago`});
+  }});
+  // Critical stakeholders
+  releases.forEach(r=>{r.projects.forEach(p=>{p.stakeholders.forEach(sh=>{
+    const sc=adoptScore(sh.factors);if(sc<40)items.push({sev:'warn',label:`${esc(r.name)} › ${esc(p.name)}`,sub:`${esc(sh.name)} at ${sc}% adoption likelihood`});
+  });});});
+
+  if(!items.length){el.innerHTML='<div class="es" style="padding:30px"><p class="es-txt" style="color:var(--green);font-weight:600">&#10003; No critical items. Portfolio is healthy.</p></div>';return;}
+  el.innerHTML=items.slice(0,8).map(it=>`<div class="exec-attn-item">
+    <div class="exec-attn-icon ${it.sev}">${it.sev==='crit'?'!':'⚠'}</div>
+    <div class="exec-attn-txt"><div class="exec-attn-label">${it.label}</div><div class="exec-attn-sub">${it.sub}</div></div>
+  </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// RECOMMENDATIONS ENGINE
+// ════════════════════════════════════════════════════════
+const RECOMMENDATIONS={
+  g1_0:{action:'Schedule an impact analysis session with OCM and functional leads to identify all impacted user populations.'},
+  g1_1:{action:'Draft a preliminary stakeholder matrix and share with the Training team for curriculum scoping.'},
+  g1_2:{action:'Request Development to document high-level system changes and share with Training.'},
+  g1_3:{action:'Convene a training approach review session to decide delivery format (ILT, vILT, eLearning, job aids).'},
+  g1_4:{action:'Confirm training resources and staffing with the PMO to mitigate schedule risk.'},
+  g2_0:{action:'Finalize the stakeholder matrix with role-level detail to enable targeted training sequencing.'},
+  g2_1:{action:'Coordinate with Development to confirm training environment ownership, access, and timeline.'},
+  g2_2:{action:'Confirm SME assignments and communicate expectations for content validation.'},
+  g2_3:{action:'Submit the curriculum outline for approval to unblock materials development.'},
+  g2_4:{action:'Work with the PMO to identify and protect training calendar windows before they compress.'},
+  g2_5:{action:'Align the communications plan with the training delivery schedule to prevent end-user confusion.'},
+  g3_0:{action:'Escalate training environment stability issues to Development — TTT cannot proceed without it.'},
+  g3_1:{action:'Confirm SME availability for content validation before the TTT window closes.'},
+  g3_2:{action:'Lock the tech transfer date with Development to enable TTT and end-user training sequencing.'},
+  g3_3:{action:'Draft and distribute the TTT schedule to all trainers and facilitators.'},
+  g3_4:{action:'Request documented system changes from Development to update training materials.'},
+  g3_5:{action:'Accelerate end-user training materials development to meet the delivery timeline.'},
+  g4_0:{action:'Complete TTT with documented sign-off before proceeding to end-user training.'},
+  g4_1:{action:'Verify the training environment mirrors production — report discrepancies to Development.'},
+  g4_2:{action:'Confirm the final user list by role and population with the PMO.'},
+  g4_3:{action:'Lock the go-live date and communicate the change freeze window to all stakeholders.'},
+  g4_4:{action:'Finalize the post-release monitoring plan between OCM Implementation and Training.'},
+  g4_5:{action:'Confirm floor support and help desk coverage for go-live and the first two weeks post-launch.'}
+};
+
+function renderRecommendations(){
+  const p=getProj();if(!p)return;
+  const el=document.getElementById('proj-recommendations');if(!el)return;
+  const recs=[];
+  GATE_DEFS.forEach(gate=>{gate.items.forEach((item,i)=>{
+    const s=p.gateState[gate.id+'_'+i];
+    if(s==='red'||s==='yellow'){
+      const key=gate.id+'_'+i;
+      const rec=RECOMMENDATIONS[key];
+      if(rec)recs.push({gate:`${gate.label} — ${gate.sub}`,item:item.text,action:rec.action,sev:s});
+    }
+  });});
+  if(!recs.length){el.innerHTML='<div class="es" style="padding:30px"><p class="es-txt" style="color:var(--green);font-weight:600">&#10003; All gate items are complete. No actions required.</p></div>';return;}
+  el.innerHTML=recs.slice(0,6).map(r=>`<div class="rec-item">
+    <div class="rec-icon ${r.sev}">${r.sev==='red'?'!':'⚠'}</div>
+    <div class="rec-txt"><div class="rec-gate">${esc(r.gate)}: ${esc(r.item)}</div>
+    <div class="rec-action"><strong>Action:</strong> ${esc(r.action)}</div></div>
+  </div>`).join('')+(recs.length>6?`<div style="text-align:center;padding:8px;font-size:11px;color:var(--ink-60)">+${recs.length-6} more — view all in the Gates tab</div>`:'');
+}
+
+// ════════════════════════════════════════════════════════
+// PROGRESS TRACKING (Weekly Snapshots)
+// ════════════════════════════════════════════════════════
+async function saveSnapshot(){
+  if(!currentUserId)return;
+  const snapshot={
+    date:new Date().toISOString().split('T')[0],
+    releases:releases.map(r=>({
+      id:r.id,name:r.name,
+      projects:r.projects.map(p=>{
+        const gs=projGateScore(p);const avg=projAdkarAvg(p);const flags=getProjFlags(p).length;
+        return{id:p.id,name:p.name,gateScore:gs,adkarAvg:avg,flags,status:p.status};
+      })
+    }))
+  };
+  // Store in user_metadata for simplicity (no new table needed)
+  const{data:{user}}=await _supabase.auth.getUser();
+  const history=user?.user_metadata?.snapshots||[];
+  // Only one snapshot per day
+  const today=snapshot.date;
+  const filtered=history.filter(s=>s.date!==today);
+  filtered.push(snapshot);
+  // Keep last 52 weeks
+  const trimmed=filtered.slice(-52);
+  await _supabase.auth.updateUser({data:{snapshots:trimmed}});
+}
+
+function autoSnapshot(){
+  // Auto-snapshot once per day on login
+  const lastSnap=localStorage.getItem('adoptiq_last_snap_'+currentUserId);
+  const today=new Date().toISOString().split('T')[0];
+  if(lastSnap!==today&&releases.length>0){
+    saveSnapshot();
+    localStorage.setItem('adoptiq_last_snap_'+currentUserId,today);
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -1198,7 +1454,7 @@ function exportProjectSummary(){
   GATE_DEFS.forEach(gate=>{
     const tot=gate.items.length;const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
     t+=`\n${gate.label} — ${gate.sub}: ${Math.round(grn/tot*100)}% (${grn}/${tot})\n`;
-    gate.items.forEach((item,i)=>{const s=p.gateState[gate.id+'_'+i];const sym=s==='green'?'[COMPLETE]   ':s==='yellow'?'[PARTIAL]    ':s==='red'?'[INCOMPLETE] ':'[NOT SET]    ';t+=`  ${sym} ${item.text}\n`;});
+    gate.items.forEach((item,i)=>{const s=p.gateState[gate.id+'_'+i];const sym=s==='green'?'[COMPLETE]   ':s==='yellow'?'[PARTIAL]    ':s==='red'?'[INCOMPLETE] ':s==='gray'?'[NOT STARTED]':'[NOT SET]    ';t+=`  ${sym} ${item.text}\n`;});
   });
   t+='\n\nADKAR ASSESSMENT\n'+'─'.repeat(45)+'\n';
   t+=`Overall Score: ${avg}/5\n\n`;
@@ -1287,7 +1543,7 @@ function exportProjectPDF(){
     gate.items.forEach((item,i)=>{
       y=pdfCheckPage(doc,y,w,h,pg,6);
       const s=p.gateState[gate.id+'_'+i];
-      const clr=s==='green'?[29,104,64]:s==='yellow'?[138,92,0]:s==='red'?[139,26,26]:[180,180,180];
+      const clr=s==='green'?[29,104,64]:s==='yellow'?[138,92,0]:s==='red'?[139,26,26]:s==='gray'?[136,150,167]:[210,210,210];
       doc.setFillColor(...clr);doc.circle(17,y-1.2,1.5,'F');
       doc.setFontSize(7.5);doc.text(item.text,22,y);y+=4.5;
     });
@@ -1397,14 +1653,31 @@ function getProjFlags(p){
 // TEAM COLLABORATION + RBAC
 // ════════════════════════════════════════════════════════
 let currentUserRole='owner'; // default for own releases
+let isDemoMode=false;
+
+function setDemoMode(on){
+  isDemoMode=on;
+  ['demo-banner-p','demo-banner-r','demo-banner-proj'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display=on?'inline-block':'none';
+  });
+}
+function exitDemo(){
+  localStorage.removeItem('adoptiq_data');
+  isDemoMode=false;
+  setDemoMode(false);
+  releases=[];
+  showLogin();showSignin();
+}
 
 async function ensureTeam(releaseId){
-  // Get or create a team record for this release
-  const{data}=await _supabase.from('teams').select('id').eq('release_id',releaseId).eq('owner_id',currentUserId).maybeSingle();
-  if(data)return data.id;
-  const{data:newTeam,error}=await _supabase.from('teams').insert({release_id:releaseId,owner_id:currentUserId}).select('id').single();
-  if(error){console.error('Create team:',error);return null;}
-  return newTeam.id;
+  try{
+    const{data,error:selErr}=await _supabase.from('teams').select('id').eq('release_id',releaseId).eq('owner_id',currentUserId).maybeSingle();
+    if(selErr){console.warn('Teams table not found. Run sql/phase4_teams.sql in Supabase.',selErr.message);return null;}
+    if(data)return data.id;
+    const{data:newTeam,error}=await _supabase.from('teams').insert({release_id:releaseId,owner_id:currentUserId}).select('id').single();
+    if(error){console.error('Create team:',error);return null;}
+    return newTeam.id;
+  }catch(e){console.warn('Team feature unavailable:',e);return null;}
 }
 
 function openInviteModal(){
@@ -1434,7 +1707,12 @@ async function sendInvite(){
 
 async function openTeamPanel(){
   const r=getRel();if(!r)return;
-  const teamId=await ensureTeam(r.id);if(!teamId)return;
+  const teamId=await ensureTeam(r.id);
+  if(!teamId){
+    document.getElementById('team-list').innerHTML='<div style="padding:20px;text-align:center;font-size:13px;color:var(--ink-60)"><strong>Team collaboration setup required.</strong><br><br>Run the SQL migration in <code>sql/phase4_teams.sql</code> in your Supabase SQL Editor to enable team features.</div>';
+    document.getElementById('team-invites-pending').innerHTML='';
+    document.getElementById('team-modal').classList.add('open');return;
+  }
   // Load members
   const{data:members}=await _supabase.from('team_members').select('user_id,role').eq('team_id',teamId);
   const listEl=document.getElementById('team-list');
@@ -1502,7 +1780,7 @@ function applyRoleRestrictions(){
   currentUserRole=role;
   // Show/hide team button (only for owners)
   const teamBtn=document.getElementById('team-btn');
-  if(teamBtn)teamBtn.style.display=role==='owner'?'':'none';
+  if(teamBtn)teamBtn.style.display=role==='owner'?'inline-block':'none';
   // For viewers: disable all inputs/buttons in project and release views
   if(role==='viewer'){
     document.querySelectorAll('#v-release input,#v-release select,#v-release textarea,#v-project input,#v-project select,#v-project textarea').forEach(el=>{el.disabled=true;});
@@ -1531,10 +1809,11 @@ async function loadDemoData(){
   p1.adkarScores={A1:4,D:3,K:3,Ab:2,R:2};
   p1.adkarNotes={A1:'Strong executive communications delivered',D:'Middle management resistance in field offices',K:'',Ab:'New system training not yet scheduled',R:''};
   migrateResources(p1);
-  p1.resources.ocm_impl=[{name:'Jordan Lee',contact:'jordan.lee@agency-alpha.gov'}];
-  p1.resources.pm=[{name:'Maria Santos',contact:'maria.santos@agency-alpha.gov'}];
-  p1.resources.func=[{name:'David Chen',contact:'david.chen@agency-alpha.gov'}];
-  p1.resources.train_env=[{name:'Sarah Kim',contact:'sarah.kim@agency-alpha.gov'}];
+  p1.resources.ocm_train=[{name:'Sarah Kim',contact:''}];
+  p1.resources.ocm_impl=[{name:'Jordan Lee',contact:''}];
+  p1.resources.pm=[{name:'Maria Santos',contact:''}];
+  p1.resources.func=[{name:'David Chen',contact:''}];
+  p1.resources.train_env=[{name:'Lisa Park',contact:''}];
   p1.stakeholders=[{
     name:'Field Office Supervisors',factors:{resistance:3,env:4,window:3,complexity:4,saturation:3,leadership:3},
     objectives:['Navigate new case management workflow','Generate exception reports','Escalate system-flagged discrepancies'],
@@ -1546,11 +1825,12 @@ async function loadDemoData(){
   p2.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'red',g1_4:'red'};
   p2.adkarScores={A1:2,D:2,K:1,Ab:1,R:1};
   migrateResources(p2);
-  p2.resources.ocm_impl=[{name:'Alex Rivera',contact:'alex.rivera@agency-beta.gov'}];
-  p2.resources.pm=[{name:'Priya Patel',contact:'priya.patel@agency-beta.gov'}];
+  p2.resources.ocm_impl=[{name:'Alex Rivera',contact:''}];
+  p2.resources.pm=[{name:'Priya Patel',contact:''}];
   r.projects=[p1,p2];
   releases.push(r);
   await saveData();renderPortfolio();renderAlerts();
+  setDemoMode(true);
   closeWelcome();
 }
 
@@ -1594,6 +1874,14 @@ function logAudit(action,entityType,entityName,details){
   _supabase.from('audit_log').insert({user_id:currentUserId,action,entity_type:entityType,entity_name:entityName||'',details:details||{}}).then(({error})=>{if(error)console.warn('Audit log:',error);});
 }
 
+function openAuditLog(){document.getElementById('audit-modal').classList.add('open');renderAuditLog();}
+async function exportAuditLog(){
+  const{data}=await _supabase.from('audit_log').select('*').eq('user_id',currentUserId).order('created_at',{ascending:false}).limit(200);
+  if(!data||!data.length){showSaveIndicator('No audit data');return;}
+  let csv='Timestamp,Action,Entity,Details\n';
+  data.forEach(r=>{const ts=new Date(r.created_at).toISOString();csv+=`"${ts}","${r.action}","${(r.entity_name||'').replace(/"/g,'""')}","${JSON.stringify(r.details||{}).replace(/"/g,'""')}"\n`;});
+  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='AdoptIQ-Audit-Log.csv';a.click();URL.revokeObjectURL(url);
+}
 async function renderAuditLog(){
   const container=document.getElementById('audit-log-body');if(!container)return;
   container.innerHTML='<div style="color:var(--ink-60);font-size:12px;padding:8px 0">Loading\u2026</div>';
@@ -1618,10 +1906,14 @@ function renderAlerts(){
     const rl=relRollup(r);
     if(r.golive){
       const d=daysTo(r.golive);
-      if(d!==null&&d>=0&&d<=30&&rl.status.cls!=='on-track')
-        alerts.push({cls:'warn',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} days</strong> and is ${rl.status.label}.`});
-      if(d!==null&&d>=0&&d<=7)
+      if(d!==null&&d<0)
+        alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> go-live was <strong>${Math.abs(d)} day${Math.abs(d)===1?'':'s'} ago</strong> — release is overdue.`});
+      else if(d!==null&&d===0)
+        alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live <strong>today</strong> — final readiness check required.`});
+      else if(d!==null&&d<=7)
         alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} day${d===1?'':'s'}</strong> — final readiness check required.`});
+      else if(d!==null&&d<=30&&rl.status.cls!=='on-track')
+        alerts.push({cls:'warn',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} days</strong> and is ${rl.status.label}.`});
     }
     if(rl.status.cls==='critical')
       alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> is <strong>Critical</strong> — ${rl.flags} active risk flag${rl.flags===1?'':'s'} require attention.`});
