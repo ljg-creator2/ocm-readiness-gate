@@ -262,7 +262,7 @@ const RC={
       'No shared post-release monitoring plan between Implementation and Training.',
       'End users will have no structured support at go-live.']
 };
-const WS=['OCM Training','OCM Implementation','Project Manager','Functional','QA','UAT','SMEs','Training Environment'];
+const WS=['OCM Training','OCM Implementation','Project Manager','Functional','QA','UAT','SMEs','App Dev'];
 const GL=['Post-Requirements','Post-Design','Post-Dev / Pre-UAT','Post-UAT / Pre-Go-Live'];
 const AF=[
   {key:'resistance',label:'Resistance Signals',desc:'Signals surfaced via stakeholder engagement'},
@@ -288,7 +288,7 @@ const RES_ROLES=[
   {key:'qa',label:'QA'},
   {key:'uat',label:'UAT'},
   {key:'smes',label:'SMEs'},
-  {key:'train_env',label:'Training Environment'},
+  {key:'app_dev',label:'App Dev'},
 ];
 const TIER_MAP={low:'Low',mod:'Moderate',high:'High',crit:'Critical'};
 function storageKey(){return currentUserId?'adoptiq_v1_'+currentUserId:'adoptiq_v1';}
@@ -406,9 +406,8 @@ function migrateResources(p){
   // Migrate old keys to new keys
   if(p.resources.pmo&&!p.resources.pm)p.resources.pm=p.resources.pmo;
   delete p.resources.pmo;
-  if(p.resources.appdev&&!p.resources.dev)p.resources.dev=p.resources.appdev;
-  delete p.resources.appdev;
-  delete p.resources.dev;
+  if(p.resources.train_env&&!p.resources.app_dev)p.resources.app_dev=p.resources.train_env;
+  delete p.resources.train_env;
   RES_ROLES.forEach(role=>{
     const v=p.resources[role.key];
     if(!v)p.resources[role.key]=[];
@@ -430,7 +429,7 @@ function touch(target){
 // ════════════════════════════════════════════════════════
 function projGateScore(p){
   let tot=0,grn=0;
-  GATE_DEFS.forEach(g=>{g.items.forEach((_,i)=>{tot++;if(p.gateState[g.id+'_'+i]==='green')grn++;});});
+  GATE_DEFS.forEach(g=>{g.items.forEach((_,i)=>{if(p.gateState[g.id+'_'+i]==='na')return;tot++;if(p.gateState[g.id+'_'+i]==='green')grn++;});});
   return tot?Math.round(grn/tot*100):null;
 }
 function projFlagCount(p){
@@ -939,19 +938,22 @@ function renderPGates(){
   const c=document.getElementById('p-gates-container');c.innerHTML='';
   GATE_DEFS.forEach(gate=>{
     const tot=gate.items.length;
+    const naCount=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='na').length;
+    const applicable=tot-naCount;
     const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
-    const pct=Math.round(grn/tot*100);
+    const pct=applicable?Math.round(grn/applicable*100):100;
     const barColor=pct>=80?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
     const div=document.createElement('div');div.className='gate-panel';
-    div.innerHTML=`<div class="gate-hdr"><div class="gate-ttl">${gate.label} — ${gate.sub}</div><div class="gate-tag" id="pgs-${gate.id}">${grn}/${tot} &nbsp; ${pct}%</div></div>
+    div.innerHTML=`<div class="gate-hdr"><div class="gate-ttl">${gate.label} — ${gate.sub}</div><div class="gate-tag" id="pgs-${gate.id}">${grn}/${applicable} &nbsp; ${pct}%</div></div>
     <div class="gate-bar"><div class="gate-fill" id="pgf-${gate.id}" style="width:${pct}%;background:${barColor}"></div></div>
     <div class="gate-items">${gate.items.map((item,i)=>{const st=p.gateState[gate.id+'_'+i]||null;
-      return`<div class="gate-item"><div class="gate-txt">${item.text}</div>
+      return`<div class="gate-item${st==='na'?' gate-na':''}"><div class="gate-txt">${item.text}</div>
         <div class="ss-row" role="group">
           <button class="ss-btn ${st==='green'?'sc':''}" onclick="setPGate('${gate.id}',${i},'green')">Complete</button>
           <button class="ss-btn ${st==='yellow'?'sp':''}" onclick="setPGate('${gate.id}',${i},'yellow')">Partial</button>
           <button class="ss-btn ${st==='red'?'si':''}" onclick="setPGate('${gate.id}',${i},'red')">Incomplete</button>
           <button class="ss-btn ${st==='gray'?'sn':''}" onclick="setPGate('${gate.id}',${i},'gray')">Not Started</button>
+          <button class="ss-btn ${st==='na'?'sna':''}" onclick="setPGate('${gate.id}',${i},'na')">N/A</button>
         </div></div>`;}).join('')}</div>`;
     c.appendChild(div);
   });
@@ -960,17 +962,10 @@ function renderPGates(){
 function setPGate(gid,idx,color){
   const p=getProj();if(!p)return;
   const k=gid+'_'+idx;p.gateState[k]=p.gateState[k]===color?null:color;
-  const gate=GATE_DEFS.find(g=>g.id===gid);
-  if(gate){
-    const tot=gate.items.length;const grn=gate.items.filter((_,i)=>p.gateState[gid+'_'+i]==='green').length;
-    const pct=Math.round(grn/tot*100);const bc=pct>=80?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
-    const se=document.getElementById('pgs-'+gid);const fe=document.getElementById('pgf-'+gid);
-    if(se)se.textContent=`${grn}/${tot}   ${pct}%`;if(fe){fe.style.width=pct+'%';fe.style.background=bc;}
-  }
   renderPGates();renderPKPIs();touch('proj');schedSave();
 }
 
-const HMS=['Not Started','Complete','Partial','Blocking'];
+const HMS=['Not Started','Complete','Partial','Blocking','N/A'];
 function renderPDepHM(){
   const p=getProj();if(!p)return;
   const t=document.getElementById('p-dep-hm');
@@ -984,7 +979,7 @@ function renderPDepHM(){
     });h+='</tr>';
   });h+='</tbody>';t.innerHTML=h;
 }
-function cyclePHMCell(k){const p=getProj();if(!p)return;p.depHM[k]=((p.depHM[k]||0)+1)%4;renderPDepHM();touch('proj');schedSave();}
+function cyclePHMCell(k){const p=getProj();if(!p)return;p.depHM[k]=((p.depHM[k]||0)+1)%5;renderPDepHM();touch('proj');schedSave();}
 document.addEventListener('click',e=>{
   if(e.shiftKey&&e.target.classList.contains('hm-cell')){
     e.preventDefault();const oc=e.target.getAttribute('onclick');const k=oc?.match(/'([^']+)'/)?.[1];
