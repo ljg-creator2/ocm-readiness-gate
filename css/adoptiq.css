@@ -660,9 +660,9 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 [data-theme="dark"] .audit-row{border-color:var(--border)}
 [data-theme="dark"] .exec-attn-label{color:var(--ink)}
 [data-theme="dark"] .rec-gate{color:var(--ink)}
-[data-theme="dark"] #alert-bar{color:var(--navy)}
-[data-theme="dark"] .alert-item{color:var(--navy)}
-[data-theme="dark"] .alert-item span{color:var(--navy)}
+[data-theme="dark"] #alert-bar{background:rgba(184,146,42,0.15);color:var(--ink)}
+[data-theme="dark"] .alert-item{color:var(--ink)}
+[data-theme="dark"] .alert-item span{color:var(--ink)}
 [data-theme="dark"] .ib-input[type="date"],
 [data-theme="dark"] .modal-inp[type="date"]{color-scheme:dark}
 [data-theme="dark"] .res-add-btn{color:var(--gold);border-color:var(--gold-light)}
