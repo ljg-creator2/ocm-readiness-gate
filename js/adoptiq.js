@@ -76,7 +76,7 @@ async function signOut(){
 
 async function bootApp(){
   await loadData();renderPortfolio();renderAlerts();document.getElementById('v-portfolio').classList.add('active');
-  checkPendingInvites();autoSnapshot();
+  checkPendingInvites();autoSnapshot();initTopBrand();
   // Show onboarding for new users
   const{data:{user}}=await _supabase.auth.getUser();
   if(user&&!user.user_metadata?.onboarded&&releases.length===0){
@@ -101,6 +101,16 @@ function validatePassword(pw){
   if(!/\d/.test(pw))return 'Password must contain at least one number.';
   if(!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw))return 'Password must contain at least one special character (!@#$%^&*()_+-=[]{};\':"|,.<>/?).';
   return '';
+}
+
+function initTopBrand(){
+  document.querySelectorAll('.top-brand').forEach(el=>{
+    el.style.cursor='pointer';
+    el.onclick=()=>{
+      const isPortfolio=document.getElementById('v-portfolio')?.classList.contains('active');
+      if(!isPortfolio){goPortfolio();}
+    };
+  });
 }
 
 async function initAuth(){
@@ -451,7 +461,9 @@ function relRollup(r){
   const adkars=projs.map(p=>parseFloat(projAdkarAvg(p)));
   const adkar=adkars.length?(adkars.reduce((a,b)=>a+b,0)/adkars.length).toFixed(1):null;
   const reds=projs.reduce((s,p)=>s+Object.values(p.gateState).filter(v=>v==='red').length,0);
-  const status=reds>=3?{label:'Critical',cls:'critical'}:reds>=1?{label:'At Risk',cls:'at-risk'}:{label:'On Track',cls:'on-track'};
+  const baseStatus=reds>=3?{label:'Critical',cls:'critical'}:reds>=1?{label:'At Risk',cls:'at-risk'}:{label:'On Track',cls:'on-track'};
+  const d=daysTo(r.golive);
+  const status=(d!==null&&d<0&&baseStatus.cls==='on-track')?{label:'Overdue',cls:'overdue'}:baseStatus;
   return{gateScore,flags,adkar,status};
 }
 function adoptScore(f){const v=Object.values(f);return Math.round(v.reduce((a,b)=>a+b,0)/v.length/5*100);}
@@ -1873,32 +1885,25 @@ async function loadDemoData(){
   r4.projects=[p4a,p4b];
   releases.push(r4);
 
-  // Release 5: 6/21 Release (Government) - KEEP ORIGINAL
-  const r5=newRelease('6/21 Release',['Agency Alpha','Agency Beta'],'2026-07-21','Development');
-  const p5a=newProject('Benefits Modernization',['Agency Alpha'],1200);
-  p5a.status='In Progress';
-  p5a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'yellow',g1_4:'green',g2_0:'green',g2_1:'yellow',g2_2:'green',g2_3:'green',g2_4:'red',g2_5:'yellow',g3_0:'red',g3_1:'yellow'};
-  p5a.adkarScores={A1:4,D:3,K:3,Ab:2,R:2};
-  p5a.adkarNotes={A1:'Strong executive communications delivered',D:'Middle management resistance in field offices',K:'',Ab:'New system training not yet scheduled',R:''};
+  // Release 5: State Benefits Portal (Government - Live)
+  const r5=newRelease('State Benefits Portal Modernization',['GSA','DeloitteGov'],'2025-11-30','Active Production');
+  const p5a=newProject('Case Management System',['GSA'],12500);
+  p5a.status='Completed';
+  p5a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
   migrateResources(p5a);
-  p5a.resources.ocm_train=[{name:'Sarah Kim',contact:''}];
-  p5a.resources.ocm_impl=[{name:'Jordan Lee',contact:''}];
-  p5a.resources.pm=[{name:'Maria Santos',contact:''}];
-  p5a.resources.func=[{name:'David Chen',contact:''}];
-  p5a.resources.train_env=[{name:'Lisa Park',contact:''}];
-  p5a.stakeholders=[{
-    name:'Field Office Supervisors',factors:{resistance:3,env:4,window:3,complexity:4,saturation:3,leadership:3},
-    objectives:['Navigate new case management workflow','Generate exception reports','Escalate system-flagged discrepancies'],
-    kirk:{L1:{method:'Post-training survey',timing:'Same day'},L2:{method:'Simulation exercise',assessment:'Pass/fail practical'},L3:{observable:'Case processing time',interval:'30-day post go-live'},L4:{outcome:'15% reduction in processing errors',metric:'Error rate dashboard'}},
-    rein:{owner:'Regional Directors',activities:'Bi-weekly check-ins + dashboard reviews',intervals:['Week 2','Week 4','Week 8'],escalation:'Escalate to Program Director if adoption < 70%'}
-  }];
-  const p5b=newProject('Portal Redesign',['Agency Beta'],3500);
-  p5b.status='Not Started';
-  p5b.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'red',g1_4:'red'};
-  p5b.adkarScores={A1:2,D:2,K:1,Ab:1,R:1};
+  p5a.resources.ocm_train=[{name:'Patricia Walsh',contact:''}];
+  p5a.resources.ocm_impl=[{name:'Charles Thompson',contact:''}];
+  p5a.resources.pm=[{name:'Rebecca Martinez',contact:''}];
+  p5a.resources.func=[{name:'Dr. Jonathan Lee',contact:''}];
+  p5a.stakeholders=[{name:'Case Workers',factors:{resistance:2,env:3,window:4,complexity:3,saturation:2,leadership:4},objectives:['Manage benefit applications','Process claims quickly','Document client interactions'],kirk:{L1:{method:'Classroom + online modules',timing:'6 weeks pre-launch'},L2:{method:'Job shadowing + practice cases',assessment:'100% accuracy required'},L3:{observable:'Case processing time',interval:'30-day post launch'},L4:{outcome:'Zero benefits processing delays',metric:'Claims dashboard'}},rein:{owner:'Regional Director',activities:'Weekly supervisor check-ins + monthly town halls',intervals:['Weekly','Monthly'],escalation:'Escalate if processing time exceeds SLA'}},{name:'Agency Leadership',factors:{resistance:1,env:4,window:5,complexity:2,saturation:1,leadership:5},objectives:['Monitor system performance','Meet constituent service metrics','Track budget savings'],kirk:{L1:{method:'Executive briefing',timing:'2 weeks pre-launch'},L2:{method:'Dashboard training',assessment:'Operational proficiency'},L3:{observable:'System availability',interval:'Ongoing'},L4:{outcome:'90% constituent satisfaction',metric:'Feedback surveys'}},rein:{owner:'Deputy Commissioner',activities:'Monthly performance reviews + quarterly steering committee',intervals:['Monthly','Quarterly'],escalation:'Escalate if system availability < 99.5%'}}];
+  const p5b=newProject('Public Portal & Self-Service',['GSA'],8300);
+  p5b.status='Completed';
+  p5b.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
   migrateResources(p5b);
-  p5b.resources.ocm_impl=[{name:'Alex Rivera',contact:''}];
-  p5b.resources.pm=[{name:'Priya Patel',contact:''}];
+  p5b.resources.ocm_train=[{name:'Margaret Chen',contact:''}];
+  p5b.resources.ocm_impl=[{name:'William Rodriguez',contact:''}];
+  p5b.resources.pm=[{name:'Katherine Johnson',contact:''}];
+  p5b.stakeholders=[{name:'Constituents/Public Users',factors:{resistance:3,env:2,window:3,complexity:2,saturation:2,leadership:2},objectives:['Access benefit information','Submit applications online','Track application status'],kirk:{L1:{method:'Website tutorials + FAQs',timing:'Ongoing'},L2:{method:'Call center training pilot',assessment:'Support staff proficiency'},L3:{observable:'Portal usage adoption',interval:'30-day post launch'},L4:{outcome:'50% online submission rate',metric:'Portal analytics'}},rein:{owner:'Help Desk Manager',activities:'Daily monitoring + weekly optimization',intervals:['Daily','Weekly'],escalation:'Escalate if 311 call volume spikes'}}];
   r5.projects=[p5a,p5b];
   releases.push(r5);
 
