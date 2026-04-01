@@ -1802,33 +1802,106 @@ async function closeWelcome(){
   await _supabase.auth.updateUser({data:{onboarded:true}});
 }
 async function loadDemoData(){
-  const r=newRelease('6/21 Release',['Agency Alpha','Agency Beta'],'2026-07-21','Development');
-  const p1=newProject('Benefits Modernization',['Agency Alpha'],1200);
-  p1.status='In Progress';
-  p1.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'yellow',g1_4:'green',g2_0:'green',g2_1:'yellow',g2_2:'green',g2_3:'green',g2_4:'red',g2_5:'yellow',g3_0:'red',g3_1:'yellow'};
-  p1.adkarScores={A1:4,D:3,K:3,Ab:2,R:2};
-  p1.adkarNotes={A1:'Strong executive communications delivered',D:'Middle management resistance in field offices',K:'',Ab:'New system training not yet scheduled',R:''};
-  migrateResources(p1);
-  p1.resources.ocm_train=[{name:'Sarah Kim',contact:''}];
-  p1.resources.ocm_impl=[{name:'Jordan Lee',contact:''}];
-  p1.resources.pm=[{name:'Maria Santos',contact:''}];
-  p1.resources.func=[{name:'David Chen',contact:''}];
-  p1.resources.train_env=[{name:'Lisa Park',contact:''}];
-  p1.stakeholders=[{
+  // Release 1: Q3 EHR Migration (Healthcare)
+  const r1=newRelease('Q3 EHR Migration',['HCA Healthcare','Cigna'],'2026-07-15','Development');
+  const p1a=newProject('Clinical Workflow',['HCA Healthcare'],4200);
+  p1a.status='In Progress';
+  p1a.gateState={g1_0:'green',g1_1:'green',g1_2:'yellow',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'yellow',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'yellow',g3_1:'green'};
+  migrateResources(p1a);
+  p1a.resources.ocm_train=[{name:'Dr. Rachel Goldman',contact:''}];
+  p1a.resources.ocm_impl=[{name:'James Mitchell',contact:''}];
+  p1a.resources.pm=[{name:'Asha Patel',contact:''}];
+  p1a.resources.func=[{name:'Dr. Emily Wilson',contact:''}];
+  p1a.stakeholders=[{name:'Attending Physicians',factors:{resistance:4,env:3,window:2,complexity:5,saturation:4,leadership:4},objectives:['Document patient encounters in new EHR','Generate clinical quality reports'],kirk:{L1:{method:'In-person workshop',timing:'Pre-go-live'},L2:{method:'Case-based assessment',assessment:'90% accuracy'},L3:{observable:'Documentation compliance',interval:'14-day post go-live'},L4:{outcome:'Zero clinical safety events',metric:'Safety event tracker'}},rein:{owner:'Chief Medical Officer',activities:'Weekly physician council + lunch sessions',intervals:['Week 1','Week 2','Week 3'],escalation:'Escalate if < 80% documentation compliance'}}];
+  const p1b=newProject('Nursing Documentation',['HCA Healthcare'],8500);
+  p1b.status='In Progress';
+  p1b.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'yellow',g1_4:'yellow',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'yellow',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'yellow'};
+  migrateResources(p1b);
+  p1b.resources.ocm_train=[{name:'Patricia Johnson',contact:''}];
+  p1b.resources.ocm_impl=[{name:'Michael Chen',contact:''}];
+  p1b.resources.pm=[{name:'Sophia Rodriguez',contact:''}];
+  p1b.stakeholders=[{name:'RN Staff',factors:{resistance:3,env:4,window:3,complexity:4,saturation:3,leadership:3},objectives:['Complete shift assessments','Enter vital signs + interventions'],kirk:{L1:{method:'Classroom + hands-on lab',timing:'2 days pre-go-live'},L2:{method:'Simulation with scenarios',assessment:'Pass/fail'},L3:{observable:'Shift charting time',interval:'30-day post go-live'},L4:{outcome:'Patient safety metrics maintained',metric:'Safety dashboard'}},rein:{owner:'Chief Nursing Officer',activities:'Daily floor huddles + super-user rounds',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate to Nursing Leadership if issues arise'}}];
+  r1.projects=[p1a,p1b];
+  releases.push(r1);
+
+  // Release 2: Core Banking Modernization (Financial Services)
+  const r2=newRelease('Core Banking Modernization',['JPMorgan','Deloitte'],'2026-08-30','Testing');
+  const p2a=newProject('Teller Platform',['JPMorgan'],2800);
+  p2a.status='In Progress';
+  p2a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'yellow',g1_4:'green',g2_0:'yellow',g2_1:'green',g2_2:'green',g2_3:'yellow',g2_4:'yellow',g2_5:'green',g3_0:'yellow',g3_1:'yellow'};
+  migrateResources(p2a);
+  p2a.resources.ocm_train=[{name:'Robert Harrison',contact:''}];
+  p2a.resources.ocm_impl=[{name:'Lisa Anderson',contact:''}];
+  p2a.resources.pm=[{name:'David Thompson',contact:''}];
+  p2a.resources.func=[{name:'Michelle Lee',contact:''}];
+  p2a.stakeholders=[{name:'Branch Tellers',factors:{resistance:3,env:3,window:3,complexity:3,saturation:2,leadership:3},objectives:['Process deposits/withdrawals','Handle wire transfers','Customer authentication verification'],kirk:{L1:{method:'Role-based training modules',timing:'2 weeks pre-go-live'},L2:{method:'Transaction simulation',assessment:'100 test cases'},L3:{observable:'Avg transaction time',interval:'14-day post go-live'},L4:{outcome:'Zero fraudulent transactions',metric:'Risk dashboard'}},rein:{owner:'Branch Managers',activities:'Daily check-ins + super-user support',intervals:['Week 1','Week 2','Week 4'],escalation:'Escalate if transaction errors exceed 0.5%'}}];
+  const p2b=newProject('Online Banking',['JPMorgan'],45000);
+  p2b.status='Not Started';
+  p2b.gateState={g1_0:'yellow',g1_1:'yellow',g1_2:'red',g1_3:'red',g1_4:'red'};
+  migrateResources(p2b);
+  p2b.resources.ocm_impl=[{name:'Jennifer Walsh',contact:''}];
+  p2b.resources.pm=[{name:'Thomas Burke',contact:''}];
+  p2b.resources.func=[{name:'Sarah Kim',contact:''}];
+  r2.projects=[p2a,p2b];
+  releases.push(r2);
+
+  // Release 3: SAP S/4HANA Cutover (Manufacturing)
+  const r3=newRelease('SAP S/4HANA Cutover',['Accenture','SAP'],'2026-09-15','Development');
+  const p3a=newProject('Shop Floor MES',['Accenture'],650);
+  p3a.status='Not Started';
+  p3a.gateState={g1_0:'red',g1_1:'red',g1_2:'yellow',g1_3:'yellow',g1_4:'red',g2_0:'red',g2_1:'red',g2_2:'yellow',g2_3:'red',g2_4:'red',g2_5:'yellow',g3_0:'red',g3_1:'red'};
+  migrateResources(p3a);
+  p3a.resources.ocm_train=[{name:'Klaus Weber',contact:''}];
+  p3a.resources.ocm_impl=[{name:'Marco Rossi',contact:''}];
+  p3a.resources.pm=[{name:'Anna Schmidt',contact:''}];
+  p3a.stakeholders=[{name:'Machine Operators',factors:{resistance:4,env:2,window:2,complexity:5,saturation:3,leadership:2},objectives:['Operate in new MES','Enter production data','Respond to system alerts'],kirk:{L1:{method:'Hands-on factory training',timing:'3 days pre-go-live'},L2:{method:'Production simulation line',assessment:'Pass safety + speed checks'},L3:{observable:'Downtime reduction',interval:'30-day post cutover'},L4:{outcome:'5% efficiency improvement',metric:'Production metrics'}},rein:{owner:'Plant Manager',activities:'Shift leader check-ins + production reviews',intervals:['Daily','Week 1','Week 4'],escalation:'Stop production if error rate > 2%'}},{name:'Warehouse Staff',factors:{resistance:3,env:3,window:3,complexity:4,saturation:3,leadership:3},objectives:['Pick items per SAP','Manage inventory transfers','Scan and reconcile'],kirk:{L1:{method:'Classroom SAP basics',timing:'1 week pre-cutover'},L2:{method:'Mock warehouse drill',assessment:'Speed + accuracy'},L3:{observable:'Inventory accuracy',interval:'14-day post go-live'},L4:{outcome:'Cycle count time < 2 hours',metric:'Inventory reports'}},rein:{owner:'Warehouse Manager',activities:'Daily huddles + floor supervision',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate if cycle counts fail'}}];
+  r3.projects=[p3a];
+  releases.push(r3);
+
+  // Release 4: Müller & Sons CRM Go-Live (Edge case - international)
+  const r4=newRelease('Müller & Sons CRM Go-Live',['Salesforce','Müller & Sons AG'],'2026-06-30','Testing');
+  const p4a=newProject('Client 360° Dashboard <Beta>',['Müller & Sons AG'],3200);
+  p4a.status='In Progress';
+  p4a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'yellow',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'yellow',g3_0:'green',g3_1:'green'};
+  migrateResources(p4a);
+  p4a.resources.ocm_train=[{name:'François Dupont',contact:''}];
+  p4a.resources.ocm_impl=[{name:'Hans Mueller',contact:''}];
+  p4a.resources.pm=[{name:'Giulia Rossi',contact:''}];
+  const p4b=newProject('',['Müller & Sons AG'],0);
+  p4b.status='Not Started';
+  migrateResources(p4b);
+  r4.projects=[p4a,p4b];
+  releases.push(r4);
+
+  // Release 5: 6/21 Release (Government) - KEEP ORIGINAL
+  const r5=newRelease('6/21 Release',['Agency Alpha','Agency Beta'],'2026-07-21','Development');
+  const p5a=newProject('Benefits Modernization',['Agency Alpha'],1200);
+  p5a.status='In Progress';
+  p5a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'yellow',g1_4:'green',g2_0:'green',g2_1:'yellow',g2_2:'green',g2_3:'green',g2_4:'red',g2_5:'yellow',g3_0:'red',g3_1:'yellow'};
+  p5a.adkarScores={A1:4,D:3,K:3,Ab:2,R:2};
+  p5a.adkarNotes={A1:'Strong executive communications delivered',D:'Middle management resistance in field offices',K:'',Ab:'New system training not yet scheduled',R:''};
+  migrateResources(p5a);
+  p5a.resources.ocm_train=[{name:'Sarah Kim',contact:''}];
+  p5a.resources.ocm_impl=[{name:'Jordan Lee',contact:''}];
+  p5a.resources.pm=[{name:'Maria Santos',contact:''}];
+  p5a.resources.func=[{name:'David Chen',contact:''}];
+  p5a.resources.train_env=[{name:'Lisa Park',contact:''}];
+  p5a.stakeholders=[{
     name:'Field Office Supervisors',factors:{resistance:3,env:4,window:3,complexity:4,saturation:3,leadership:3},
     objectives:['Navigate new case management workflow','Generate exception reports','Escalate system-flagged discrepancies'],
     kirk:{L1:{method:'Post-training survey',timing:'Same day'},L2:{method:'Simulation exercise',assessment:'Pass/fail practical'},L3:{observable:'Case processing time',interval:'30-day post go-live'},L4:{outcome:'15% reduction in processing errors',metric:'Error rate dashboard'}},
     rein:{owner:'Regional Directors',activities:'Bi-weekly check-ins + dashboard reviews',intervals:['Week 2','Week 4','Week 8'],escalation:'Escalate to Program Director if adoption < 70%'}
   }];
-  const p2=newProject('Portal Redesign',['Agency Beta'],3500);
-  p2.status='Not Started';
-  p2.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'red',g1_4:'red'};
-  p2.adkarScores={A1:2,D:2,K:1,Ab:1,R:1};
-  migrateResources(p2);
-  p2.resources.ocm_impl=[{name:'Alex Rivera',contact:''}];
-  p2.resources.pm=[{name:'Priya Patel',contact:''}];
-  r.projects=[p1,p2];
-  releases.push(r);
+  const p5b=newProject('Portal Redesign',['Agency Beta'],3500);
+  p5b.status='Not Started';
+  p5b.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'red',g1_4:'red'};
+  p5b.adkarScores={A1:2,D:2,K:1,Ab:1,R:1};
+  migrateResources(p5b);
+  p5b.resources.ocm_impl=[{name:'Alex Rivera',contact:''}];
+  p5b.resources.pm=[{name:'Priya Patel',contact:''}];
+  r5.projects=[p5a,p5b];
+  releases.push(r5);
+
   await saveData();renderPortfolio();renderAlerts();
   setDemoMode(true);
   closeWelcome();
