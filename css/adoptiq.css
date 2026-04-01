@@ -706,6 +706,10 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 [data-theme="dark"] .alert-item span{color:#4a3c1a}
 [data-theme="dark"] .ib-input[type="date"],
 [data-theme="dark"] .modal-inp[type="date"]{color-scheme:dark}
+.ib-input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(1) brightness(2);cursor:pointer;opacity:0.85;width:18px;height:18px}
+.ib-input[type="date"]::-webkit-calendar-picker-indicator:hover{opacity:1}
+.modal-inp[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.7}
+.modal-inp[type="date"]::-webkit-calendar-picker-indicator:hover{opacity:1}
 [data-theme="dark"] .res-add-btn{color:var(--gold);border-color:var(--gold-light)}
 [data-theme="dark"] .res-add-btn:hover{background:rgba(184,146,42,0.12);border-color:var(--gold)}
 
