@@ -1860,6 +1860,7 @@ function pdfCheckPage(doc,y,w,h,pg,needed){
 }
 
 function exportProjectPDF(){
+  if(!window.jspdf){alert('PDF library is still loading. Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   migrateResources(p);
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -1952,6 +1953,7 @@ function exportProjectPDF(){
 }
 
 function exportReleasePDF(){
+  if(!window.jspdf){alert('PDF library is still loading. Please try again in a moment.');return;}
   const r=getRel();if(!r)return;
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
   const w=doc.internal.pageSize.getWidth(),h=doc.internal.pageSize.getHeight();
@@ -2009,6 +2011,8 @@ function getProjFlags(p){
 // CLIENT HANDOFF PDF
 // ════════════════════════════════════════════════════════
 function exportHandoffPDF(){
+  if(!window.jspdf){alert('PDF library is still loading. Please try again in a moment.');return;}
+  try{
   const brand=getBrand();
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
   const w=doc.internal.pageSize.getWidth(),h=doc.internal.pageSize.getHeight();
@@ -2016,10 +2020,10 @@ function exportHandoffPDF(){
   // Cover page
   doc.setFillColor(12,31,63);doc.rect(0,0,w,h,'F');
   doc.setFontSize(36);doc.setTextColor(184,146,42);doc.setFont('helvetica','bold');
-  doc.text(brand.firmName,w/2,h*0.35,{align:'center'});
+  doc.text(brand.firmName||'AdoptIQ',w/2,h*0.35,{align:'center'});
   doc.setFontSize(14);doc.setTextColor(255,255,255);doc.setFont('helvetica','normal');
   doc.text('Client Handoff Package',w/2,h*0.43,{align:'center'});
-  doc.setFontSize(10);doc.text(brand.subtitle,w/2,h*0.50,{align:'center'});
+  doc.setFontSize(10);doc.text(brand.subtitle||'',w/2,h*0.50,{align:'center'});
   doc.setFontSize(9);doc.text('Generated: '+new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),w/2,h*0.58,{align:'center'});
   doc.setFontSize(9);doc.text(releases.length+' Releases · '+releases.reduce((s,r)=>s+r.projects.length,0)+' Projects',w/2,h*0.63,{align:'center'});
   doc.setFontSize(7);doc.setTextColor(184,146,42);
@@ -2068,7 +2072,7 @@ function exportHandoffPDF(){
     if(r.projects.length){
       y=pdfSection(doc,y,'Projects',w);
       const pRows=r.projects.map(p=>{const gs=projGateScore(p);const avg=projAdkarAvg(p);
-        return[p.name,p.status,gs!==null?gs+'%':'—',avg+'/5',String(getProjFlags(p).length)];
+        return[p.name,p.status||'—',gs!==null?gs+'%':'—',avg+'/5',String(getProjFlags(p).length)];
       });
       doc.autoTable({startY:y,head:[['Project','Status','Gate %','ADKAR','Flags']],body:pRows,
         margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
@@ -2082,8 +2086,8 @@ function exportHandoffPDF(){
       y=pdfSection(doc,y,p.name+' — Gate Readiness',w);
       GATE_DEFS.forEach(gate=>{
         y=pdfCheckPage(doc,y,w,h,pg,10);
-        const tot=gate.items.length;const naC=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='na').length;
-        const applicable=tot-naC;const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
+        const tot=gate.items.length;const naC=gate.items.filter((_,i)=>(p.gateState||{})[gate.id+'_'+i]==='na').length;
+        const applicable=tot-naC;const grn=gate.items.filter((_,i)=>(p.gateState||{})[gate.id+'_'+i]==='green').length;
         const pct=applicable?Math.round(grn/applicable*100):100;
         doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text(gate.label,14,y);
         doc.setFont('helvetica','normal');doc.text(pct+'%',w-14,y,{align:'right'});y+=3;
@@ -2091,15 +2095,16 @@ function exportHandoffPDF(){
       });
       // ADKAR
       y=pdfCheckPage(doc,y,w,h,pg,20);
+      const adkar=p.adkarScores||{};
       doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('ADKAR: '+projAdkarAvg(p)+'/5',14,y);y+=6;
       doc.setFont('helvetica','normal');
-      ADKAR_DIMS.forEach(d=>{const sc=p.adkarScores[d.key];doc.setFontSize(7);doc.text(d.word+': '+sc+'/5',14,y);y+=4;});
+      ADKAR_DIMS.forEach(d=>{const sc=adkar[d.key]||0;doc.setFontSize(7);doc.text(d.word+': '+sc+'/5',14,y);y+=4;});
       y+=4;
       // Impact assessment if present
       if(p.impactAssessment?.groups?.length){
         y=pdfCheckPage(doc,y,w,h,pg,16);
         y=pdfSection(doc,y,p.name+' — Change Impact',w);
-        const impRows=p.impactAssessment.groups.map(g=>[g.name||'—',g.level,(g.changeTypes||[]).join(', ')||'—',
+        const impRows=p.impactAssessment.groups.map(g=>[g.name||'—',g.level||'—',(g.changeTypes||[]).join(', ')||'—',
           (g.actions||[]).filter(a=>a.done).length+'/'+(g.actions||[]).length+' complete']);
         doc.autoTable({startY:y,head:[['Group','Impact','Change Types','Actions']],body:impRows,
           margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
@@ -2108,9 +2113,9 @@ function exportHandoffPDF(){
         });y=doc.lastAutoTable.finalY+8;
       }
       // Stakeholders
-      if(p.stakeholders.length){
+      if(p.stakeholders?.length){
         y=pdfCheckPage(doc,y,w,h,pg,16);
-        const shRows=p.stakeholders.map(sh=>{const sc=adoptScore(sh.factors);const{tier}=adoptTier(sc);return[sh.name,sc+'%',tier];});
+        const shRows=p.stakeholders.map(sh=>{const sc=adoptScore(sh.factors||{});const{tier}=adoptTier(sc);return[sh.name||'—',sc+'%',tier];});
         doc.autoTable({startY:y,head:[['Stakeholder','Adoption %','Risk Tier']],body:shRows,
           margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
           headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
@@ -2121,6 +2126,7 @@ function exportHandoffPDF(){
     pdfFooter(doc,w,h,pg[0]);
   });
   doc.save(`AdoptIQ-${brand.firmName.replace(/[^a-z0-9]/gi,'-')}-Handoff-Package.pdf`);
+  }catch(e){console.error('Handoff PDF error:',e);alert('Error generating PDF: '+e.message);}
 }
 
 // ════════════════════════════════════════════════════════
