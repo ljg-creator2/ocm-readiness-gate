@@ -130,9 +130,10 @@
         <button class="btn-gold" onclick="openAddRelease()">+ Add Release</button>
         <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer">&#9654; EXIT DEMO</button>
         <select id="view-role-select" class="role-select" onchange="applyViewRole(this.value);renderPortfolio()">
-          <option value="ocm_lead">OCM Lead</option>
-          <option value="exec_sponsor">Executive View</option>
-          <option value="project_manager">Project Manager</option>
+          <option value="admin">Administrator</option>
+          <option value="staff">Staff / Team</option>
+          <option value="exec_sponsor">Executive Sponsor</option>
+          <option value="client_viewer">Client Viewer</option>
         </select>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-p"></span><span id="avatar-name-p">Profile</span></button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
@@ -801,9 +802,10 @@
     <div class="profile-field">
       <label for="profile-view-role">View Mode</label>
       <select id="profile-view-role" class="alert-select" style="width:100%;padding:8px 10px;font-size:12px">
-        <option value="ocm_lead">OCM Lead (Full Access)</option>
+        <option value="admin">Administrator (Full Access)</option>
+        <option value="staff">Staff / Team (View Only)</option>
         <option value="exec_sponsor">Executive Sponsor (Dashboard Only)</option>
-        <option value="project_manager">Project Manager (Project Level)</option>
+        <option value="client_viewer">Client Viewer (Summary Only)</option>
       </select>
       <div class="alert-desc">Controls your default landing view and available actions.</div>
     </div>

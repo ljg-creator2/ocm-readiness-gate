@@ -169,9 +169,9 @@ async function openProfile(){
   document.getElementById('profile-msg').textContent='';
   document.getElementById('profile-modal').classList.add('open');
   loadAlertPrefs();loadBrandInputs();
-  const vrSel=document.getElementById('profile-view-role');if(vrSel)vrSel.value=meta.view_role||'ocm_lead';
+  const vrSel=document.getElementById('profile-view-role');if(vrSel)vrSel.value=meta.view_role||'admin';
   const brandSec=document.getElementById('brand-section');
-  if(brandSec)brandSec.style.display=(currentViewRole==='ocm_lead')?'block':'none';
+  if(brandSec)brandSec.style.display=(currentViewRole==='admin')?'block':'none';
 }
 
 function checkProfilePwStrength(){
@@ -195,7 +195,7 @@ async function saveProfile(){
   const confirmPw=document.getElementById('profile-confirm-pw').value;
 
   // Update metadata
-  const viewRole=document.getElementById('profile-view-role')?.value||'ocm_lead';
+  const viewRole=document.getElementById('profile-view-role')?.value||'admin';
   const{error:metaErr}=await _supabase.auth.updateUser({data:{full_name:name,organization:org,role:role,view_role:viewRole}});
   if(metaErr){msgEl.style.color='var(--red)';msgEl.textContent=metaErr.message;return;}
   saveBrandFromInputs();applyViewRole(viewRole);
@@ -421,17 +421,17 @@ function saveBrandFromInputs(){
 // ════════════════════════════════════════════════════════
 // ROLE-BASED VIEWS
 // ════════════════════════════════════════════════════════
-let currentViewRole='ocm_lead';
+let currentViewRole='admin';
 function applyViewRole(role){
-  currentViewRole=role||'ocm_lead';
+  currentViewRole=role||'admin';
   document.body.setAttribute('data-role',currentViewRole);
   const brandSec=document.getElementById('brand-section');
-  if(brandSec)brandSec.style.display=(currentViewRole==='ocm_lead')?'block':'none';
+  if(brandSec)brandSec.style.display=(currentViewRole==='admin')?'block':'none';
   const vrSel=document.getElementById('view-role-select');
   if(vrSel)vrSel.value=currentViewRole;
   const profileSel=document.getElementById('profile-view-role');
   if(profileSel)profileSel.value=currentViewRole;
-  if(currentViewRole==='exec_sponsor'){
+  if(currentViewRole==='exec_sponsor'||currentViewRole==='client_viewer'){
     showView('v-portfolio');renderPortfolio();
   }
 }

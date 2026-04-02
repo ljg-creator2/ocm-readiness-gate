@@ -837,19 +837,32 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 .bench-label{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-60);margin-bottom:2px}
 
 /* ── Role-Based Views ── */
-/* Executive Sponsor: read-only dashboard view, no editing, no project-level details */
-[data-role="exec_sponsor"] .btn-gold:not(.btn-export),[data-role="exec_sponsor"] .btn-del-sm,
-[data-role="exec_sponsor"] .chip-rm,[data-role="exec_sponsor"] .res-add-btn,
-[data-role="exec_sponsor"] .btn-outline:not(.btn-export){display:none!important}
+/* Shared read-only rules for all non-admin roles */
+[data-role="staff"] .btn-gold:not(.btn-export),
+[data-role="staff"] .btn-del-sm,[data-role="staff"] .chip-rm,
+[data-role="staff"] .res-add-btn,[data-role="staff"] .drag-handle,
+[data-role="staff"] #brand-section{display:none!important}
+[data-role="staff"] .ib-input,[data-role="staff"] .ib-select,
+[data-role="staff"] .modal-inp,[data-role="staff"] textarea{pointer-events:none;opacity:0.7}
+
+[data-role="exec_sponsor"] .btn-gold:not(.btn-export),
+[data-role="exec_sponsor"] .btn-del-sm,[data-role="exec_sponsor"] .chip-rm,
+[data-role="exec_sponsor"] .res-add-btn,[data-role="exec_sponsor"] .drag-handle,
+[data-role="exec_sponsor"] .btn-outline:not(.btn-export),
+[data-role="exec_sponsor"] #brand-section,[data-role="exec_sponsor"] #phm-sec{display:none!important}
 [data-role="exec_sponsor"] .ib-input,[data-role="exec_sponsor"] .ib-select,
 [data-role="exec_sponsor"] .modal-inp,[data-role="exec_sponsor"] textarea{pointer-events:none;opacity:0.7}
-[data-role="exec_sponsor"] .drag-handle{display:none}
-[data-role="exec_sponsor"] #phm-sec{display:none!important}
-/* Project Manager: can edit projects, but no portfolio-level actions or branding */
-[data-role="project_manager"] #v-portfolio .btn-gold,
-[data-role="project_manager"] #brand-section,
-[data-role="project_manager"] .btn-del-sm{display:none!important}
-[data-role="project_manager"] .drag-handle{display:none}
+
+[data-role="client_viewer"] .btn-gold:not(.btn-export),
+[data-role="client_viewer"] .btn-del-sm,[data-role="client_viewer"] .chip-rm,
+[data-role="client_viewer"] .res-add-btn,[data-role="client_viewer"] .drag-handle,
+[data-role="client_viewer"] .btn-outline:not(.btn-export):not(.btn-share),
+[data-role="client_viewer"] #brand-section,[data-role="client_viewer"] #phm-sec,
+[data-role="client_viewer"] #trends-sec,[data-role="client_viewer"] #tl-sec,
+[data-role="client_viewer"] .btn-profile,[data-role="client_viewer"] .btn-signout,
+[data-role="client_viewer"] .exec-card-wide{display:none!important}
+[data-role="client_viewer"] .ib-input,[data-role="client_viewer"] .ib-select,
+[data-role="client_viewer"] .modal-inp,[data-role="client_viewer"] textarea{pointer-events:none;opacity:0.7}
 
 /* ── Dark mode additions ── */
 [data-theme="dark"] .rag-badge.rag-g{background:rgba(29,104,64,0.20);color:#4ade80}
