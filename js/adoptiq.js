@@ -2295,6 +2295,13 @@ async function loadDemoData(){
   p1b.resources.ocm_impl=[{name:'Michael Chen',contact:''}];
   p1b.resources.pm=[{name:'Sophia Rodriguez',contact:''}];
   p1b.stakeholders=[{name:'RN Staff',factors:{resistance:3,env:4,window:3,complexity:4,saturation:3,leadership:3},objectives:['Complete shift assessments','Enter vital signs + interventions'],kirk:{L1:{method:'Classroom + hands-on lab',timing:'2 days pre-go-live'},L2:{method:'Simulation with scenarios',assessment:'Pass/fail'},L3:{observable:'Shift charting time',interval:'30-day post go-live'},L4:{outcome:'Patient safety metrics maintained',metric:'Safety dashboard'}},rein:{owner:'Chief Nursing Officer',activities:'Daily floor huddles + super-user rounds',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate to Nursing Leadership if issues arise'}}];
+  p1a.impactAssessment={groups:[
+    {name:'Attending Physicians',level:'High',changeTypes:['Technology','Process'],currentState:'Paper-based charting with legacy EHR for order entry. Physicians dictate notes for transcription.',futureState:'Full electronic documentation with CPOE, real-time clinical decision support, and integrated patient portal.',actions:[{text:'Complete physician workflow analysis',done:true},{text:'Schedule hands-on EHR lab sessions',done:true},{text:'Assign super-user physician champions per department',done:false},{text:'Develop quick-reference workflow cards',done:false}]},
+    {name:'Medical Assistants',level:'Medium',changeTypes:['Technology','People'],currentState:'Manual vitals entry and paper intake forms. Limited system access.',futureState:'Tablet-based intake with auto-populated patient history and vitals integration.',actions:[{text:'Identify MA training cohorts by clinic',done:true},{text:'Create role-specific job aids',done:false}]}
+  ]};
+  p1b.impactAssessment={groups:[
+    {name:'RN Staff — Inpatient',level:'High',changeTypes:['Technology','Process','People'],currentState:'Shift handoffs via paper reports. Medication scanning on legacy system.',futureState:'Electronic shift handoff with barcode medication administration (BCMA) and real-time alerts.',actions:[{text:'Map current nursing workflows per unit',done:true},{text:'Build simulation scenarios for BCMA',done:true},{text:'Coordinate with Pharmacy on med reconciliation',done:false}]}
+  ]};
   r1.projects=[p1a,p1b];
   releases.push(r1);
 
@@ -2316,6 +2323,9 @@ async function loadDemoData(){
   p2b.resources.ocm_impl=[{name:'Jennifer Walsh',contact:''}];
   p2b.resources.pm=[{name:'Thomas Burke',contact:''}];
   p2b.resources.func=[{name:'Sarah Kim',contact:''}];
+  p2a.impactAssessment={groups:[
+    {name:'Branch Tellers',level:'High',changeTypes:['Technology','Process'],currentState:'Legacy teller terminal with manual transaction entry. Paper-based customer verification.',futureState:'Modern teller platform with biometric auth, real-time fraud detection, and integrated CRM.',actions:[{text:'Complete branch-by-branch readiness assessment',done:true},{text:'Deploy practice environment to pilot branches',done:false},{text:'Train branch managers as local champions',done:false}]}
+  ]};
   r2.projects=[p2a,p2b];
   releases.push(r2);
 
