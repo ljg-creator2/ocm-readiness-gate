@@ -75,7 +75,7 @@ async function signOut(){
 }
 
 async function bootApp(){
-  await loadData();renderPortfolio();renderAlerts();document.getElementById('v-portfolio').classList.add('active');
+  await loadData();applyBrand();renderPortfolio();renderAlerts();document.getElementById('v-portfolio').classList.add('active');
   checkPendingInvites();autoSnapshot();initTopBrand();renderTrendCharts();
   // Show onboarding for new users
   const{data:{user}}=await _supabase.auth.getUser();
@@ -168,7 +168,8 @@ async function openProfile(){
   document.getElementById('profile-pw-strength').textContent='';
   document.getElementById('profile-msg').textContent='';
   document.getElementById('profile-modal').classList.add('open');
-  loadAlertPrefs();
+  loadAlertPrefs();loadBrandInputs();
+  const vrSel=document.getElementById('profile-view-role');if(vrSel)vrSel.value=meta.view_role||'ocm_lead';
 }
 
 function checkProfilePwStrength(){
@@ -192,8 +193,10 @@ async function saveProfile(){
   const confirmPw=document.getElementById('profile-confirm-pw').value;
 
   // Update metadata
-  const{error:metaErr}=await _supabase.auth.updateUser({data:{full_name:name,organization:org,role:role}});
+  const viewRole=document.getElementById('profile-view-role')?.value||'ocm_lead';
+  const{error:metaErr}=await _supabase.auth.updateUser({data:{full_name:name,organization:org,role:role,view_role:viewRole}});
   if(metaErr){msgEl.style.color='var(--red)';msgEl.textContent=metaErr.message;return;}
+  saveBrandFromInputs();applyViewRole(viewRole);
 
   // Change password if provided
   if(newPw){
@@ -385,6 +388,47 @@ function toggleTheme(){applyTheme(theme==='light'?'dark':'light');setTimeout(()=
 applyTheme(theme);
 
 // ════════════════════════════════════════════════════════
+// METHODOLOGY BRANDING
+// ════════════════════════════════════════════════════════
+const DEFAULT_BRAND={firmName:'Providence Consulting Firm',subtitle:'Where OCM Meets Measurable Readiness',gateLabels:['Gate 1','Gate 2','Gate 3','Gate 4'],adkarLabels:{A1:'Awareness',D:'Desire',K:'Knowledge',Ab:'Ability',R:'Reinforcement'}};
+function getBrand(){try{const b=localStorage.getItem('adoptiq_brand');return b?{...DEFAULT_BRAND,...JSON.parse(b)}:{...DEFAULT_BRAND};}catch(e){return{...DEFAULT_BRAND};}}
+function saveBrand(brand){localStorage.setItem('adoptiq_brand',JSON.stringify(brand));applyBrand();}
+function applyBrand(){
+  const b=getBrand();
+  document.querySelectorAll('.top-firm').forEach(el=>el.textContent=b.firmName);
+  document.querySelectorAll('.login-footer-brand').forEach(el=>el.textContent=b.firmName);
+  b.gateLabels.forEach((lbl,i)=>{if(GATE_DEFS[i])GATE_DEFS[i].label=lbl;});
+  Object.entries(b.adkarLabels).forEach(([key,lbl])=>{const dim=ADKAR_DIMS.find(d=>d.key===key);if(dim)dim.word=lbl;});
+}
+function loadBrandInputs(){
+  const b=getBrand();
+  const f=document.getElementById('brand-firm');if(f)f.value=b.firmName;
+  const s=document.getElementById('brand-subtitle');if(s)s.value=b.subtitle;
+  b.gateLabels.forEach((lbl,i)=>{const el=document.getElementById('brand-g'+(i+1));if(el)el.value=lbl;});
+}
+function saveBrandFromInputs(){
+  const brand={
+    firmName:document.getElementById('brand-firm')?.value||DEFAULT_BRAND.firmName,
+    subtitle:document.getElementById('brand-subtitle')?.value||DEFAULT_BRAND.subtitle,
+    gateLabels:[1,2,3,4].map(i=>document.getElementById('brand-g'+i)?.value||'Gate '+i),
+    adkarLabels:DEFAULT_BRAND.adkarLabels
+  };
+  saveBrand(brand);
+}
+
+// ════════════════════════════════════════════════════════
+// ROLE-BASED VIEWS
+// ════════════════════════════════════════════════════════
+let currentViewRole='ocm_lead';
+function applyViewRole(role){
+  currentViewRole=role||'ocm_lead';
+  document.body.setAttribute('data-role',currentViewRole);
+  if(currentViewRole==='exec_sponsor'){
+    showView('v-portfolio');renderPortfolio();
+  }
+}
+
+// ════════════════════════════════════════════════════════
 // PERSISTENCE — Supabase primary, localStorage offline cache
 // ════════════════════════════════════════════════════════
 function showSaveIndicator(text){
@@ -420,7 +464,7 @@ async function loadData(){
   // Migrate all project resources to array format
   releases.forEach(r=>{
     delete r.resources; // remove release-level resources (no longer used)
-    (r.projects||[]).forEach(p=>migrateResources(p));
+    (r.projects||[]).forEach(p=>{migrateResources(p);if(!p.impactAssessment)p.impactAssessment={groups:[]};});
   });
 }
 
@@ -442,7 +486,8 @@ function newProject(name,agencies,users){
     trainingRequired:true,status:'Not Started',golive:'',
     gateState:{},depHM:{},depNotes:{},stakeholders:[],
     adkarScores:{A1:3,D:3,K:3,Ab:3,R:3},adkarNotes:{A1:'',D:'',K:'',Ab:'',R:''},
-    resources:res
+    resources:res,
+    impactAssessment:{groups:[]}
   };
 }
 
@@ -517,6 +562,46 @@ function relRollup(r){
   const d=daysTo(r.golive);
   const status=(d!==null&&d<0&&baseStatus.cls==='on-track')?{label:'Overdue',cls:'overdue'}:baseStatus;
   return{gateScore,flags,adkar,status};
+}
+function relRAG(r){
+  const rl=relRollup(r);let score=0,count=0;
+  if(rl.gateScore!==null){score+=rl.gateScore>=70?2:rl.gateScore>=40?1:0;count++;}
+  if(rl.adkar!==null){score+=parseFloat(rl.adkar)>=3.5?2:parseFloat(rl.adkar)>=2.5?1:0;count++;}
+  score+=rl.flags===0?2:rl.flags<=3?1:0;count++;
+  const d=daysTo(r.golive);if(d!==null){score+=d<0?0:d>30?2:d>=14?1:0;count++;}
+  const avg=count?score/count:2;
+  if(avg>=1.5)return{rag:'green',label:'On Track',cls:'rag-g'};
+  if(avg>=0.75)return{rag:'amber',label:'At Risk',cls:'rag-a'};
+  return{rag:'red',label:'Critical',cls:'rag-r'};
+}
+function projRAG(p,golive){
+  const gs=projGateScore(p);const fl=projFlagCount(p);const adk=parseFloat(projAdkarAvg(p));
+  let score=0,count=0;
+  if(gs!==null){score+=gs>=70?2:gs>=40?1:0;count++;}
+  score+=adk>=3.5?2:adk>=2.5?1:0;count++;
+  score+=fl===0?2:fl<=3?1:0;count++;
+  const d=daysTo(golive);if(d!==null){score+=d<0?0:d>30?2:d>=14?1:0;count++;}
+  const avg=count?score/count:2;
+  if(avg>=1.5)return{rag:'green',label:'On Track',cls:'rag-g'};
+  if(avg>=0.75)return{rag:'amber',label:'At Risk',cls:'rag-a'};
+  return{rag:'red',label:'Critical',cls:'rag-r'};
+}
+function quartiles(arr){
+  if(arr.length<4)return null;
+  const sorted=[...arr].sort((a,b)=>a-b);
+  return{q1:sorted[Math.floor(sorted.length*0.25)],median:sorted[Math.floor(sorted.length*0.5)],q3:sorted[Math.floor(sorted.length*0.75)],min:sorted[0],max:sorted[sorted.length-1]};
+}
+function calcBenchmarks(){
+  const gs=[],ad=[],fl=[];
+  releases.forEach(r=>r.projects.forEach(p=>{const s=projGateScore(p);if(s!==null)gs.push(s);ad.push(parseFloat(projAdkarAvg(p)));fl.push(projFlagCount(p));}));
+  return{gate:quartiles(gs),adkar:quartiles(ad),flags:quartiles(fl)};
+}
+function benchmarkPosition(value,q){
+  if(!q)return null;
+  if(value>=q.q3)return{label:'Top Quartile',cls:'top',icon:'▲'};
+  if(value>=q.median)return{label:'Above Median',cls:'above',icon:'►'};
+  if(value>=q.q1)return{label:'Below Median',cls:'below',icon:'►'};
+  return{label:'Bottom Quartile',cls:'bottom',icon:'▼'};
 }
 function adoptScore(f){const v=Object.values(f);return Math.round(v.reduce((a,b)=>a+b,0)/v.length/5*100);}
 function adoptTier(s){if(s>=80)return{tier:'Low Risk',cls:'low'};if(s>=60)return{tier:'Moderate Risk',cls:'mod'};if(s>=40)return{tier:'High Risk',cls:'high'};return{tier:'Critical Risk',cls:'crit'};}
@@ -597,6 +682,7 @@ function showProjTab(id,btn){
   if(id==='overview')renderProjOverview();
   if(id==='flags')renderPFlags();
   if(id==='adopthm')renderPAHM();
+  if(id==='impact')renderPImpact();
 }
 
 // ════════════════════════════════════════════════════════
@@ -731,10 +817,11 @@ function renderPortfolio(){
   }
   wrap.innerHTML=`<div class="card-grid">${releases.map(r=>{
     const rl=relRollup(r);const d=daysTo(r.golive);const modStr=fmtMod(r.modified);
+    const rg=relRAG(r);
     const tl='';const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
     return`<div class="r-card" tabindex="0" draggable="true" data-rel-id="${r.id}" onclick="openRelease(${r.id})" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button" aria-label="Open ${esc(r.name)}">
       <div class="r-card-hd">
-        <div style="display:flex;align-items:center;justify-content:space-between"><div class="rc-name">${esc(r.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div class="rc-name"><span class="rag-dot ${rg.cls}" title="${rg.label}"></span>${esc(r.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
         <div class="chip-row">${(r.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}</span>`).join('')}</div>
         <div class="rc-gl">Go-Live: ${fmtDate(r.golive)}</div>
         ${tl?`<div class="rc-owner">Training Lead: ${esc(tl)}</div>`:''}
@@ -857,8 +944,9 @@ function renderRelSumBar(){
   document.getElementById('rsb-chips').innerHTML=(r.agencies||[]).map(a=>`<span class="chip chip-white" style="margin-right:4px">${esc(a)}</span>`).join('');
   document.getElementById('rsb-phase').textContent=r.phase||'—';
   document.getElementById('rsb-golive').textContent=r.golive?fmtDate(r.golive):'Not set';
-  const rl=relRollup(r);const chip=document.getElementById('rsb-chip');
+  const rl=relRollup(r);const rg=relRAG(r);const chip=document.getElementById('rsb-chip');
   chip.className='rsb-chip '+rl.status.cls;chip.textContent=rl.status.label;
+  const ragEl=document.getElementById('rsb-rag');if(ragEl){ragEl.className='rag-badge '+rg.cls;ragEl.innerHTML='<span class="rag-dot '+rg.cls+'"></span>'+rg.label;}
   const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
   document.getElementById('rsb-proj-ct').textContent=`${(r.projects||[]).length} total — ${tp} require training`;
 }
@@ -1271,6 +1359,7 @@ function renderPOverview(){
   renderPResources();
   renderProjCharts();
   renderRecommendations();
+  renderBenchmarkCard();
 }
 
 // ════════════════════════════════════════════════════════
@@ -1377,8 +1466,8 @@ function renderPortfolioCharts(){
     rkc.parentElement.innerHTML='<div class="es" style="padding:40px"><p class="es-txt">Add stakeholder groups to see risk distribution.</p></div>';
   }
 
-  // Attention Required
-  renderExecAttention();
+  // Attention Required + Enhanced Exec Dashboard
+  renderExecAttention();renderExecRAGSummary();renderExecGoLiveStrip();renderExecTopRisks();renderExecAgencyHM();renderExecNarratives();
 }
 
 function renderExecAttention(){
@@ -1408,6 +1497,130 @@ function renderExecAttention(){
     <div class="exec-attn-icon ${it.sev}">${it.sev==='crit'?'!':'⚠'}</div>
     <div class="exec-attn-txt"><div class="exec-attn-label">${it.label}</div><div class="exec-attn-sub">${it.sub}</div></div>
   </div>`).join('');
+}
+
+function renderExecRAGSummary(){
+  const el=document.getElementById('exec-rag-summary');if(!el)return;
+  let g=0,a=0,r=0;
+  releases.forEach(rel=>{const rg=relRAG(rel);if(rg.rag==='green')g++;else if(rg.rag==='amber')a++;else r++;});
+  el.innerHTML=`<div class="rag-summary-row">
+    <div class="rag-summary-card rag-g-bg"><div class="rag-summary-val">${g}</div><div class="rag-summary-lbl">On Track</div></div>
+    <div class="rag-summary-card rag-a-bg"><div class="rag-summary-val">${a}</div><div class="rag-summary-lbl">At Risk</div></div>
+    <div class="rag-summary-card rag-r-bg"><div class="rag-summary-val">${r}</div><div class="rag-summary-lbl">Critical</div></div>
+  </div>`;
+}
+
+function renderExecGoLiveStrip(){
+  const el=document.getElementById('exec-golive-strip');if(!el)return;
+  const sorted=[...releases].filter(r=>r.golive).sort((a,b)=>new Date(a.golive)-new Date(b.golive));
+  if(!sorted.length){el.innerHTML='';return;}
+  el.innerHTML=sorted.map(r=>{const d=daysTo(r.golive);const rg=relRAG(r);
+    return`<div class="golive-card" onclick="openRelease(${r.id})">
+      <div class="golive-card-name"><span class="rag-dot ${rg.cls}"></span>${esc(r.name)}</div>
+      <div class="golive-card-days">${fmtDays(d)}</div>
+      <div class="golive-card-sub">${fmtDate(r.golive)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderExecTopRisks(){
+  const el=document.getElementById('exec-top-risks');if(!el)return;
+  const risks=[];
+  releases.forEach(r=>{
+    const d=daysTo(r.golive);const rl=relRollup(r);
+    if(d!==null&&d<0)risks.push({sev:3,text:`${esc(r.name)} is ${Math.abs(d)} days overdue with ${rl.gateScore||0}% gate readiness.`});
+    if(d!==null&&d>=0&&d<=14&&rl.gateScore!==null&&rl.gateScore<50)risks.push({sev:3,text:`${esc(r.name)} goes live in ${d} days but gate readiness is only ${rl.gateScore}%.`});
+    r.projects.forEach(p=>{
+      const fl=projFlagCount(p);if(fl>=3)risks.push({sev:2,text:`${esc(p.name)} (${esc(r.name)}) has ${fl} active risk flags requiring immediate attention.`});
+      const uatEmpty=!(p.resources?.uat?.length&&p.resources.uat.some(e=>e.name));
+      if(uatEmpty&&d!==null&&d<=30&&d>=0)risks.push({sev:2,text:`${esc(p.name)} has no UAT resources assigned with go-live in ${d} days.`});
+      p.stakeholders.forEach(sh=>{const sc=adoptScore(sh.factors);if(sc<40)risks.push({sev:1,text:`${esc(sh.name)} (${esc(p.name)}) at ${sc}% adoption likelihood — critical risk tier.`});});
+    });
+  });
+  risks.sort((a,b)=>b.sev-a.sev);
+  if(!risks.length){el.innerHTML='<div class="es" style="padding:20px"><p class="es-txt" style="color:var(--green);font-weight:600">No critical risks identified.</p></div>';return;}
+  el.innerHTML=risks.slice(0,5).map(r=>`<div class="exec-attn-item"><div class="exec-attn-icon ${r.sev>=2?'crit':'warn'}">${r.sev>=2?'!':'⚠'}</div><div class="exec-attn-txt"><div class="exec-attn-sub">${r.text}</div></div></div>`).join('');
+}
+
+function renderExecAgencyHM(){
+  const el=document.getElementById('exec-agency-hm');if(!el)return;
+  const agencyMap={};
+  releases.forEach(r=>{(r.agencies||[]).forEach(a=>{
+    if(!agencyMap[a])agencyMap[a]={gateScores:[],adkars:[],flags:0,releases:0};
+    agencyMap[a].releases++;
+    const rl=relRollup(r);if(rl.gateScore!==null)agencyMap[a].gateScores.push(rl.gateScore);
+    if(rl.adkar!==null)agencyMap[a].adkars.push(parseFloat(rl.adkar));
+    agencyMap[a].flags+=rl.flags;
+  });});
+  const agencies=Object.keys(agencyMap);
+  if(!agencies.length){el.innerHTML='';return;}
+  let h='<thead><tr><th class="phm-rh">Agency</th><th>Releases</th><th>Avg Gate</th><th>Avg ADKAR</th><th>Risk Flags</th></tr></thead><tbody>';
+  agencies.forEach(a=>{const d=agencyMap[a];
+    const avgG=d.gateScores.length?Math.round(d.gateScores.reduce((s,v)=>s+v,0)/d.gateScores.length):null;
+    const avgA=d.adkars.length?(d.adkars.reduce((s,v)=>s+v,0)/d.adkars.length).toFixed(1):null;
+    const gcls=hmCellCls(avgG,[80,50]);const acls=avgA?hmCellCls(parseFloat(avgA),[4,3]):'n';const fcls=d.flags===0?'g':d.flags<=2?'a':'r';
+    h+=`<tr><td class="phm-rl">${esc(a)}</td><td><div class="hmc-w"><div class="hmc g">${d.releases}</div></div></td>
+    <td><div class="hmc-w"><div class="hmc ${gcls}">${avgG!==null?avgG+'%':'—'}</div></div></td>
+    <td><div class="hmc-w"><div class="hmc ${acls}">${avgA||'—'}</div></div></td>
+    <td><div class="hmc-w"><div class="hmc ${fcls}">${d.flags}</div></div></td></tr>`;
+  });
+  h+='</tbody>';el.innerHTML=h;
+}
+
+function generatePortfolioNarratives(){
+  const insights=[];
+  // UAT resources unassigned near go-live
+  let uatMissing=0;
+  releases.forEach(r=>{const d=daysTo(r.golive);r.projects.forEach(p=>{
+    const uatEmpty=!(p.resources?.uat?.length&&p.resources.uat.some(e=>e.name));
+    if(uatEmpty&&d!==null&&d<=30&&d>=0)uatMissing++;
+  });});
+  if(uatMissing)insights.push({icon:'!',cls:'warn',text:`${uatMissing} project${uatMissing>1?'s have':' has'} no UAT resources assigned within 30 days of go-live.`});
+  // Low gate readiness
+  const lowGate=releases.filter(r=>{const rl=relRollup(r);return rl.gateScore!==null&&rl.gateScore<50;});
+  if(lowGate.length)insights.push({icon:'⚠',cls:'warn',text:`${lowGate.length} release${lowGate.length>1?'s are':' is'} below 50% gate readiness: ${lowGate.map(r=>r.name).join(', ')}.`});
+  // Critical stakeholders
+  let critSH=0;
+  releases.forEach(r=>r.projects.forEach(p=>p.stakeholders.forEach(sh=>{if(adoptScore(sh.factors)<40)critSH++;})));
+  if(critSH)insights.push({icon:'!',cls:'warn',text:`${critSH} stakeholder group${critSH>1?'s are':' is'} at critical adoption risk (below 40%).`});
+  // Competing go-lives
+  const goLives=releases.filter(r=>r.golive).map(r=>({name:r.name,d:new Date(r.golive)})).sort((a,b)=>a.d-b.d);
+  for(let i=1;i<goLives.length;i++){const diff=Math.abs(goLives[i].d-goLives[i-1].d)/86400000;
+    if(diff<=7)insights.push({icon:'⚠',cls:'warn',text:`${goLives[i-1].name} and ${goLives[i].name} go live within ${Math.round(diff)} days of each other — resource contention risk.`});}
+  // High readiness releases
+  const highReady=releases.filter(r=>{const rl=relRollup(r);return rl.gateScore!==null&&rl.gateScore>=80;});
+  if(highReady.length)insights.push({icon:'✓',cls:'good',text:`${highReady.length} release${highReady.length>1?'s are':' is'} at 80%+ gate readiness: ${highReady.map(r=>r.name).join(', ')}.`});
+  // ADKAR strengths
+  const strongAdkar=releases.filter(r=>{const rl=relRollup(r);return rl.adkar!==null&&parseFloat(rl.adkar)>=4;});
+  if(strongAdkar.length)insights.push({icon:'✓',cls:'good',text:`${strongAdkar.length} release${strongAdkar.length>1?'s show':' shows'} strong ADKAR scores (4+/5).`});
+  if(!insights.length)insights.push({icon:'—',cls:'neutral',text:'Portfolio data is insufficient to generate insights. Add projects and score gates to begin.'});
+  return insights;
+}
+
+function renderExecNarratives(){
+  const el=document.getElementById('exec-narratives');if(!el)return;
+  const insights=generatePortfolioNarratives();
+  el.innerHTML=insights.map(i=>`<div class="trend-insight ${i.cls}">
+    <div class="trend-insight-icon ${i.cls}">${i.icon}</div><div>${i.text}</div>
+  </div>`).join('');
+}
+
+function renderBenchmarkCard(){
+  const el=document.getElementById('p-benchmark-card');if(!el)return;
+  const p=getProj();if(!p){el.style.display='none';return;}
+  const bm=calcBenchmarks();const gs=projGateScore(p);
+  if(!bm.gate||gs===null){el.style.display='none';return;}
+  const pos=benchmarkPosition(gs,bm.gate);
+  const adk=parseFloat(projAdkarAvg(p));const adkPos=bm.adkar?benchmarkPosition(adk,bm.adkar):null;
+  el.style.display='block';
+  el.innerHTML=`<div class="bench-card">
+    <div class="bench-icon ${pos.cls}">${pos.icon}</div>
+    <div class="bench-txt">
+      <div class="bench-label">Portfolio Benchmark</div>
+      Gate readiness at ${gs}% places this project in the <strong>${pos.label}</strong> across your portfolio.
+      ${adkPos?` ADKAR score of ${adk}/5 is <strong>${adkPos.label}</strong>.`:''}
+    </div>
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════════
@@ -1457,6 +1670,88 @@ function renderRecommendations(){
     <div class="rec-txt"><div class="rec-gate">${esc(r.gate)}: ${esc(r.item)}</div>
     <div class="rec-action"><strong>Action:</strong> ${esc(r.action)}</div></div>
   </div>`).join('')+(recs.length>6?`<div style="text-align:center;padding:8px;font-size:11px;color:var(--ink-60)">+${recs.length-6} more — view all in the Gates tab</div>`:'');
+}
+
+// ════════════════════════════════════════════════════════
+// CHANGE IMPACT ASSESSMENT
+// ════════════════════════════════════════════════════════
+const CHANGE_TYPES=['Process','Technology','People','Organization'];
+function renderPImpact(){
+  const p=getProj();if(!p)return;
+  const el=document.getElementById('p-impact-panel');if(!el)return;
+  if(!p.impactAssessment)p.impactAssessment={groups:[]};
+  const groups=p.impactAssessment.groups;
+  if(!groups.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add impacted groups to begin the impact assessment.</p></div>';return;}
+  el.innerHTML=groups.map((g,gi)=>{
+    const lvlCls=g.level==='High'?'high':g.level==='Low'?'low':'medium';
+    return`<div class="impact-group">
+      <div class="impact-group-hd">
+        <input class="ib-input" style="flex:1;font-weight:600" value="${esc(g.name)}" placeholder="Group name" onchange="syncImpactField(${gi},'name',this.value)">
+        <select class="ib-select" style="margin:0 10px" onchange="syncImpactField(${gi},'level',this.value)">
+          <option value="High"${g.level==='High'?' selected':''}>High Impact</option>
+          <option value="Medium"${g.level==='Medium'?' selected':''}>Medium Impact</option>
+          <option value="Low"${g.level==='Low'?' selected':''}>Low Impact</option>
+        </select>
+        <span class="impact-level ${lvlCls}">${g.level}</span>
+        <button class="btn-del-sm" style="margin-left:10px" onclick="removeImpactGroup(${gi})">Remove</button>
+      </div>
+      <div class="change-type-chips">${CHANGE_TYPES.map(ct=>`<button class="ct-chip${(g.changeTypes||[]).includes(ct)?' active':''}" onclick="toggleChangeType(${gi},'${ct}')">${ct}</button>`).join('')}</div>
+      <div class="impact-states">
+        <div><label class="ib-label">Current State</label><textarea class="impact-ta" onchange="syncImpactField(${gi},'currentState',this.value)" placeholder="Describe the current process, tools, or behaviors...">${esc(g.currentState||'')}</textarea></div>
+        <div class="impact-arrow">→</div>
+        <div><label class="ib-label">Future State</label><textarea class="impact-ta" onchange="syncImpactField(${gi},'futureState',this.value)" placeholder="Describe the target process, tools, or behaviors...">${esc(g.futureState||'')}</textarea></div>
+      </div>
+      <div class="impact-actions">
+        <div class="ib-label">Readiness Actions</div>
+        ${(g.actions||[]).map((a,ai)=>`<div class="impact-action${a.done?' done':''}">
+          <input type="checkbox" ${a.done?'checked':''} onchange="toggleImpactAction(${gi},${ai})">
+          <input class="ib-input" style="flex:1" value="${esc(a.text)}" onchange="syncImpactAction(${gi},${ai},this.value)">
+          <button class="btn-del-sm" onclick="removeImpactAction(${gi},${ai})">×</button>
+        </div>`).join('')}
+        <button class="btn-sm" style="margin-top:6px" onclick="addImpactAction(${gi})">+ Add Action</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function addImpactGroup(){
+  const p=getProj();if(!p)return;
+  if(!p.impactAssessment)p.impactAssessment={groups:[]};
+  p.impactAssessment.groups.push({name:'',level:'Medium',changeTypes:[],currentState:'',futureState:'',actions:[]});
+  touch('proj');schedSave();renderPImpact();
+}
+function removeImpactGroup(gi){
+  const p=getProj();if(!p)return;
+  p.impactAssessment.groups.splice(gi,1);touch('proj');schedSave();renderPImpact();
+}
+function syncImpactField(gi,field,val){
+  const p=getProj();if(!p)return;
+  p.impactAssessment.groups[gi][field]=val;touch('proj');schedSave();
+  if(field==='level')renderPImpact();
+}
+function toggleChangeType(gi,ct){
+  const p=getProj();if(!p)return;
+  const g=p.impactAssessment.groups[gi];if(!g.changeTypes)g.changeTypes=[];
+  const idx=g.changeTypes.indexOf(ct);if(idx>=0)g.changeTypes.splice(idx,1);else g.changeTypes.push(ct);
+  touch('proj');schedSave();renderPImpact();
+}
+function addImpactAction(gi){
+  const p=getProj();if(!p)return;
+  if(!p.impactAssessment.groups[gi].actions)p.impactAssessment.groups[gi].actions=[];
+  p.impactAssessment.groups[gi].actions.push({text:'',done:false});
+  touch('proj');schedSave();renderPImpact();
+}
+function toggleImpactAction(gi,ai){
+  const p=getProj();if(!p)return;
+  p.impactAssessment.groups[gi].actions[ai].done=!p.impactAssessment.groups[gi].actions[ai].done;
+  touch('proj');schedSave();renderPImpact();
+}
+function syncImpactAction(gi,ai,val){
+  const p=getProj();if(!p)return;
+  p.impactAssessment.groups[gi].actions[ai].text=val;touch('proj');schedSave();
+}
+function removeImpactAction(gi,ai){
+  const p=getProj();if(!p)return;
+  p.impactAssessment.groups[gi].actions.splice(ai,1);touch('proj');schedSave();renderPImpact();
 }
 
 // ════════════════════════════════════════════════════════
@@ -1708,6 +2003,124 @@ function getProjFlags(p){
     if(s==='red'||s==='yellow')flags.push({gate:gate.label,sub:gate.sub,item:item.text,consequence:RC[gate.id]?.[i]||'',key:gate.id+'_'+i});
   });});
   return flags;
+}
+
+// ════════════════════════════════════════════════════════
+// CLIENT HANDOFF PDF
+// ════════════════════════════════════════════════════════
+function exportHandoffPDF(){
+  const brand=getBrand();
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  const w=doc.internal.pageSize.getWidth(),h=doc.internal.pageSize.getHeight();
+  const pg=[1];
+  // Cover page
+  doc.setFillColor(12,31,63);doc.rect(0,0,w,h,'F');
+  doc.setFontSize(36);doc.setTextColor(184,146,42);doc.setFont('helvetica','bold');
+  doc.text(brand.firmName,w/2,h*0.35,{align:'center'});
+  doc.setFontSize(14);doc.setTextColor(255,255,255);doc.setFont('helvetica','normal');
+  doc.text('Client Handoff Package',w/2,h*0.43,{align:'center'});
+  doc.setFontSize(10);doc.text(brand.subtitle,w/2,h*0.50,{align:'center'});
+  doc.setFontSize(9);doc.text('Generated: '+new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),w/2,h*0.58,{align:'center'});
+  doc.setFontSize(9);doc.text(releases.length+' Releases · '+releases.reduce((s,r)=>s+r.projects.length,0)+' Projects',w/2,h*0.63,{align:'center'});
+  doc.setFontSize(7);doc.setTextColor(184,146,42);
+  doc.text('Powered by AdoptIQ — Adoption Intelligence Platform',w/2,h-20,{align:'center'});
+  // Executive summary page
+  pg[0]++;doc.addPage();let y=pdfHeader(doc,w);
+  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(12,31,63);
+  doc.text('Executive Summary',14,y);y+=10;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(0,0,0);
+  // RAG summary
+  let gCnt=0,aCnt=0,rCnt=0;
+  releases.forEach(r=>{const rg=relRAG(r);if(rg.rag==='green')gCnt++;else if(rg.rag==='amber')aCnt++;else rCnt++;});
+  doc.text(`Portfolio Status: ${gCnt} On Track, ${aCnt} At Risk, ${rCnt} Critical`,14,y);y+=6;
+  const scores=releases.map(r=>relRollup(r).gateScore).filter(s=>s!==null);
+  const avgGate=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):0;
+  doc.text(`Average Gate Readiness: ${avgGate}%`,14,y);y+=6;
+  const tFlags=releases.reduce((s,r)=>s+relRollup(r).flags,0);
+  doc.text(`Total Risk Flags: ${tFlags}`,14,y);y+=10;
+  // Narratives
+  y=pdfSection(doc,y,'Portfolio Insights',w);
+  const narratives=generatePortfolioNarratives();
+  narratives.forEach(n=>{y=pdfCheckPage(doc,y,w,h,pg,8);
+    const lines=doc.splitTextToSize('• '+n.text,w-28);lines.forEach(l=>{doc.setFontSize(8);doc.text(l,14,y);y+=4;});y+=2;
+  });
+  y+=4;
+  // Release summary table
+  y=pdfCheckPage(doc,y,w,h,pg,20);
+  y=pdfSection(doc,y,'Release Overview',w);
+  const relRows=releases.map(r=>{const rl=relRollup(r);const rg=relRAG(r);
+    return[r.name,rg.label,rl.gateScore!==null?rl.gateScore+'%':'—',rl.adkar||'—',String(rl.flags),r.golive?fmtDate(r.golive):'—'];
+  });
+  doc.autoTable({startY:y,head:[['Release','RAG','Gate %','ADKAR','Flags','Go-Live']],body:relRows,
+    margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]}
+  });y=doc.lastAutoTable.finalY+10;
+  // Per-release detail pages
+  releases.forEach(r=>{
+    pg[0]++;doc.addPage();y=pdfHeader(doc,w);
+    doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(12,31,63);
+    doc.text(r.name,14,y);y+=7;
+    const rl=relRollup(r);const rg=relRAG(r);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(0,0,0);
+    doc.text(`Status: ${rg.label} | Gate Readiness: ${rl.gateScore!==null?rl.gateScore+'%':'—'} | Go-Live: ${r.golive?fmtDate(r.golive):'Not set'}`,14,y);y+=8;
+    // Project table
+    if(r.projects.length){
+      y=pdfSection(doc,y,'Projects',w);
+      const pRows=r.projects.map(p=>{const gs=projGateScore(p);const avg=projAdkarAvg(p);
+        return[p.name,p.status,gs!==null?gs+'%':'—',avg+'/5',String(getProjFlags(p).length)];
+      });
+      doc.autoTable({startY:y,head:[['Project','Status','Gate %','ADKAR','Flags']],body:pRows,
+        margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+        headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+        alternateRowStyles:{fillColor:[248,247,244]}
+      });y=doc.lastAutoTable.finalY+8;
+    }
+    // Per-project gate bars
+    r.projects.forEach(p=>{
+      y=pdfCheckPage(doc,y,w,h,pg,25);
+      y=pdfSection(doc,y,p.name+' — Gate Readiness',w);
+      GATE_DEFS.forEach(gate=>{
+        y=pdfCheckPage(doc,y,w,h,pg,10);
+        const tot=gate.items.length;const naC=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='na').length;
+        const applicable=tot-naC;const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
+        const pct=applicable?Math.round(grn/applicable*100):100;
+        doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text(gate.label,14,y);
+        doc.setFont('helvetica','normal');doc.text(pct+'%',w-14,y,{align:'right'});y+=3;
+        pdfBar(doc,14,y,w-28,pct,29,104,64);y+=7;
+      });
+      // ADKAR
+      y=pdfCheckPage(doc,y,w,h,pg,20);
+      doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('ADKAR: '+projAdkarAvg(p)+'/5',14,y);y+=6;
+      doc.setFont('helvetica','normal');
+      ADKAR_DIMS.forEach(d=>{const sc=p.adkarScores[d.key];doc.setFontSize(7);doc.text(d.word+': '+sc+'/5',14,y);y+=4;});
+      y+=4;
+      // Impact assessment if present
+      if(p.impactAssessment?.groups?.length){
+        y=pdfCheckPage(doc,y,w,h,pg,16);
+        y=pdfSection(doc,y,p.name+' — Change Impact',w);
+        const impRows=p.impactAssessment.groups.map(g=>[g.name||'—',g.level,(g.changeTypes||[]).join(', ')||'—',
+          (g.actions||[]).filter(a=>a.done).length+'/'+(g.actions||[]).length+' complete']);
+        doc.autoTable({startY:y,head:[['Group','Impact','Change Types','Actions']],body:impRows,
+          margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+          headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+          alternateRowStyles:{fillColor:[248,247,244]}
+        });y=doc.lastAutoTable.finalY+8;
+      }
+      // Stakeholders
+      if(p.stakeholders.length){
+        y=pdfCheckPage(doc,y,w,h,pg,16);
+        const shRows=p.stakeholders.map(sh=>{const sc=adoptScore(sh.factors);const{tier}=adoptTier(sc);return[sh.name,sc+'%',tier];});
+        doc.autoTable({startY:y,head:[['Stakeholder','Adoption %','Risk Tier']],body:shRows,
+          margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+          headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+          alternateRowStyles:{fillColor:[248,247,244]}
+        });y=doc.lastAutoTable.finalY+8;
+      }
+    });
+    pdfFooter(doc,w,h,pg[0]);
+  });
+  doc.save(`AdoptIQ-${brand.firmName.replace(/[^a-z0-9]/gi,'-')}-Handoff-Package.pdf`);
 }
 
 // ════════════════════════════════════════════════════════
