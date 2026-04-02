@@ -1910,8 +1910,8 @@ async function loadDemoData(){
   r5.projects=[p5a,p5b];
   releases.push(r5);
 
-  await saveData();renderPortfolio();renderAlerts();
-  setDemoMode(true);initTopBrand();
+  await saveData();setDemoMode(true);renderPortfolio();renderAlerts();
+  initTopBrand();
   closeWelcome();
 }
 
