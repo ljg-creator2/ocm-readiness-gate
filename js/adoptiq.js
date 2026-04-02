@@ -82,6 +82,38 @@ async function bootApp(){
   if(user&&!user.user_metadata?.onboarded&&releases.length===0){
     document.getElementById('welcome-modal').classList.add('open');
   }
+  // Determine if user is owner or team member and lock role accordingly
+  await resolveUserRole();
+}
+async function resolveUserRole(){
+  if(!currentUserId||isDemoMode)return;
+  try{
+    // Check if user owns any releases (has their own user_data)
+    const{data:own}=await _supabase.from('user_data').select('user_id').eq('user_id',currentUserId).maybeSingle();
+    if(own){
+      // User is an owner/admin — show role selector, default to admin
+      applyViewRole('admin');
+      const sel=document.getElementById('view-role-select');if(sel)sel.style.display='';
+      return;
+    }
+    // Not an owner — check team memberships for assigned role
+    const{data:memberships}=await _supabase.from('team_members').select('role').eq('user_id',currentUserId);
+    if(memberships&&memberships.length){
+      // Use the highest-access role across all team memberships
+      const roleOrder=['staff','exec_sponsor','client_viewer'];
+      let bestRole='client_viewer';
+      for(const m of memberships){
+        if(roleOrder.indexOf(m.role)<roleOrder.indexOf(bestRole)&&roleOrder.includes(m.role))bestRole=m.role;
+        // Legacy roles map to staff
+        if(m.role==='editor')bestRole='staff';
+        if(m.role==='viewer'&&bestRole==='client_viewer')bestRole='staff';
+      }
+      applyViewRole(bestRole);
+      // Hide role selector — role is assigned by admin
+      const sel=document.getElementById('view-role-select');if(sel)sel.style.display='none';
+      const profVR=document.getElementById('profile-view-role');if(profVR)profVR.disabled=true;
+    }
+  }catch(e){console.warn('Role resolution:',e);}
 }
 
 function checkPasswordStrength(){
@@ -2192,7 +2224,7 @@ async function ensureTeam(releaseId){
 
 function openInviteModal(){
   document.getElementById('invite-email').value='';
-  document.getElementById('invite-role').value='editor';
+  document.getElementById('invite-role').value='staff';
   document.getElementById('invite-err').textContent='';
   document.getElementById('invite-modal').classList.add('open');
 }
@@ -2233,8 +2265,9 @@ async function openTeamPanel(){
     for(const m of members){
       const{data:u}=await _supabase.auth.admin?.getUserById?.(m.user_id)||{data:null};
       const name=u?.user?.email||m.user_id.slice(0,8)+'...';
-      const badgeCls=m.role==='editor'?'editor':'viewer';
-      html+=`<div class="team-member-row"><span class="team-role-badge ${badgeCls}">${m.role}</span><span>${esc(name)}</span>
+      const roleLbl={staff:'Staff',exec_sponsor:'Exec Sponsor',client_viewer:'Client',editor:'Editor',viewer:'Viewer'}[m.role]||m.role;
+      const badgeCls=m.role==='staff'?'editor':m.role==='editor'?'editor':'viewer';
+      html+=`<div class="team-member-row"><span class="team-role-badge ${badgeCls}">${roleLbl}</span><span>${esc(name)}</span>
         <button class="btn-sm" style="margin-left:auto;font-size:9px;padding:3px 8px" onclick="removeMember('${teamId}','${m.user_id}')">Remove</button></div>`;
     }
   }
@@ -2275,6 +2308,9 @@ async function acceptInvite(inviteId,teamId,role){
   // Mark invite accepted
   await _supabase.from('team_invites').update({accepted_at:new Date().toISOString()}).eq('id',inviteId);
   checkPendingInvites();
+  // Apply the assigned role immediately
+  await resolveUserRole();
+  renderPortfolio();
   showSaveIndicator('Invite accepted');
 }
 
