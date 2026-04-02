@@ -76,7 +76,7 @@ async function signOut(){
 
 async function bootApp(){
   await loadData();renderPortfolio();renderAlerts();document.getElementById('v-portfolio').classList.add('active');
-  checkPendingInvites();autoSnapshot();initTopBrand();
+  checkPendingInvites();autoSnapshot();initTopBrand();renderTrendCharts();
   // Show onboarding for new users
   const{data:{user}}=await _supabase.auth.getUser();
   if(user&&!user.user_metadata?.onboarded&&releases.length===0){
@@ -114,11 +114,18 @@ function initTopBrand(){
 }
 
 async function initAuth(){
+  // Check for public share link first
+  const shareToken=checkShareParam();
+  if(shareToken){
+    await loadSharedView(shareToken);
+    return;
+  }
   const{data:{session}}=await _supabase.auth.getSession();
   if(session&&session.user){
     if(!session.user.email_confirmed_at){await _supabase.auth.signOut();return;}
     currentUserId=session.user.id;
     hideLogin();await bootApp();updateAvatars();
+    if(checkReadOnlyParam())enableReadOnly();
   }
 }
 
@@ -328,7 +335,7 @@ function applyTheme(t){
     if(lb)lb.textContent=t==='dark'?'Dark':'Light';
   });
 }
-function toggleTheme(){applyTheme(theme==='light'?'dark':'light');setTimeout(()=>{if(releases.length)renderPortfolioCharts();const p=getProj();if(p)renderProjCharts();},300);}
+function toggleTheme(){applyTheme(theme==='light'?'dark':'light');setTimeout(()=>{if(releases.length){renderPortfolioCharts();renderTrendCharts();}const p=getProj();if(p)renderProjCharts();},300);}
 applyTheme(theme);
 
 // ════════════════════════════════════════════════════════
@@ -486,7 +493,7 @@ function showView(id){
     document.getElementById(v).classList.toggle('active',v===id);
   });
 }
-function goPortfolio(){activeRelId=null;activeProjId=null;showView('v-portfolio');renderPortfolio();}
+function goPortfolio(){activeRelId=null;activeProjId=null;showView('v-portfolio');renderPortfolio();announceToSR('Portfolio view loaded');}
 function openRelease(id){
   activeRelId=id;activeProjId=null;
   const r=getRel();if(!r)return;
@@ -705,7 +712,8 @@ function renderPortfolio(){
     </div>`;
   }).join('')}</div>`;
   document.getElementById('phm-sec').style.display='block';document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
-  renderPortfolioHM();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();
+  renderPortfolioHM();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();
+  if(isReadOnly)applyReadOnlyRestrictions();
 }
 
 function renderPortfolioHM(){
@@ -796,7 +804,7 @@ function updateRelStatusPill(){
 // ════════════════════════════════════════════════════════
 // RELEASE VIEW
 // ════════════════════════════════════════════════════════
-function renderRelView(){renderRelSumBar();renderRelScope();renderRelKPIs();renderRelProjCards();renderRelOverview();applyRoleRestrictions();}
+function renderRelView(){renderRelSumBar();renderRelScope();renderRelKPIs();renderRelProjCards();renderRelOverview();applyRoleRestrictions();if(isReadOnly)applyReadOnlyRestrictions();}
 function renderRelSumBar(){
   const r=getRel();if(!r)return;
   document.getElementById('rsb-name').textContent=r.name||'—';
@@ -931,7 +939,7 @@ function updateProjGateScoreBand(){
 // ════════════════════════════════════════════════════════
 // PROJECT — ALL RENDER
 // ════════════════════════════════════════════════════════
-function renderProjAll(){renderPGates();renderPDepHM();renderPAdkar();renderPSH();renderPKPIs();renderPOverview();renderPResources();}
+function renderProjAll(){renderPGates();renderPDepHM();renderPAdkar();renderPSH();renderPKPIs();renderPOverview();renderPResources();if(isReadOnly)applyReadOnlyRestrictions();}
 
 function renderPGates(){
   const p=getProj();if(!p)return;
@@ -1410,8 +1418,8 @@ function renderRecommendations(){
 // ════════════════════════════════════════════════════════
 async function saveSnapshot(){
   if(!currentUserId)return;
-  const snapshot={
-    date:new Date().toISOString().split('T')[0],
+  const today=new Date().toISOString().split('T')[0];
+  const snapshotData={
     releases:releases.map(r=>({
       id:r.id,name:r.name,
       projects:r.projects.map(p=>{
@@ -1420,16 +1428,16 @@ async function saveSnapshot(){
       })
     }))
   };
-  // Store in user_metadata for simplicity (no new table needed)
-  const{data:{user}}=await _supabase.auth.getUser();
-  const history=user?.user_metadata?.snapshots||[];
-  // Only one snapshot per day
-  const today=snapshot.date;
-  const filtered=history.filter(s=>s.date!==today);
-  filtered.push(snapshot);
-  // Keep last 52 weeks
-  const trimmed=filtered.slice(-52);
-  await _supabase.auth.updateUser({data:{snapshots:trimmed}});
+  // Try new snapshots table first, fall back to user_metadata
+  const{error}=await _supabase.from('snapshots').upsert({user_id:currentUserId,snapshot_date:today,data:snapshotData},{onConflict:'user_id,snapshot_date'});
+  if(error){
+    // Fallback: store in user_metadata (table may not exist yet)
+    const{data:{user}}=await _supabase.auth.getUser();
+    const history=user?.user_metadata?.snapshots||[];
+    const filtered=history.filter(s=>s.date!==today);
+    filtered.push({date:today,...snapshotData});
+    await _supabase.auth.updateUser({data:{snapshots:filtered.slice(-52)}});
+  }
 }
 
 function autoSnapshot(){
@@ -1903,7 +1911,7 @@ async function loadDemoData(){
   releases.push(r5);
 
   await saveData();renderPortfolio();renderAlerts();
-  setDemoMode(true);
+  setDemoMode(true);initTopBrand();
   closeWelcome();
 }
 
@@ -1999,6 +2007,451 @@ function renderAlerts(){
 }
 
 // ════════════════════════════════════════════════════════
+// VIEW-ONLY SHARING MODE
+// ════════════════════════════════════════════════════════
+let isReadOnly=false;
+
+function checkReadOnlyParam(){
+  const params=new URLSearchParams(window.location.search);
+  return params.get('readonly')==='true';
+}
+
+function enableReadOnly(){
+  isReadOnly=true;
+  document.body.classList.add('readonly-mode');
+  // Show viewer banner on all views
+  ['viewer-banner-p','viewer-banner-r','viewer-banner-proj'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display='flex';
+  });
+  applyReadOnlyRestrictions();
+}
+
+function applyReadOnlyRestrictions(){
+  if(!isReadOnly)return;
+  // Disable all inputs, selects, textareas across all views
+  document.querySelectorAll('#v-portfolio input,#v-portfolio select,#v-portfolio textarea,#v-release input,#v-release select,#v-release textarea,#v-project input,#v-project select,#v-project textarea').forEach(el=>{el.disabled=true;});
+  // Disable action buttons (but keep navigation, export, and theme buttons)
+  document.querySelectorAll('#v-portfolio button,#v-release button,#v-project button').forEach(el=>{
+    const txt=el.textContent||'';
+    const isNav=el.classList.contains('nav-btn')||el.classList.contains('theme-btn')||el.classList.contains('btn-profile');
+    const isExport=txt.includes('Export')||txt.includes('Audit');
+    const isBack=txt.includes('Back')||txt.includes('Portfolio');
+    const isOpen=txt.includes('Open')||el.classList.contains('btn-sm');
+    const isCard=el.closest('.r-card')||el.closest('.pc');
+    if(!isNav&&!isExport&&!isBack&&!isOpen&&!isCard){
+      el.disabled=true;el.style.opacity='0.5';el.style.cursor='not-allowed';
+    }
+  });
+  // Hide add/remove/delete buttons
+  document.querySelectorAll('.btn-del-sm,.res-add-btn,.chip-rm').forEach(el=>{el.style.display='none';});
+  // Hide sign-out and profile edit
+  const signOutBtn=document.querySelector('.btn-profile');
+  if(signOutBtn)signOutBtn.style.display='none';
+}
+
+function copyViewOnlyLink(){
+  const url=new URL(window.location.href);
+  url.searchParams.set('readonly','true');
+  navigator.clipboard.writeText(url.toString()).then(()=>{
+    showSaveIndicator('View-only link copied!');
+  }).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=url.toString();document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    showSaveIndicator('View-only link copied!');
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// PUBLIC SHARING (Frozen Snapshots)
+// ════════════════════════════════════════════════════════
+let sharedViewData=null; // Holds data when viewing a shared link
+
+function checkShareParam(){
+  const params=new URLSearchParams(window.location.search);
+  return params.get('share')||null;
+}
+
+async function loadSharedView(token){
+  // Try RPC first (works for anonymous), fall back to direct query
+  const{data,error}=await _supabase.rpc('get_shared_snapshot',{share_token:token});
+  if(error||!data){
+    // Fallback: direct query (works if RLS allows)
+    const{data:row,error:qErr}=await _supabase.from('shared_links').select('snapshot,label,created_at,expires_at').eq('token',token).eq('is_active',true).gt('expires_at',new Date().toISOString()).maybeSingle();
+    if(qErr||!row){
+      document.getElementById('v-login').classList.remove('active');
+      document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);font-family:DM Sans,sans-serif"><div style="text-align:center;max-width:400px;padding:40px"><div style="font-size:48px;margin-bottom:16px">&#128279;</div><h2 style="font-family:DM Serif Display,Georgia,serif;margin-bottom:12px">Link Expired or Invalid</h2><p style="color:#666;font-size:14px">This shared dashboard link has expired, been revoked, or does not exist.</p><a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;background:#b8922a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Go to AdoptIQ</a></div></div>';
+      return;
+    }
+    sharedViewData=row;
+  } else {
+    sharedViewData=data;
+  }
+  // Load the frozen data
+  releases=sharedViewData.snapshot||[];
+  const createdDate=new Date(sharedViewData.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  // Hide login, show portfolio
+  hideLogin();
+  document.getElementById('v-portfolio').classList.add('active');
+  // Set shared banner text
+  ['viewer-banner-p','viewer-banner-r','viewer-banner-proj'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.style.display='flex';el.innerHTML=`<span>Shared View</span> — Dashboard snapshot from ${esc(createdDate)}. This is a read-only view.`;}
+  });
+  isReadOnly=true;
+  document.body.classList.add('readonly-mode');
+  renderPortfolio();renderAlerts();initTopBrand();
+  applyReadOnlyRestrictions();
+  // Hide auth-only elements
+  document.querySelectorAll('.btn-profile,.btn-signout,#demo-banner-p,#demo-banner-r,#demo-banner-proj').forEach(el=>{el.style.display='none';});
+}
+
+function openShareModal(){
+  document.getElementById('share-err').textContent='';
+  document.getElementById('share-link-result').style.display='none';
+  document.getElementById('share-expiry').value='7';
+  renderActiveShares();
+  openModal('share-modal');
+}
+
+async function generateShareLink(){
+  const errEl=document.getElementById('share-err');
+  errEl.textContent='';
+  if(!currentUserId){errEl.textContent='Please sign in to share.';return;}
+  const days=parseInt(document.getElementById('share-expiry').value)||7;
+  const expiresAt=new Date();expiresAt.setDate(expiresAt.getDate()+days);
+  // Freeze current data
+  const snapshot=JSON.parse(JSON.stringify(releases));
+  const label=releases.map(r=>r.name).join(', ');
+  const{data,error}=await _supabase.from('shared_links').insert({
+    user_id:currentUserId,
+    label:label.substring(0,200),
+    snapshot,
+    expires_at:expiresAt.toISOString(),
+    is_active:true
+  }).select('token').single();
+  if(error){
+    errEl.textContent='Could not create share link. Run sql/phase5_sharing.sql in Supabase first.';
+    console.error('Share link error:',error);return;
+  }
+  const url=window.location.origin+'/?share='+data.token;
+  document.getElementById('share-link-url').value=url;
+  document.getElementById('share-link-expires').textContent='Expires '+expiresAt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('share-link-result').style.display='block';
+  renderActiveShares();
+}
+
+function copyShareLink(){
+  const inp=document.getElementById('share-link-url');
+  inp.select();
+  navigator.clipboard.writeText(inp.value).then(()=>{
+    showSaveIndicator('Share link copied!');
+  }).catch(()=>{
+    document.execCommand('copy');
+    showSaveIndicator('Share link copied!');
+  });
+}
+
+async function renderActiveShares(){
+  const el=document.getElementById('active-shares-list');if(!el)return;
+  if(!currentUserId){el.innerHTML='';return;}
+  const{data,error}=await _supabase.from('shared_links').select('id,token,label,created_at,expires_at,is_active').eq('user_id',currentUserId).order('created_at',{ascending:false}).limit(10);
+  if(error||!data||!data.length){el.innerHTML='<div style="font-size:11px;color:var(--ink-60);padding:8px 0">No shared links yet.</div>';return;}
+  el.innerHTML=data.map(s=>{
+    const created=new Date(s.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const expires=new Date(s.expires_at);
+    const isExpired=expires<new Date();
+    const active=s.is_active&&!isExpired;
+    const statusTxt=!s.is_active?'Revoked':isExpired?'Expired':'Active';
+    const statusCls=active?'share-active':' share-inactive';
+    return`<div class="share-row">
+      <div class="share-row-info"><span class="share-row-label">${esc(s.label||'Dashboard').substring(0,40)}</span><span class="share-row-date">Created ${created}</span></div>
+      <span class="share-status ${statusCls}">${statusTxt}</span>
+      ${active?`<button class="btn-del-sm" onclick="revokeShare('${s.id}')">Revoke</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function revokeShare(id){
+  await _supabase.from('shared_links').update({is_active:false}).eq('id',id).eq('user_id',currentUserId);
+  showSaveIndicator('Link revoked');
+  renderActiveShares();
+}
+
+// ════════════════════════════════════════════════════════
+// HISTORICAL TREND CHARTS
+// ════════════════════════════════════════════════════════
+function generateDemoSnapshots(){
+  // Simulate 8 weeks of improving portfolio data for demo
+  const today=new Date();const snaps=[];
+  const baseGates=[8,12,15,19,22,25,27,30];
+  const baseFlags=[22,19,17,16,15,14,13,12];
+  const baseAdkar=[2.2,2.4,2.5,2.7,2.8,2.9,3.0,3.0];
+  for(let i=7;i>=0;i--){
+    const d=new Date(today);d.setDate(d.getDate()-i*7);
+    const idx=7-i;
+    snaps.push({
+      date:d.toISOString().split('T')[0],
+      releases:[
+        {id:1,name:'Q3 EHR Migration',projects:[
+          {id:1,name:'Clinical Workflow',gateScore:baseGates[idx]+9,adkarAvg:(baseAdkar[idx]+0.5).toFixed(1),flags:Math.max(0,baseFlags[idx]-10),status:'In Progress'},
+          {id:2,name:'Nursing Documentation',gateScore:baseGates[idx]+5,adkarAvg:(baseAdkar[idx]+0.3).toFixed(1),flags:Math.max(0,baseFlags[idx]-8),status:'In Progress'}
+        ]},
+        {id:2,name:'Core Banking Modernization',projects:[
+          {id:3,name:'Teller Platform',gateScore:baseGates[idx]+3,adkarAvg:baseAdkar[idx].toFixed(1),flags:Math.max(0,baseFlags[idx]-5),status:'In Progress'},
+          {id:4,name:'Online Banking',gateScore:Math.max(0,baseGates[idx]-5),adkarAvg:(baseAdkar[idx]-0.2).toFixed(1),flags:baseFlags[idx],status:'Not Started'}
+        ]},
+        {id:3,name:'SAP S/4HANA Cutover',projects:[
+          {id:5,name:'Shop Floor MES',gateScore:Math.max(0,baseGates[idx]-8),adkarAvg:(baseAdkar[idx]-0.3).toFixed(1),flags:Math.min(22,baseFlags[idx]+3),status:'Not Started'}
+        ]},
+        {id:4,name:'M\u00FCller & Sons CRM Go-Live',projects:[
+          {id:6,name:'Client 360',gateScore:baseGates[idx]+20,adkarAvg:(baseAdkar[idx]+0.8).toFixed(1),flags:Math.max(0,baseFlags[idx]-12),status:'In Progress'}
+        ]},
+        {id:5,name:'State Benefits Portal Modernization',projects:[
+          {id:7,name:'Case Management',gateScore:100,adkarAvg:'4.5',flags:0,status:'Completed'},
+          {id:8,name:'Public Portal',gateScore:100,adkarAvg:'4.2',flags:0,status:'Completed'}
+        ]}
+      ]
+    });
+  }
+  return snaps;
+}
+
+// Cached snapshots for sparklines
+let _trendSnapshots=[];
+
+async function renderTrendCharts(){
+  const container=document.getElementById('trends-sec');if(!container)return;
+  let snapshots=[];
+  if(isDemoMode){
+    snapshots=generateDemoSnapshots();
+  } else if(currentUserId){
+    // Try snapshots table first
+    const{data:rows}=await _supabase.from('snapshots').select('snapshot_date,data').eq('user_id',currentUserId).order('snapshot_date',{ascending:true}).limit(52);
+    if(rows&&rows.length){
+      snapshots=rows.map(r=>({date:r.snapshot_date,...r.data}));
+    } else {
+      // Fallback to user_metadata
+      const{data:{user}}=await _supabase.auth.getUser();
+      snapshots=user?.user_metadata?.snapshots||[];
+    }
+  }
+  if(snapshots.length<2){container.style.display='none';return;}
+  container.style.display='block';
+  snapshots.sort((a,b)=>a.date.localeCompare(b.date));
+  _trendSnapshots=snapshots;
+  const recent=snapshots.slice(-12);
+  const labels=recent.map(s=>{const d=new Date(s.date+'T00:00:00');return 'Wk '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'});});
+
+  // Calculate portfolio metrics per snapshot
+  const gateScores=recent.map(s=>{let t=0,c=0;s.releases.forEach(r=>(r.projects||[]).forEach(p=>{if(p.gateScore!=null){t+=p.gateScore;c++;}}));return c?Math.round(t/c):null;});
+  const flagCounts=recent.map(s=>{let t=0;s.releases.forEach(r=>(r.projects||[]).forEach(p=>{t+=(p.flags||0);}));return t;});
+  const adkarAvgs=recent.map(s=>{let t=0,c=0;s.releases.forEach(r=>(r.projects||[]).forEach(p=>{if(p.adkarAvg!=null){t+=parseFloat(p.adkarAvg);c++;}}));return c?parseFloat((t/c).toFixed(1)):null;});
+
+  // ── Delta KPI Row ──
+  const curGate=gateScores[gateScores.length-1];const prevGate=gateScores[gateScores.length-2];
+  const curFlags=flagCounts[flagCounts.length-1];const prevFlags=flagCounts[flagCounts.length-2];
+  const curAdkar=adkarAvgs[adkarAvgs.length-1];const prevAdkar=adkarAvgs[adkarAvgs.length-2];
+  const gateDelta=curGate!=null&&prevGate!=null?curGate-prevGate:null;
+  const flagDelta=curFlags!=null&&prevFlags!=null?curFlags-prevFlags:null;
+  const adkarDelta=curAdkar!=null&&prevAdkar!=null?parseFloat((curAdkar-prevAdkar).toFixed(1)):null;
+
+  const deltaHtml=(val,unit,inverted)=>{
+    if(val===null||val===0)return'<span class="trend-delta trend-neutral">No change</span>';
+    const up=val>0;const good=inverted?!up:up;
+    return`<span class="trend-delta ${good?'trend-up':'trend-down'}">${up?'&#9650; +':'&#9660; '}${Math.abs(val)}${unit} this week</span>`;
+  };
+  const kpiEl=document.getElementById('trend-kpis');
+  if(kpiEl)kpiEl.innerHTML=`
+    <div class="trend-kpi"><div class="trend-kpi-label">Gate Readiness</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,'%',false)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">Risk Flags</div><div class="trend-kpi-val">${curFlags!=null?curFlags:'—'}</div>${deltaHtml(flagDelta,'',true)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">ADKAR Score</div><div class="trend-kpi-val">${curAdkar!=null?curAdkar+'/5':'—'}</div>${deltaHtml(adkarDelta,'',false)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">Weeks Tracked</div><div class="trend-kpi-val">${recent.length}</div><span class="trend-delta trend-neutral">${labels[0]} — ${labels[labels.length-1]}</span></div>
+  `;
+
+  // ── Auto-generated Insights ──
+  const insights=[];
+  // Gate readiness trajectory
+  if(gateDelta!==null){
+    if(gateDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`Portfolio gate readiness improved by <strong>${gateDelta}%</strong> this week, now at <strong>${curGate}%</strong>.`});
+    else if(gateDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`Portfolio gate readiness dropped by <strong>${Math.abs(gateDelta)}%</strong> this week to <strong>${curGate}%</strong> — review incomplete gates.`});
+    else insights.push({icon:'—',cls:'neutral',text:`Gate readiness held steady at <strong>${curGate}%</strong>.`});
+  }
+  // Gate vs target
+  if(curGate!=null&&curGate<80)insights.push({icon:'&#9673;',cls:'warn',text:`Portfolio is <strong>${80-curGate}%</strong> below the 80% go-live readiness target.`});
+  else if(curGate!=null&&curGate>=80)insights.push({icon:'&#10003;',cls:'good',text:`Portfolio exceeds the 80% go-live readiness target.`});
+  // Risk flags
+  if(flagDelta!==null){
+    if(flagDelta>0)insights.push({icon:'!',cls:'warn',text:`Risk flags increased by <strong>${flagDelta}</strong> this week (now ${curFlags}). Investigate new incomplete gates.`});
+    else if(flagDelta<0)insights.push({icon:'&#10003;',cls:'good',text:`Risk flags decreased by <strong>${Math.abs(flagDelta)}</strong> this week (now ${curFlags}).`});
+  }
+  // ADKAR stagnation
+  if(adkarAvgs.length>=3){
+    const last3=adkarAvgs.slice(-3);
+    const flat=last3.every((v,_,a)=>v!=null&&Math.abs(v-a[0])<0.2);
+    if(flat&&curAdkar!=null&&curAdkar<4)insights.push({icon:'&#9724;',cls:'warn',text:`ADKAR scores have been flat at <strong>${curAdkar}/5</strong> for 3+ weeks — reinforcement activities may need attention.`});
+  }
+  // Per-release insights: find biggest mover
+  if(recent.length>=2){
+    const last=recent[recent.length-1];const prev=recent[recent.length-2];
+    let bestDelta=-Infinity,bestName='',worstDelta=Infinity,worstName='';
+    last.releases.forEach(lr=>{
+      const pr=prev.releases.find(r=>r.id===lr.id);if(!pr)return;
+      const curAvg=avgGateForRel(lr);const prevAvg=avgGateForRel(pr);
+      if(curAvg!=null&&prevAvg!=null){
+        const d=curAvg-prevAvg;
+        if(d>bestDelta){bestDelta=d;bestName=lr.name;}
+        if(d<worstDelta){worstDelta=d;worstName=lr.name;}
+      }
+    });
+    if(bestDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`<strong>${esc(bestName)}</strong> improved the most this week (+${bestDelta}% gate readiness).`});
+    if(worstDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`<strong>${esc(worstName)}</strong> declined this week (${worstDelta}% gate readiness) — may need intervention.`});
+  }
+
+  const insEl=document.getElementById('trend-insights');
+  if(insEl)insEl.innerHTML=insights.length?insights.map(i=>`<div class="trend-insight ${i.cls}"><span class="trend-insight-icon ${i.cls}">${i.icon}</span><span>${i.text}</span></div>`).join(''):'<div class="es"><p class="es-txt">Collecting data — insights will appear as trends emerge.</p></div>';
+
+  // ── Charts ──
+  // Gate Readiness with 80% goal line
+  destroyChart('trend-gate');
+  const gc=document.getElementById('chart-trend-gate');
+  if(gc){
+    const goalLine=new Array(labels.length).fill(80);
+    chartInstances['trend-gate']=new Chart(gc,{type:'line',data:{
+      labels,datasets:[
+        {label:'Gate Readiness %',data:gateScores,borderColor:CHART_GREEN,backgroundColor:'rgba(29,104,64,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GREEN,borderWidth:2},
+        {label:'80% Target',data:goalLine,borderColor:'rgba(184,146,42,0.6)',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
+      ]
+    },options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
+        x:{ticks:{font:{size:9},color:chartSubColor(),maxRotation:45},grid:{display:false}}},
+      plugins:{legend:{display:false},tooltip:{filter:ctx=>ctx.datasetIndex===0,callbacks:{label:ctx=>ctx.raw+'%'}}}}
+    });
+  }
+
+  // Risk Flags
+  destroyChart('trend-flags');
+  const fc=document.getElementById('chart-trend-flags');
+  if(fc){
+    chartInstances['trend-flags']=new Chart(fc,{type:'line',data:{
+      labels,datasets:[{label:'Risk Flags',data:flagCounts,borderColor:CHART_RED,backgroundColor:'rgba(139,26,26,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_RED,borderWidth:2}]
+    },options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{min:0,ticks:{font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
+        x:{ticks:{font:{size:9},color:chartSubColor(),maxRotation:45},grid:{display:false}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+' flags'}}}}
+    });
+  }
+
+  // ADKAR
+  destroyChart('trend-adkar');
+  const ac=document.getElementById('chart-trend-adkar');
+  if(ac){
+    chartInstances['trend-adkar']=new Chart(ac,{type:'line',data:{
+      labels,datasets:[{label:'ADKAR Avg',data:adkarAvgs,borderColor:CHART_GOLD,backgroundColor:'rgba(184,146,42,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GOLD,borderWidth:2}]
+    },options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{min:0,max:5,ticks:{stepSize:1,font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
+        x:{ticks:{font:{size:9},color:chartSubColor(),maxRotation:45},grid:{display:false}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+'/5'}}}}
+    });
+  }
+
+  // ── Sparklines on release cards ──
+  renderReleaseSparklines(snapshots);
+}
+
+function avgGateForRel(r){
+  let t=0,c=0;
+  (r.projects||[]).forEach(p=>{if(p.gateScore!=null){t+=p.gateScore;c++;}});
+  return c?Math.round(t/c):null;
+}
+
+function renderReleaseSparklines(snapshots){
+  if(!snapshots||snapshots.length<2)return;
+  const recent=snapshots.slice(-8);
+  releases.forEach(r=>{
+    const canvas=document.getElementById('spark-'+r.id);if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    const w=canvas.offsetWidth||canvas.parentElement.offsetWidth||200;
+    const h=32;canvas.width=w;canvas.height=h;
+    // Get gate scores for this release across snapshots
+    const points=recent.map(s=>{
+      const sr=s.releases.find(sr=>sr.id===r.id||sr.name===r.name);
+      if(!sr)return null;
+      return avgGateForRel(sr);
+    });
+    if(points.filter(p=>p!=null).length<2){ctx.clearRect(0,0,w,h);return;}
+    const validPts=points.map((p,i)=>p!=null?{x:i,y:p}:null).filter(Boolean);
+    const minY=0;const maxY=100;const rangeY=maxY-minY||1;
+    const padX=4;const padY=4;
+    const scaleX=(w-padX*2)/(recent.length-1);
+    const scaleY=(h-padY*2)/rangeY;
+    // Determine color based on trend
+    const first=validPts[0].y;const last=validPts[validPts.length-1].y;
+    const trending=last>first?'up':last<first?'down':'flat';
+    const color=trending==='up'?'rgba(29,104,64,0.9)':trending==='down'?'rgba(139,26,26,0.9)':'rgba(184,146,42,0.9)';
+    const fillColor=trending==='up'?'rgba(29,104,64,0.15)':trending==='down'?'rgba(139,26,26,0.15)':'rgba(184,146,42,0.15)';
+    ctx.clearRect(0,0,w,h);
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(padX+validPts[0].x*scaleX,h-padY);
+    validPts.forEach(p=>{ctx.lineTo(padX+p.x*scaleX,h-padY-(p.y-minY)*scaleY);});
+    ctx.lineTo(padX+validPts[validPts.length-1].x*scaleX,h-padY);
+    ctx.closePath();ctx.fillStyle=fillColor;ctx.fill();
+    // Line
+    ctx.beginPath();
+    validPts.forEach((p,i)=>{const x=padX+p.x*scaleX;const y=h-padY-(p.y-minY)*scaleY;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+    // End dot
+    const lastPt=validPts[validPts.length-1];
+    ctx.beginPath();ctx.arc(padX+lastPt.x*scaleX,h-padY-(lastPt.y-minY)*scaleY,3,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// ACCESSIBILITY HELPERS
+// ════════════════════════════════════════════════════════
+function trapFocus(modal){
+  const focusable=modal.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
+  if(!focusable.length)return;
+  const first=focusable[0];const last=focusable[focusable.length-1];
+  modal._trapHandler=function(e){
+    if(e.key!=='Tab')return;
+    if(e.shiftKey){if(document.activeElement===first){e.preventDefault();last.focus();}}
+    else{if(document.activeElement===last){e.preventDefault();first.focus();}}
+  };
+  modal.addEventListener('keydown',modal._trapHandler);
+  first.focus();
+}
+
+function releaseFocusTrap(modal){
+  if(modal._trapHandler){modal.removeEventListener('keydown',modal._trapHandler);delete modal._trapHandler;}
+}
+
+// Enhance openModal/closeModal with focus trapping
+const _origOpenModal=openModal;
+openModal=function(id){
+  _origOpenModal(id);
+  const m=document.getElementById(id);
+  if(m){trapFocus(m);m.setAttribute('aria-hidden','false');}
+};
+const _origCloseModal=closeModal;
+closeModal=function(id){
+  const m=document.getElementById(id);
+  if(m){releaseFocusTrap(m);m.setAttribute('aria-hidden','true');}
+  _origCloseModal(id);
+};
+
+function announceToSR(msg){
+  const el=document.getElementById('sr-announcer');
+  if(el){el.textContent='';setTimeout(()=>{el.textContent=msg;},50);}
+}
+
+// ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
+// Check readonly mode before auth
+if(checkReadOnlyParam()){
+  // In readonly mode, skip login and load demo or existing data
+  document.addEventListener('DOMContentLoaded',()=>{
+    enableReadOnly();
+  });
+}
 initAuth();

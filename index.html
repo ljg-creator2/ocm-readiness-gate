@@ -13,6 +13,8 @@
 <link rel="stylesheet" href="css/adoptiq.css">
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
 <!-- ══════════════════════════════════════════
      LOGIN SCREEN
@@ -105,7 +107,8 @@
 <!-- ══════════════════════════════════════════
      PORTFOLIO VIEW
 ══════════════════════════════════════════ -->
-<div id="v-portfolio">
+<div id="v-portfolio" role="main">
+  <div id="viewer-banner-p" class="viewer-banner" style="display:none" role="alert"><span>View-Only Mode</span> — You are viewing a shared, read-only version of this dashboard.</div>
   <div class="top-bar">
     <div class="top-bar-i">
       <div class="top-brand">
@@ -122,6 +125,7 @@
           <span id="theme-lbl">Dark</span>
         </button>
         <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
+        <button class="btn-outline btn-share" onclick="openShareModal()" style="font-size:10px;padding:6px 14px" title="Share this dashboard publicly">Share</button>
         <button class="btn-gold" onclick="openAddRelease()">+ Add Release</button>
         <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer">&#9654; EXIT DEMO</button>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-p"></span><span id="avatar-name-p">Profile</span></button>
@@ -156,6 +160,32 @@
         <div class="exec-card exec-card-wide">
           <div class="exec-card-title">Attention Required</div>
           <div id="exec-attention" class="exec-attention-list"></div>
+        </div>
+      </div>
+    </div>
+    <div id="trends-sec" style="display:none;margin-bottom:28px">
+      <div class="sec-head"><div><div class="sec-eye">Insights &amp; Trends</div><div class="sec-ttl">What Changed This Week</div></div></div>
+      <!-- Delta KPI Row -->
+      <div class="trend-kpi-row" id="trend-kpis"></div>
+      <!-- Auto-generated insights -->
+      <div class="panel" style="margin-bottom:20px">
+        <div class="ph"><div><div class="pt">Key Insights</div><div class="ps-text">Auto-generated observations based on weekly snapshot data</div></div></div>
+        <div class="pb"><div id="trend-insights" class="trend-insights"></div></div>
+      </div>
+      <!-- Charts with goal line -->
+      <div class="exec-dash-grid">
+        <div class="exec-card">
+          <div class="exec-card-title">Gate Readiness Trend</div>
+          <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-gate"></canvas></div>
+          <div class="trend-chart-note">Dashed line = 80% go-live ready target</div>
+        </div>
+        <div class="exec-card">
+          <div class="exec-card-title">Risk Flags Trend</div>
+          <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-flags"></canvas></div>
+        </div>
+        <div class="exec-card">
+          <div class="exec-card-title">ADKAR Score Trend</div>
+          <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-adkar"></canvas></div>
         </div>
       </div>
     </div>
@@ -205,10 +235,44 @@
   </div>
 </div>
 
+<!-- SHARE MODAL -->
+<div class="modal-ov" id="share-modal" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-ttl">Share Dashboard</div>
+    <div class="modal-sub">Generate a public link anyone can view — no account needed. Data is frozen at time of sharing.</div>
+    <div style="margin:16px 0">
+      <label style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-60);display:block;margin-bottom:6px">Link Expires In</label>
+      <select id="share-expiry" class="modal-inp" style="width:auto">
+        <option value="7">7 days</option>
+        <option value="14">14 days</option>
+        <option value="30">30 days</option>
+        <option value="90">90 days</option>
+      </select>
+    </div>
+    <button class="btn-gold" onclick="generateShareLink()" style="width:100%;margin-bottom:12px">Generate Share Link</button>
+    <div id="share-link-result" style="display:none;margin-bottom:16px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="share-link-url" class="modal-inp" readonly style="flex:1;font-size:11px;font-family:monospace">
+        <button class="btn-gold" onclick="copyShareLink()" style="white-space:nowrap;padding:8px 16px">Copy</button>
+      </div>
+      <div id="share-link-expires" style="font-size:10px;color:var(--ink-60);margin-top:6px"></div>
+    </div>
+    <div id="share-err" style="color:var(--red);font-size:12px;margin-bottom:8px"></div>
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:8px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-60);margin-bottom:8px">Active Share Links</div>
+      <div id="active-shares-list" style="max-height:200px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-acts" style="margin-top:16px">
+      <button class="btn-gold" onclick="closeModal('share-modal')">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════
      RELEASE VIEW
 ══════════════════════════════════════════ -->
 <div id="v-release">
+  <div id="viewer-banner-r" class="viewer-banner" style="display:none" role="alert"><span>View-Only Mode</span> — You are viewing a shared, read-only version of this dashboard.</div>
   <div class="top-bar">
     <div class="top-bar-i">
       <div class="top-brand">
@@ -386,6 +450,7 @@
      PROJECT VIEW
 ══════════════════════════════════════════ -->
 <div id="v-project">
+  <div id="viewer-banner-proj" class="viewer-banner" style="display:none" role="alert"><span>View-Only Mode</span> — You are viewing a shared, read-only version of this dashboard.</div>
   <div class="top-bar">
     <div class="top-bar-i">
       <div class="top-brand">
