@@ -427,6 +427,10 @@ function applyViewRole(role){
   document.body.setAttribute('data-role',currentViewRole);
   const brandSec=document.getElementById('brand-section');
   if(brandSec)brandSec.style.display=(currentViewRole==='ocm_lead')?'block':'none';
+  const vrSel=document.getElementById('view-role-select');
+  if(vrSel)vrSel.value=currentViewRole;
+  const profileSel=document.getElementById('profile-view-role');
+  if(profileSel)profileSel.value=currentViewRole;
   if(currentViewRole==='exec_sponsor'){
     showView('v-portfolio');renderPortfolio();
   }
