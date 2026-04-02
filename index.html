@@ -149,6 +149,7 @@
     <!-- EXECUTIVE DASHBOARD -->
     <div id="exec-dash" style="display:none;margin-bottom:28px">
       <div class="sec-head"><div><div class="sec-eye">Executive Summary</div><div class="sec-ttl">Portfolio Health Dashboard</div></div></div>
+      <div id="exec-rag-summary" style="margin-bottom:16px"></div>
       <div class="exec-dash-grid">
         <div class="exec-card">
           <div class="exec-card-title">Overall Readiness</div>
@@ -163,25 +164,27 @@
           <div id="exec-attention" class="exec-attention-list"></div>
         </div>
       </div>
-      <!-- RAG Summary -->
-      <div id="exec-rag-summary" style="margin-top:16px"></div>
-      <!-- Go-Live Countdown Strip -->
-      <div class="golive-strip" id="exec-golive-strip"></div>
-      <!-- Top Risks -->
-      <div class="exec-card exec-card-wide" style="margin-top:16px">
-        <div class="exec-card-title">Top Portfolio Risks</div>
-        <div id="exec-top-risks" class="exec-attention-list"></div>
-      </div>
-      <!-- Agency Heatmap -->
-      <div class="exec-card exec-card-wide" style="margin-top:16px">
-        <div class="exec-card-title">Readiness by Agency</div>
-        <div class="phm-scroll"><table class="phm-tbl" id="exec-agency-hm"></table></div>
-      </div>
-      <!-- Portfolio Narratives -->
-      <div class="exec-card exec-card-wide" style="margin-top:16px">
-        <div class="exec-card-title">Portfolio Insights</div>
-        <div id="exec-narratives" class="trend-insights"></div>
-      </div>
+      <!-- Collapsible: Go-Live & Risks -->
+      <details class="dash-section" open>
+        <summary class="dash-section-toggle">Go-Live Countdown &amp; Risks</summary>
+        <div class="golive-strip" id="exec-golive-strip"></div>
+        <div class="exec-card exec-card-wide" style="margin-top:12px">
+          <div class="exec-card-title">Top Portfolio Risks</div>
+          <div id="exec-top-risks" class="exec-attention-list"></div>
+        </div>
+      </details>
+      <!-- Collapsible: Agency & Insights -->
+      <details class="dash-section">
+        <summary class="dash-section-toggle">Agency Readiness &amp; Insights</summary>
+        <div class="exec-card exec-card-wide" style="margin-top:12px">
+          <div class="exec-card-title">Readiness by Agency</div>
+          <div class="phm-scroll"><table class="phm-tbl" id="exec-agency-hm"></table></div>
+        </div>
+        <div class="exec-card exec-card-wide" style="margin-top:12px">
+          <div class="exec-card-title">Portfolio Insights</div>
+          <div id="exec-narratives" class="trend-insights"></div>
+        </div>
+      </details>
     </div>
     <div id="trends-sec" style="display:none;margin-bottom:28px">
       <div class="sec-head"><div><div class="sec-eye">Insights &amp; Trends</div><div class="sec-ttl">What Changed This Week</div></div></div>
@@ -799,7 +802,8 @@
       </select>
       <div class="alert-desc">Controls your default landing view and available actions.</div>
     </div>
-    <div class="profile-section-title">Methodology Branding</div>
+    <div id="brand-section" style="display:none">
+    <div class="profile-section-title">Methodology Branding <span style="font-size:9px;font-weight:400;color:var(--ink-60);letter-spacing:0">(Administrator only)</span></div>
     <div class="profile-field">
       <label for="brand-firm">Firm / Company Name</label>
       <input id="brand-firm" type="text" class="modal-inp" placeholder="Your firm name">
@@ -816,6 +820,7 @@
         <input id="brand-g3" type="text" class="modal-inp" placeholder="Gate 3">
         <input id="brand-g4" type="text" class="modal-inp" placeholder="Gate 4">
       </div>
+    </div>
     </div>
     <div class="profile-section-title">Email Alerts</div>
     <div class="profile-field">

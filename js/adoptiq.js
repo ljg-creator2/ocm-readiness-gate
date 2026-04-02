@@ -170,6 +170,8 @@ async function openProfile(){
   document.getElementById('profile-modal').classList.add('open');
   loadAlertPrefs();loadBrandInputs();
   const vrSel=document.getElementById('profile-view-role');if(vrSel)vrSel.value=meta.view_role||'ocm_lead';
+  const brandSec=document.getElementById('brand-section');
+  if(brandSec)brandSec.style.display=(currentViewRole==='ocm_lead')?'block':'none';
 }
 
 function checkProfilePwStrength(){
@@ -423,6 +425,8 @@ let currentViewRole='ocm_lead';
 function applyViewRole(role){
   currentViewRole=role||'ocm_lead';
   document.body.setAttribute('data-role',currentViewRole);
+  const brandSec=document.getElementById('brand-section');
+  if(brandSec)brandSec.style.display=(currentViewRole==='ocm_lead')?'block':'none';
   if(currentViewRole==='exec_sponsor'){
     showView('v-portfolio');renderPortfolio();
   }
@@ -2304,6 +2308,7 @@ async function closeWelcome(){
   await _supabase.auth.updateUser({data:{onboarded:true}});
 }
 async function loadDemoData(){
+  releases=[];
   // Release 1: Q3 EHR Migration (Healthcare)
   const r1=newRelease('Q3 EHR Migration',['HCA Healthcare','Cigna'],'2026-07-15','Development');
   const p1a=newProject('Clinical Workflow',['HCA Healthcare'],4200);
