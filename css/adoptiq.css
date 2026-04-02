@@ -645,6 +645,10 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 .profile-field input:focus,.profile-field select:focus{border-color:var(--gold)}
 .profile-email{font-size:12px;color:var(--ink-35);margin-bottom:16px;padding:8px 12px;background:var(--surface-2);border-radius:var(--r6);border:1px solid var(--border)}
 .profile-section-title{font-family:var(--font-d);font-size:14px;color:var(--ink);margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--border)}
+.alert-toggle{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;cursor:pointer}
+.alert-toggle input[type="checkbox"]{width:16px;height:16px;accent-color:var(--gold)}
+.alert-desc{font-size:11px;color:var(--ink-60);margin-top:2px;line-height:1.5}
+.alert-select{font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--ink);font-family:var(--font-b)}
 .profile-msg{font-size:12px;min-height:18px;margin-top:12px}
 .team-member-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
 .team-member-row:last-child{border-bottom:none}

@@ -168,6 +168,7 @@ async function openProfile(){
   document.getElementById('profile-pw-strength').textContent='';
   document.getElementById('profile-msg').textContent='';
   document.getElementById('profile-modal').classList.add('open');
+  loadAlertPrefs();
 }
 
 function checkProfilePwStrength(){
@@ -205,7 +206,52 @@ async function saveProfile(){
 
   msgEl.style.color='var(--green)';msgEl.textContent='Profile saved successfully.';
   updateAvatars();
+  await saveAlertPrefs();
   setTimeout(()=>{closeModal('profile-modal');},1200);
+}
+
+// ════════════════════════════════════════════════════════
+// EMAIL ALERT PREFERENCES
+// ════════════════════════════════════════════════════════
+async function loadAlertPrefs(){
+  if(!currentUserId)return;
+  try{
+    const{data}=await _supabase.from('alert_preferences').select('*').eq('user_id',currentUserId).maybeSingle();
+    if(data){
+      document.getElementById('alert-golive').checked=data.golive_enabled;
+      document.getElementById('alert-golive-days').value=data.golive_days;
+      document.getElementById('alert-golive-thresh').value=data.golive_threshold;
+      document.getElementById('alert-stale').checked=data.stale_enabled;
+      document.getElementById('alert-stale-days').value=data.stale_days;
+      document.getElementById('alert-adkar').checked=data.adkar_enabled;
+      document.getElementById('alert-digest').checked=data.digest_enabled;
+      document.getElementById('alert-digest-day').value=data.digest_day;
+      document.getElementById('alert-share').checked=data.share_expiry_enabled;
+    }
+  }catch(e){console.warn('Alert prefs table not found. Run sql/phase6_alerts.sql.',e.message);}
+}
+
+async function saveAlertPrefs(){
+  if(!currentUserId)return;
+  const{data:{user}}=await _supabase.auth.getUser();
+  if(!user)return;
+  const prefs={
+    user_id:currentUserId,
+    email:user.email,
+    golive_enabled:document.getElementById('alert-golive').checked,
+    golive_days:parseInt(document.getElementById('alert-golive-days').value),
+    golive_threshold:parseInt(document.getElementById('alert-golive-thresh').value),
+    stale_enabled:document.getElementById('alert-stale').checked,
+    stale_days:parseInt(document.getElementById('alert-stale-days').value),
+    adkar_enabled:document.getElementById('alert-adkar').checked,
+    digest_enabled:document.getElementById('alert-digest').checked,
+    digest_day:parseInt(document.getElementById('alert-digest-day').value),
+    share_expiry_enabled:document.getElementById('alert-share').checked,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    await _supabase.from('alert_preferences').upsert(prefs,{onConflict:'user_id'});
+  }catch(e){console.warn('Could not save alert prefs:',e.message);}
 }
 
 // ════════════════════════════════════════════════════════
