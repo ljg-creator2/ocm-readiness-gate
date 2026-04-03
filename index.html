@@ -619,6 +619,28 @@
         <div class="kc cg"><div class="kc-l">Groups Tracked</div><div class="kc-v" id="p-kpi-grps">0</div><div class="kc-s">Stakeholder populations</div></div>
         <div class="kc cb"><div class="kc-l" id="p-kpi-adkar-label">ADKAR Score</div><div class="kc-v" id="p-kpi-adkar">—</div><div class="kc-s">Overall composite</div></div>
       </div>
+      <!-- PREDICTED TRAJECTORY -->
+      <div id="p-trajectory-card" class="trajectory-card" style="display:none">
+        <div class="trajectory-hdr">
+          <div>
+            <div class="trajectory-title">Predicted Trajectory</div>
+            <div class="trajectory-sub">AI-powered readiness forecast based on current project data</div>
+          </div>
+          <div class="trajectory-actions">
+            <div class="trajectory-confidence" id="traj-confidence" style="display:none">
+              <span class="traj-conf-dot"></span>
+              <span class="traj-conf-label"></span>
+            </div>
+            <button class="btn-outline traj-refresh-btn" id="traj-refresh-btn" onclick="refreshPrediction()" title="Refresh prediction">&#x21BB; Refresh</button>
+          </div>
+        </div>
+        <div id="traj-warning-banner" class="traj-warning" style="display:none"></div>
+        <div class="trajectory-chart-wrap">
+          <canvas id="chart-trajectory" role="img" aria-label="Predicted adoption trajectory line chart"></canvas>
+        </div>
+        <div id="traj-drivers" class="traj-drivers" style="display:none"></div>
+        <div class="traj-disclaimer">Predictions are based on historical patterns and current data. Actual outcomes depend on intervention quality and organizational conditions.</div>
+      </div>
       <!-- BENCHMARK CARD -->
       <div id="p-benchmark-card" style="display:none"></div>
       <!-- PROJECT CHARTS -->

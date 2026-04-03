@@ -1565,6 +1565,436 @@ function showGateInfoPop(btn){
 }
 
 // ════════════════════════════════════════════════════════
+// AI-POWERED PREDICTED TRAJECTORY
+// ════════════════════════════════════════════════════════
+let _trajCache={};
+let _trajChartInstance=null;
+const TRAJ_EDGE_URL='https://yufehucjvviwanbulcok.supabase.co/functions/v1/predict-trajectory';
+const TRAJ_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1ZmVodWNqdnZpd2FuYnVsY29rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NjE2NjEsImV4cCI6MjA5MDUzNzY2MX0.2yF5PqIjsKsGGFyCTIYtZk999ff7lavTA5kFRPPBkcQ';
+
+function getTrajCacheKey(p){
+  // Build a hash from project data that changes when prediction-relevant data changes
+  const parts=[
+    JSON.stringify(p.gateState),
+    JSON.stringify(p.adkarScores),
+    p.stakeholders.map(s=>JSON.stringify(s.factors)).join(','),
+    p.stakeholders.map(s=>adoptScore(s.factors)).join(','),
+    p.stakeholders.length,
+    p.golive||'',
+    (p.impactAssessment?.groups||[]).length,
+    (p.gapAnalysis?.gaps||[]).length
+  ].join('|');
+  let hash=0;
+  for(let i=0;i<parts.length;i++){hash=((hash<<5)-hash)+parts.charCodeAt(i);hash|=0;}
+  return p.id+'_'+hash;
+}
+
+function collectTrajectoryData(p){
+  const dims=getActiveDims();
+
+  // Per-gate scores
+  const gateScores=GATE_DEFS.map(gate=>{
+    const tot=gate.items.length;
+    const naCount=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='na').length;
+    const applicable=tot-naCount;
+    const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
+    const ylw=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='yellow').length;
+    const red=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='red').length;
+    const notStarted=gate.items.filter((_,i)=>!p.gateState[gate.id+'_'+i]||p.gateState[gate.id+'_'+i]==='gray').length;
+    const pct=applicable?Math.round(grn/applicable*100):null;
+    const status=pct===null?'not_applicable':pct>=75?'go':pct>=50?'conditional':'no_go';
+    return{gate:gate.label,sub:gate.sub,score:pct,status,completed:grn,partial:ylw,incomplete:red,notStarted,applicable};
+  });
+
+  // Framework assessment scores
+  const fwScores={};
+  dims.forEach(d=>{fwScores[d.word]=p.adkarScores?.[d.key]||3;});
+  const fwAvg=dims.length?dims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/dims.length:3;
+
+  // Stakeholder data
+  const stakeholderData=p.stakeholders.map(s=>({
+    name:s.name,
+    adoptionScore:adoptScore(s.factors),
+    tier:adoptTier(adoptScore(s.factors)).tier,
+    factors:Object.fromEntries(AF.map(f=>([f.label, s.factors?.[f.key]||3]))),
+    kirkpatrickReady:kirkReady(s),
+    reinforcementReady:reinReady(s)
+  }));
+
+  // Training completion rates
+  const trainRate=stakeholderData.length?Math.round(stakeholderData.filter(s=>s.kirkpatrickReady==='ready').length/stakeholderData.length*100):0;
+  const reinRate=stakeholderData.length?Math.round(stakeholderData.filter(s=>s.reinforcementReady==='ready').length/stakeholderData.length*100):0;
+
+  // Risk flags
+  const flags=getPFlags();
+
+  // Gap analysis
+  const gaps=(p.gapAnalysis?.gaps||[]).map(g=>({
+    description:g.description||'',
+    severity:g.severity||'Medium',
+    status:g.status||'Open',
+    owner:g.owner||''
+  }));
+
+  // Impact groups
+  const impactGroups=(p.impactAssessment?.groups||[]).map(g=>({
+    name:g.name||'',
+    impactLevel:g.impactLevel||'Medium',
+    changeTypes:g.changeTypes||[],
+    readinessActions:g.readinessActions?.length||0,
+    completedActions:g.readinessActions?.filter(a=>a.done).length||0
+  }));
+
+  // Determine which gates are "completed" vs "upcoming"
+  const completedGates=gateScores.filter(g=>g.score!==null&&g.notStarted===0&&g.incomplete===0);
+  const upcomingGates=gateScores.filter(g=>g.score===null||g.notStarted>0||g.incomplete>0);
+
+  // Confidence calculation
+  const dataPoints=completedGates.length + (stakeholderData.length>0?1:0) + (gaps.length>0?1:0) + (impactGroups.length>0?1:0) + (trainRate>0?1:0);
+  const confidence=dataPoints>=5?'High':dataPoints>=3?'Medium':'Low';
+
+  // Overall adoption score (from explainer formula)
+  const sentPct=stakeholderData.length?Math.round(stakeholderData.reduce((a,s)=>a+s.adoptionScore,0)/stakeholderData.length):0;
+  const kirkPcts=p.stakeholders.map(sh=>{
+    if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;
+    if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;
+    if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
+    return Math.round(f/8*100);
+  });
+  const trainPctCalc=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
+  const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
+  const commsPct=Math.round(commsAvg/5*100);
+  const gs=projGateScore(p);
+  const flagCount=flags.length;
+  const riskPct=Math.max(0,Math.min(100,gs!==null?Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)):50));
+  const fwPct=Math.round(fwAvg/5*100);
+  const currentAdoptionScore=Math.round(fwPct*0.30+sentPct*0.20+trainPctCalc*0.20+commsPct*0.15+riskPct*0.15);
+
+  return{
+    projectName:p.name,
+    frameworkName:fwName(),
+    goLiveDate:p.golive||null,
+    currentAdoptionScore,
+    overallGateScore:gs,
+    confidence,
+    gateScores,
+    completedGates,
+    upcomingGates,
+    frameworkScores:fwScores,
+    frameworkAverage:Math.round(fwAvg*100)/100,
+    stakeholders:stakeholderData,
+    avgStakeholderSentiment:sentPct,
+    trainingCompletionRate:trainRate,
+    reinforcementRate:reinRate,
+    riskFlags:flags.map(f=>({gate:f.gate,sub:f.sub,item:f.item})),
+    gaps,
+    impactGroups
+  };
+}
+
+async function callAnthropicPrediction(data){
+  const response=await fetch(TRAJ_EDGE_URL,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':'Bearer '+TRAJ_ANON_KEY
+    },
+    body:JSON.stringify(data)
+  });
+
+  if(!response.ok){
+    const err=await response.json().catch(()=>({}));
+    throw new Error(err.error||'Prediction service unavailable');
+  }
+
+  return await response.json();
+}
+
+function renderTrajectoryCard(){
+  const p=getProj();if(!p)return;
+  const card=document.getElementById('p-trajectory-card');
+  if(!card)return;
+
+  card.style.display='block';
+
+  // Check cache
+  const cacheKey=getTrajCacheKey(p);
+  if(_trajCache[cacheKey]){
+    renderTrajectoryFromData(_trajCache[cacheKey]);
+    return;
+  }
+
+  // Show loading state in chart
+  renderTrajectoryLoading();
+  // Auto-fetch prediction
+  fetchAndRenderPrediction();
+}
+
+function renderTrajectoryLoading(){
+  const canvas=document.getElementById('chart-trajectory');
+  if(!canvas)return;
+  if(_trajChartInstance){_trajChartInstance.destroy();_trajChartInstance=null;}
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.font='500 14px "DM Sans",sans-serif';
+  ctx.fillStyle=chartSubColor();
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText('Analyzing project data…',canvas.width/2,canvas.height/2);
+  ctx.restore();
+}
+
+async function fetchAndRenderPrediction(){
+  const p=getProj();if(!p)return;
+  const btn=document.getElementById('traj-refresh-btn');
+  if(btn){btn.classList.add('loading');btn.textContent='⟳ Analyzing…';}
+
+  try{
+    const data=collectTrajectoryData(p);
+    const prediction=await callAnthropicPrediction(data);
+    // Cache it
+    const cacheKey=getTrajCacheKey(p);
+    _trajCache[cacheKey]={prediction,data,timestamp:Date.now()};
+    renderTrajectoryFromData(_trajCache[cacheKey]);
+  }catch(err){
+    renderTrajectoryError(err.message);
+  }finally{
+    if(btn){btn.classList.remove('loading');btn.innerHTML='&#x21BB; Refresh';}
+  }
+}
+
+function refreshPrediction(){
+  const p=getProj();if(!p)return;
+  // Clear cache for this project
+  Object.keys(_trajCache).forEach(k=>{if(k.startsWith(p.id+'_'))delete _trajCache[k];});
+  fetchAndRenderPrediction();
+}
+
+function renderTrajectoryError(msg){
+  const canvas=document.getElementById('chart-trajectory');
+  if(!canvas)return;
+  if(_trajChartInstance){_trajChartInstance.destroy();_trajChartInstance=null;}
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.font='500 13px "DM Sans",sans-serif';
+  ctx.fillStyle='#8B1A1A';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText('Prediction unavailable: '+msg,canvas.width/2,canvas.height/2);
+  ctx.restore();
+}
+
+function renderTrajectoryFromData(cached){
+  const{prediction,data}=cached;
+
+  // Render chart
+  renderTrajectoryChart(prediction,data);
+
+  // Render confidence
+  const confEl=document.getElementById('traj-confidence');
+  if(confEl){
+    confEl.style.display='flex';
+    const dot=confEl.querySelector('.traj-conf-dot');
+    const label=confEl.querySelector('.traj-conf-label');
+    dot.className='traj-conf-dot '+data.confidence.toLowerCase();
+    label.textContent=data.confidence+' Confidence';
+  }
+
+  // Render drivers
+  const driversEl=document.getElementById('traj-drivers');
+  if(driversEl&&prediction.drivers?.length){
+    driversEl.style.display='grid';
+    driversEl.innerHTML=prediction.drivers.map((d,i)=>{
+      const dir=d.direction||'neutral';
+      const icon=dir==='positive'?'▲':dir==='negative'?'▼':'►';
+      return`<div class="traj-driver">
+        <div class="traj-driver-rank ${dir}">${icon} Factor ${i+1} — ${dir.charAt(0).toUpperCase()+dir.slice(1)}</div>
+        <div class="traj-driver-name">${esc(d.name)}</div>
+        <div class="traj-driver-desc">${esc(d.description)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Render warning banner
+  const bannerEl=document.getElementById('traj-warning-banner');
+  if(bannerEl){
+    if(prediction.atRiskWarning){
+      const w=prediction.atRiskWarning;
+      bannerEl.style.display='block';
+      bannerEl.innerHTML=`<strong>⚠ Trajectory Alert:</strong> Based on current trends, this project is projected to score <strong>${w.score}%</strong> at <strong>${esc(w.gate)}</strong>. Consider intervention in <strong>${esc(w.dimension)}</strong>: ${esc(w.recommendation)}`;
+    }else{
+      bannerEl.style.display='none';
+    }
+  }
+}
+
+function renderTrajectoryChart(prediction,data){
+  if(_trajChartInstance){_trajChartInstance.destroy();_trajChartInstance=null;}
+  const canvas=document.getElementById('chart-trajectory');
+  if(!canvas)return;
+
+  const labels=GATE_DEFS.map(g=>g.label);
+  const actualScores=[];
+  const predictedScores=[];
+
+  GATE_DEFS.forEach((gate,i)=>{
+    const gateData=data.gateScores[i];
+    const pred=prediction.predictions?.find(p=>p.gate===gate.label);
+    const isComplete=gateData&&gateData.notStarted===0&&gateData.incomplete===0&&gateData.score!==null;
+
+    if(isComplete){
+      actualScores.push(gateData.score);
+      predictedScores.push(gateData.score); // overlap at transition point
+    }else{
+      actualScores.push(null);
+      predictedScores.push(pred?pred.predictedScore:null);
+    }
+  });
+
+  // If we have actual data, extend the actual line one point into the predicted zone for visual continuity
+  const lastActualIdx=actualScores.reduce((last,v,i)=>v!==null?i:last,-1);
+  if(lastActualIdx>=0&&lastActualIdx<3&&predictedScores[lastActualIdx+1]!==null){
+    // Set the first predicted point to also have an actual score for line continuity
+    predictedScores[lastActualIdx]=actualScores[lastActualIdx];
+  }
+
+  // Threshold annotation line at 65
+  const thresholdData=labels.map(()=>65);
+
+  _trajChartInstance=new Chart(canvas,{
+    type:'line',
+    data:{
+      labels:labels,
+      datasets:[
+        {
+          label:'Actual Score',
+          data:actualScores,
+          borderColor:'rgba(12,31,63,0.9)',
+          backgroundColor:'rgba(12,31,63,0.1)',
+          borderWidth:3,
+          pointRadius:6,
+          pointBackgroundColor:'rgba(12,31,63,1)',
+          pointBorderColor:'#fff',
+          pointBorderWidth:2,
+          pointHoverRadius:8,
+          tension:0.3,
+          fill:false,
+          spanGaps:false
+        },
+        {
+          label:'Predicted Score',
+          data:predictedScores,
+          borderColor:'rgba(184,146,42,0.9)',
+          backgroundColor:'rgba(184,146,42,0.08)',
+          borderWidth:3,
+          borderDash:[8,4],
+          pointRadius:6,
+          pointBackgroundColor:'rgba(184,146,42,1)',
+          pointBorderColor:'#fff',
+          pointBorderWidth:2,
+          pointHoverRadius:8,
+          pointStyle:'rectRot',
+          tension:0.3,
+          fill:false,
+          spanGaps:true
+        },
+        {
+          label:'At Risk Threshold',
+          data:thresholdData,
+          borderColor:'rgba(139,26,26,0.3)',
+          borderWidth:1,
+          borderDash:[4,4],
+          pointRadius:0,
+          pointHoverRadius:0,
+          fill:false,
+          tension:0
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      scales:{
+        y:{
+          min:0,max:100,
+          ticks:{stepSize:25,font:{size:10,family:"'DM Sans',sans-serif"},color:chartSubColor(),callback:v=>v+'%'},
+          grid:{color:chartGridColor()},
+          title:{display:true,text:'Adoption Score',font:{size:11,family:"'DM Sans',sans-serif",weight:'600'},color:chartTextColor()}
+        },
+        x:{
+          ticks:{font:{size:10,family:"'DM Sans',sans-serif",weight:'500'},color:chartTextColor()},
+          grid:{display:false}
+        }
+      },
+      plugins:{
+        legend:{
+          position:'bottom',
+          labels:{
+            font:{size:10,family:"'DM Sans',sans-serif"},
+            padding:16,
+            usePointStyle:true,
+            pointStyleWidth:10,
+            color:chartTextColor(),
+            filter:item=>item.text!=='At Risk Threshold'
+          }
+        },
+        tooltip:{
+          backgroundColor:'rgba(12,31,63,0.95)',
+          titleFont:{size:12,family:"'DM Sans',sans-serif",weight:'600'},
+          bodyFont:{size:11,family:"'DM Sans',sans-serif"},
+          padding:12,
+          cornerRadius:8,
+          callbacks:{
+            label:function(ctx){
+              if(ctx.dataset.label==='At Risk Threshold')return'At Risk Threshold: 65%';
+              const pred=prediction.predictions?.find(p=>p.gate===ctx.label);
+              let line=ctx.dataset.label+': '+ctx.parsed.y+'%';
+              if(ctx.dataset.label==='Predicted Score'&&pred?.reasoning){
+                line+=' — '+pred.reasoning;
+              }
+              return line;
+            }
+          }
+        },
+        // Custom annotation for threshold label
+        thresholdLabel:{
+          id:'thresholdLabel',
+          afterDraw(chart){
+            const{ctx}=chart;
+            const yScale=chart.scales.y;
+            const yPos=yScale.getPixelForValue(65);
+            ctx.save();
+            ctx.font='500 9px "DM Sans",sans-serif';
+            ctx.fillStyle='rgba(139,26,26,0.5)';
+            ctx.textAlign='right';
+            ctx.fillText('At Risk Threshold',chart.chartArea.right-4,yPos-5);
+            ctx.restore();
+          }
+        }
+      }
+    },
+    plugins:[{
+      id:'thresholdLabel',
+      afterDraw(chart){
+        const{ctx}=chart;
+        const yScale=chart.scales.y;
+        const yPos=yScale.getPixelForValue(65);
+        ctx.save();
+        ctx.font='500 9px "DM Sans",sans-serif';
+        ctx.fillStyle='rgba(139,26,26,0.5)';
+        ctx.textAlign='right';
+        ctx.fillText('At Risk Threshold',chart.chartArea.right-4,yPos-5);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+// ════════════════════════════════════════════════════════
 // DOCUMENT INGESTION (Upload → Auto-Populate)
 // ════════════════════════════════════════════════════════
 let _importTarget=null;
@@ -1910,6 +2340,7 @@ function normalizeSeverity(val){
 function renderPOverview(){
   const p=getProj();if(!p)return;
   renderPKPIs();
+  renderTrajectoryCard();
   const fp=document.getElementById('p-ov-flags');const flags=getPFlags().slice(0,4);
   if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div>';}
   else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.sub)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
