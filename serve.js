@@ -12,7 +12,13 @@ const MIME = {
 };
 
 http.createServer((req, res) => {
-  let filePath = path.join(DIR, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+  const urlPath = req.url.split('?')[0];
+  let filePath;
+  if (urlPath.startsWith('/pulse')) {
+    filePath = path.join(DIR, 'pulse.html');
+  } else {
+    filePath = path.join(DIR, urlPath === '/' ? 'index.html' : urlPath);
+  }
   const ext = path.extname(filePath);
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }

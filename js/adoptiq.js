@@ -166,7 +166,8 @@ async function initAuth(){
 // ════════════════════════════════════════════════════════
 function getInitials(name){
   if(!name)return '?';
-  const parts=name.trim().split(/\s+/);
+  const parts=name.trim().split(/\s+/).filter(p=>p.length>0);
+  if(!parts.length)return '?';
   if(parts.length>=2)return(parts[0][0]+parts[parts.length-1][0]).toUpperCase();
   return parts[0][0].toUpperCase();
 }
@@ -177,7 +178,7 @@ function updateAvatars(){
     const meta=user.user_metadata||{};
     const name=meta.full_name||'';
     const initials=getInitials(name);
-    const display=name||user.email.split('@')[0];
+    const display=name||(user.email||'').split('@')[0]||'User';
     ['avatar-p','avatar-r','avatar-proj'].forEach(id=>{
       const el=document.getElementById(id);if(el)el.textContent=initials;
     });
@@ -439,13 +440,15 @@ function loadBrandInputs(){
   const f=document.getElementById('brand-firm');if(f)f.value=b.firmName;
   const s=document.getElementById('brand-subtitle');if(s)s.value=b.subtitle;
   b.gateLabels.forEach((lbl,i)=>{const el=document.getElementById('brand-g'+(i+1));if(el)el.value=lbl;});
+  renderFrameworkDimInputs();
 }
 function saveBrandFromInputs(){
+  const b=getBrand();
   const brand={
+    ...b,
     firmName:document.getElementById('brand-firm')?.value||DEFAULT_BRAND.firmName,
     subtitle:document.getElementById('brand-subtitle')?.value||DEFAULT_BRAND.subtitle,
-    gateLabels:[1,2,3,4].map(i=>document.getElementById('brand-g'+i)?.value||'Gate '+i),
-    adkarLabels:DEFAULT_BRAND.adkarLabels
+    gateLabels:[1,2,3,4].map(i=>document.getElementById('brand-g'+i)?.value||'Gate '+i)
   };
   saveBrand(brand);
 }
@@ -471,21 +474,40 @@ function applyViewRole(role){
 // ════════════════════════════════════════════════════════
 // PERSISTENCE — Supabase primary, localStorage offline cache
 // ════════════════════════════════════════════════════════
-function showSaveIndicator(text){
+function showSaveIndicator(text,isWarning){
   clearTimeout(saveIndTimer);
   ['save-ind','save-ind-r','save-ind-p'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el){el.textContent=text||'Saved';el.classList.add('vis');}
+    if(el){el.textContent=text||'Saved';el.classList.add('vis');
+      el.classList.toggle('save-warn',!!isWarning);
+    }
   });
-  saveIndTimer=setTimeout(()=>{['save-ind','save-ind-r','save-ind-p'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('vis');});},2400);
+  const delay=isWarning?5000:2400;
+  saveIndTimer=setTimeout(()=>{['save-ind','save-ind-r','save-ind-p'].forEach(id=>{const el=document.getElementById(id);if(el){el.classList.remove('vis');el.classList.remove('save-warn');}});},delay);
 }
 
+const MAX_SAVE_RETRIES=2;
 async function saveData(){
   try{localStorage.setItem(storageKey(),JSON.stringify(releases));}catch(e){}
   showSaveIndicator('Saving\u2026');
   if(currentUserId){
-    const{error}=await _supabase.from('user_data').upsert({user_id:currentUserId,releases:releases,updated_at:new Date().toISOString()});
-    if(error){console.error('Supabase save:',error);showSaveIndicator('Saved locally');return;}
+    let saved=false;
+    for(let attempt=0;attempt<=MAX_SAVE_RETRIES;attempt++){
+      try{
+        const{error}=await _supabase.from('user_data').upsert({user_id:currentUserId,releases:releases,updated_at:new Date().toISOString()});
+        if(error){
+          console.error('Supabase save:',error);
+          if(attempt<MAX_SAVE_RETRIES){showSaveIndicator('Retrying\u2026');await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));continue;}
+          showSaveIndicator('Offline — saved locally',true);return;
+        }
+        saved=true;break;
+      }catch(netErr){
+        console.error('Network error:',netErr);
+        if(attempt<MAX_SAVE_RETRIES){showSaveIndicator('Retrying\u2026');await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));continue;}
+        showSaveIndicator('Offline — saved locally',true);return;
+      }
+    }
+    if(!saved){showSaveIndicator('Offline — saved locally',true);return;}
   }
   showSaveIndicator('Saved');
 }
@@ -501,10 +523,22 @@ async function loadData(){
     // Migrate from localStorage on first Supabase login
     try{const cached=localStorage.getItem(storageKey());if(cached){releases=JSON.parse(cached);await saveData();}}catch(e){releases=[];}
   }
-  // Migrate all project resources to array format
+  // Migrate all project resources and ensure stakeholder data integrity
   releases.forEach(r=>{
     delete r.resources; // remove release-level resources (no longer used)
-    (r.projects||[]).forEach(p=>{migrateResources(p);if(!p.impactAssessment)p.impactAssessment={groups:[]};});
+    (r.projects||[]).forEach(p=>{
+      migrateResources(p);
+      if(!p.impactAssessment)p.impactAssessment={groups:[]};
+      // Ensure all stakeholders have required nested objects
+      (p.stakeholders||[]).forEach(sh=>{
+        if(!sh.factors)sh.factors={resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3};
+        if(!sh.kirk)sh.kirk={L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}};
+        else{if(!sh.kirk.L1)sh.kirk.L1={method:'',timing:''};if(!sh.kirk.L2)sh.kirk.L2={method:'',assessment:''};if(!sh.kirk.L3)sh.kirk.L3={interval:'30',observable:''};if(!sh.kirk.L4)sh.kirk.L4={outcome:'',metric:''};}
+        if(!sh.rein)sh.rein={owner:'',activities:'',intervals:['30 Days'],escalation:''};
+        if(!sh.objectives)sh.objectives=[];
+        if(!sh.id)sh.id=uid();
+      });
+    });
   });
 }
 
@@ -514,7 +548,7 @@ function schedSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveData,600);
 // DATA FACTORIES
 // ════════════════════════════════════════════════════════
 let _idSeq=0;
-function uid(){return Date.now()*1000+(_idSeq++);}
+function uid(){return Date.now()*10000+Math.floor(Math.random()*9999)+(_idSeq++)*10000;}
 function newRelease(name,agencies,golive,phase){
   return{id:uid(),name,agencies:agencies||[],golive:golive||'',phase:phase||'',
     modified:new Date().toISOString(),projects:[]
@@ -527,7 +561,11 @@ function newProject(name,agencies,users){
     gateState:{},depHM:{},depNotes:{},stakeholders:[],
     adkarScores:{A1:3,D:3,K:3,Ab:3,R:3},adkarNotes:{A1:'',D:'',K:'',Ab:'',R:''},
     resources:res,
-    impactAssessment:{groups:[]}
+    impactAssessment:{groups:[]},
+    gapAnalysis:{gaps:[]},
+    pulseConfig:{},
+    pulseResults:{},
+    postLaunch:{}
   };
 }
 
@@ -576,7 +614,8 @@ function projFlagCount(p){
   return n;
 }
 function projAdkarAvg(p){
-  const v=Object.values(p.adkarScores);
+  const dims=getActiveDims();
+  const v=dims.map(d=>p.adkarScores?.[d.key]||3);
   return(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1);
 }
 function projHighestRisk(p){
@@ -589,9 +628,12 @@ function projStatus(p){
   if(r>=3)return{label:'Critical',cls:'critical'};if(r>=1)return{label:'At Risk',cls:'at-risk'};
   return{label:'On Track',cls:'on-track'};
 }
+const _rollupCache=new Map();
 function relRollup(r){
+  const cacheKey=r.id+'_'+(r.modified||'');
+  if(_rollupCache.has(cacheKey))return _rollupCache.get(cacheKey);
   const projs=r.projects||[];
-  if(!projs.length)return{gateScore:null,flags:0,adkar:null,status:{label:'On Track',cls:'on-track'}};
+  if(!projs.length){const res={gateScore:null,flags:0,adkar:null,status:{label:'On Track',cls:'on-track'}};_rollupCache.set(cacheKey,res);return res;}
   const scores=projs.map(p=>projGateScore(p)).filter(s=>s!==null);
   const gateScore=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):null;
   const flags=projs.reduce((s,p)=>s+projFlagCount(p),0);
@@ -601,7 +643,7 @@ function relRollup(r){
   const baseStatus=reds>=3?{label:'Critical',cls:'critical'}:reds>=1?{label:'At Risk',cls:'at-risk'}:{label:'On Track',cls:'on-track'};
   const d=daysTo(r.golive);
   const status=(d!==null&&d<0&&baseStatus.cls==='on-track')?{label:'Overdue',cls:'overdue'}:baseStatus;
-  return{gateScore,flags,adkar,status};
+  const result={gateScore,flags,adkar,status};_rollupCache.set(cacheKey,result);return result;
 }
 function relRAG(r){
   const rl=relRollup(r);let score=0,count=0;
@@ -643,11 +685,11 @@ function benchmarkPosition(value,q){
   if(value>=q.q1)return{label:'Below Median',cls:'below',icon:'►'};
   return{label:'Bottom Quartile',cls:'bottom',icon:'▼'};
 }
-function adoptScore(f){const v=Object.values(f);return Math.round(v.reduce((a,b)=>a+b,0)/v.length/5*100);}
+function adoptScore(f){if(!f||typeof f!=='object')return 0;const v=Object.values(f);if(!v.length)return 0;return Math.round(v.reduce((a,b)=>a+(+b||0),0)/v.length/5*100);}
 function adoptTier(s){if(s>=80)return{tier:'Low Risk',cls:'low'};if(s>=60)return{tier:'Moderate Risk',cls:'mod'};if(s>=40)return{tier:'High Risk',cls:'high'};return{tier:'Critical Risk',cls:'crit'};}
 function facTier(v){if(v>=4)return'low';if(v>=3)return'mod';if(v>=2)return'high';return'crit';}
-function kirkReady(sh){let f=0;const k=sh.kirk;if(k.L1.method)f++;if(k.L1.timing)f++;if(k.L2.method)f++;if(k.L2.assessment)f++;if(k.L3.observable)f++;if(k.L3.interval)f++;if(k.L4.outcome)f++;if(k.L4.metric)f++;return Math.round(f/8*100)>=75?'ready':Math.round(f/8*100)>=40?'partial':'needed';}
-function reinReady(sh){let f=0;if(sh.rein.owner)f++;if(sh.rein.activities)f++;if(sh.rein.intervals.length)f++;if(sh.rein.escalation)f++;return f>=3?'ready':f>=1?'partial':'needed';}
+function kirkReady(sh){if(!sh?.kirk)return'needed';let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100)>=75?'ready':Math.round(f/8*100)>=40?'partial':'needed';}
+function reinReady(sh){if(!sh?.rein)return'needed';let f=0;if(sh.rein.owner)f++;if(sh.rein.activities)f++;if(sh.rein.intervals?.length)f++;if(sh.rein.escalation)f++;return f>=3?'ready':f>=1?'partial':'needed';}
 function badgeLabel(r){return r==='ready'?'Ready':r==='partial'?'In Progress':'Not Started';}
 function daysTo(d){if(!d)return null;const t=new Date();t.setHours(0,0,0,0);const g=new Date(d);g.setHours(0,0,0,0);return Math.ceil((g-t)/86400000);}
 function fmtDays(d){if(d===null)return'—';if(d<0)return Math.abs(d)+' days overdue';if(d===0)return'Today';return d+' days';}
@@ -723,6 +765,9 @@ function showProjTab(id,btn){
   if(id==='flags')renderPFlags();
   if(id==='adopthm')renderPAHM();
   if(id==='impact')renderPImpact();
+  if(id==='gaps')renderPGaps();
+  if(id==='postlaunch')renderPPostLaunch();
+  if(id==='pulse')renderPPulse();
 }
 
 // ════════════════════════════════════════════════════════
@@ -773,9 +818,9 @@ function openDelRelease(id,name){
 }
 function confirmDelRelease(){
   if(!delRelTarget)return;
-  const r=releases.find(r=>r.id===delRelTarget);
-  if(r)logAudit('release_deleted','release',r.name,{projects:(r.projects||[]).length});
-  releases=releases.filter(r=>r.id!==delRelTarget);
+  const rel=releases.find(x=>x.id===delRelTarget);
+  if(rel)logAudit('release_deleted','release',rel.name,{projects:(rel.projects||[]).length});
+  releases=releases.filter(x=>x.id!==delRelTarget);
   closeModal('del-rel-modal');delRelTarget=null;saveData();renderPortfolio();
 }
 
@@ -794,15 +839,15 @@ function addProject(){
 }
 function openDelProject(pid,name){
   delProjTarget=pid;
-  document.getElementById('del-proj-sub').textContent=`"${name}" and all its gate data, ADKAR scores, and stakeholder groups will be permanently removed.`;
+  document.getElementById('del-proj-sub').textContent=`"${name}" and all its gate data, ${fwShort()} scores, and stakeholder groups will be permanently removed.`;
   openModal('del-proj-modal');
   setTimeout(()=>document.getElementById('del-proj-btn').focus(),50);
 }
 function confirmDelProject(){
-  const r=getRel();if(!r)return;
-  const p=r.projects.find(p=>p.id===delProjTarget);
-  if(p)logAudit('project_deleted','project',p.name,{release:r.name});
-  r.projects=r.projects.filter(p=>p.id!==delProjTarget);
+  const rel=getRel();if(!rel)return;
+  const proj=rel.projects.find(x=>x.id===delProjTarget);
+  if(proj)logAudit('project_deleted','project',proj.name,{release:rel.name});
+  rel.projects=rel.projects.filter(x=>x.id!==delProjTarget);
   closeModal('del-proj-modal');delProjTarget=null;touch('rel');saveData();renderRelView();
 }
 
@@ -822,6 +867,7 @@ function renderNewProjChips(){
 // PORTFOLIO RENDER
 // ════════════════════════════════════════════════════════
 function renderPortfolio(){
+  _rollupCache.clear();
   const total=releases.length;
   document.getElementById('ps-total').textContent=total;
   const tFlags=releases.reduce((s,r)=>s+relRollup(r).flags,0);
@@ -846,32 +892,31 @@ function renderPortfolio(){
       <div class="hero-sub">AdoptIQ integrates ADKAR, Kirkpatrick, and SDLC gate methodology into a single command center — giving OCM leaders the visibility to drive adoption at scale.</div>
       <div class="hero-features">
         <div class="hero-feat"><div class="hero-feat-icon">&#9632;</div><div><div class="hero-feat-t">4-Gate Readiness Tracker</div><div class="hero-feat-d">Map training dependencies across the full SDLC lifecycle</div></div></div>
-        <div class="hero-feat"><div class="hero-feat-icon">&#9650;</div><div><div class="hero-feat-t">ADKAR Assessment Engine</div><div class="hero-feat-d">Score awareness, desire, knowledge, ability, and reinforcement</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon">&#9650;</div><div><div class="hero-feat-t">${fwName()} Assessment Engine</div><div class="hero-feat-d">Score readiness dimensions across your chosen change framework</div></div></div>
         <div class="hero-feat"><div class="hero-feat-icon">&#9679;</div><div><div class="hero-feat-t">Adoption Risk Scoring</div><div class="hero-feat-d">Quantify stakeholder readiness with 6-factor analysis</div></div></div>
         <div class="hero-feat"><div class="hero-feat-icon">&#9733;</div><div><div class="hero-feat-t">Kirkpatrick Measurement</div><div class="hero-feat-d">L1–L4 evaluation framework built into every stakeholder group</div></div></div>
       </div>
       <button class="btn-gold" onclick="openAddRelease()" style="padding:14px 32px;font-size:13px">+ Create Your First Release</button>
       <div class="hero-cred">Providence Consulting Firm &middot; CPTM &middot; ATD Master Trainer &middot; ADKAR-Aligned</div>
     </div>`;
-    document.getElementById('phm-sec').style.display='none';document.getElementById('tl-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
+    document.getElementById('tl-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
   }
   wrap.innerHTML=`<div class="card-grid">${releases.map(r=>{
     const rl=relRollup(r);const d=daysTo(r.golive);const modStr=fmtMod(r.modified);
     const rg=relRAG(r);
-    const tl='';const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
+    const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
     return`<div class="r-card" tabindex="0" draggable="true" data-rel-id="${r.id}" onclick="openRelease(${r.id})" onkeydown="if(event.key==='Enter')openRelease(${r.id})" role="button" aria-label="Open ${esc(r.name)}">
       <div class="r-card-hd">
         <div style="display:flex;align-items:center;justify-content:space-between"><div class="rc-name"><span class="rag-dot ${rg.cls}" title="${rg.label}"></span>${esc(r.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
         <div class="chip-row">${(r.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}</span>`).join('')}</div>
         <div class="rc-gl">Go-Live: ${fmtDate(r.golive)}</div>
-        ${tl?`<div class="rc-owner">Training Lead: ${esc(tl)}</div>`:''}
         <div class="rc-mod">Updated ${modStr}</div>
       </div>
       <div class="r-card-bd">
         <div class="rc-metrics">
           <div class="rcm"><div class="rcm-l">Gate Readiness</div><div class="rcm-v">${rl.gateScore!==null?rl.gateScore+'%':'—'}</div></div>
           <div class="rcm"><div class="rcm-l">Risk Flags</div><div class="rcm-v">${rl.flags}</div></div>
-          <div class="rcm"><div class="rcm-l">ADKAR Avg</div><div class="rcm-v">${rl.adkar!==null?rl.adkar+'/5':'—'}</div></div>
+          <div class="rcm"><div class="rcm-l">${fwShort()} Avg</div><div class="rcm-v">${rl.adkar!==null?rl.adkar+'/5':'—'}</div></div>
           <div class="rcm"><div class="rcm-l">Projects</div><div class="rcm-v">${(r.projects||[]).length} / ${tp} tr.</div></div>
         </div>
         <div class="rc-foot">
@@ -884,33 +929,10 @@ function renderPortfolio(){
       </div>
     </div>`;
   }).join('')}</div>`;
-  document.getElementById('phm-sec').style.display='block';document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
-  renderPortfolioHM();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();
+  document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
+  document.getElementById('sat-sec').style.display=releases.length>=1?'block':'none';
+  renderSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();
   if(isReadOnly)applyReadOnlyRestrictions();
-}
-
-function renderPortfolioHM(){
-  const cols=['Gate Readiness','ADKAR Avg','Risk Flags','Days to Go-Live','Status'];
-  let h=`<thead><tr><th class="phm-rh">Release / Agencies / Go-Live</th>`;cols.forEach(c=>{h+=`<th>${c}</th>`;});h+='</tr></thead><tbody>';
-  releases.forEach(r=>{
-    const rl=relRollup(r);const d=daysTo(r.golive);
-    const gcls=hmCellCls(rl.gateScore,[80,50]);
-    const acls=rl.adkar?hmCellCls(parseFloat(rl.adkar),[4,3]):'n';
-    const fcls=rl.flags===0?'g':rl.flags<=2?'a':'r';
-    const dcls=d===null?'n':d<0?'r':hmCellCls(d,[30,14]);
-    const scls=rl.status.cls==='on-track'?'g':rl.status.cls==='at-risk'?'a':'r';
-    h+=`<tr>
-      <td class="phm-rl" onclick="openRelease(${r.id})" tabindex="0" onkeydown="if(event.key==='Enter')openRelease(${r.id})">
-        ${esc(r.name)}<div class="phm-rl-sub">${(r.agencies||[]).map(a=>esc(a)).join(' · ')||'—'} &nbsp;|&nbsp; ${fmtDate(r.golive)}</div>
-      </td>
-      <td><div class="hmc-w"><div class="hmc ${gcls}">${rl.gateScore!==null?rl.gateScore+'%':'Not Set'}</div></div></td>
-      <td><div class="hmc-w"><div class="hmc ${acls}">${rl.adkar!==null?rl.adkar+'/5':'Not Set'}</div></div></td>
-      <td><div class="hmc-w"><div class="hmc ${fcls}">${rl.flags}</div></div></td>
-      <td><div class="hmc-w"><div class="hmc ${dcls}">${fmtDays(d)}</div></div></td>
-      <td><div class="hmc-w"><div class="hmc ${scls}">${rl.status.label}</div></div></td>
-    </tr>`;
-  });
-  h+='</tbody>';document.getElementById('portfolio-hm').innerHTML=h;
 }
 
 function renderTimeline(){
@@ -1014,6 +1036,7 @@ function renderRelKPIs(){
   document.getElementById('r-kpi-flags').textContent=rl.flags;
   document.getElementById('r-kpi-projs').textContent=(r.projects||[]).length;
   document.getElementById('r-kpi-adkar').textContent=rl.adkar!==null?rl.adkar+'/5':'—';
+  const rkL=document.getElementById('r-kpi-adkar-label');if(rkL)rkL.textContent=fwShort()+' Avg';
   // Highest adoption risk across all projects
   let worstName='—',worstScore=101;
   (r.projects||[]).forEach(p=>{
@@ -1043,7 +1066,7 @@ function renderRelProjCards(){
         <div class="pc-metrics">
           <div class="pcm"><div class="pcm-l">Gate Readiness</div><div class="pcm-v">${gs!==null?gs+'%':'—'}</div></div>
           <div class="pcm"><div class="pcm-l">Risk Flags</div><div class="pcm-v">${fl}</div></div>
-          <div class="pcm"><div class="pcm-l">ADKAR</div><div class="pcm-v">${adk}/5</div></div>
+          <div class="pcm"><div class="pcm-l">${fwShort()}</div><div class="pcm-v">${adk}/5</div></div>
         </div>
         <div class="pc-foot">
           <span class="status-chip ${st.cls}">${st.label}</span>
@@ -1113,7 +1136,24 @@ function updateProjGateScoreBand(){
 // ════════════════════════════════════════════════════════
 // PROJECT — ALL RENDER
 // ════════════════════════════════════════════════════════
-function renderProjAll(){renderPGates();renderPDepHM();renderPAdkar();renderPSH();renderPKPIs();renderPOverview();renderPResources();if(isReadOnly)applyReadOnlyRestrictions();}
+function renderProjAll(){
+  // Update assessment framework nav label
+  const fw=getFramework();const navAk=document.getElementById('nav-adkar-btn');if(navAk)navAk.textContent=fw.name.split(' ')[0];
+  const catTitle=document.getElementById('chart-proj-adkar-title');if(catTitle)catTitle.textContent=fwName()+' Assessment';
+  renderPGates();renderPDepHM();renderPAdkar();renderPSH();renderPKPIs();renderPOverview();renderPResources();
+  // Show Post-Launch tab if go-live is in the past
+  const p=getProj();const plBtn=document.getElementById('nav-postlaunch');const plSec=document.getElementById('psec-postlaunch');
+  if(p&&p.golive&&new Date(p.golive)<=new Date()){if(plBtn)plBtn.style.display='';if(plSec)plSec.style.display='';}
+  else{if(plBtn)plBtn.style.display='none';if(plSec)plSec.style.display='none';}
+  if(isReadOnly)applyReadOnlyRestrictions();
+  checkNavOverflow();
+}
+function checkNavOverflow(){
+  const nav=document.getElementById('proj-nav-tabs');
+  if(!nav)return;
+  nav.classList.toggle('has-overflow',nav.scrollWidth>nav.clientWidth+8);
+}
+window.addEventListener('resize',checkNavOverflow);
 
 function renderPGates(){
   const p=getProj();if(!p)return;
@@ -1199,14 +1239,29 @@ function renderPFlags(){
 
 function renderPAdkar(){
   const p=getProj();if(!p)return;
-  document.getElementById('p-adkar-grid').innerHTML=ADKAR_DIMS.map(d=>`
-    <div class="ak-col"><div class="ak-hd"><div class="ak-ltr">${d.letter}</div><div class="ak-wrd">${d.word}</div></div>
+  const dims=getActiveDims();
+  const fw=getFramework();
+  const eye=document.getElementById('assess-eye');if(eye)eye.textContent=fw.name;
+  const head=document.getElementById('assess-head');if(head)head.textContent=fw.name+' Readiness Assessment';
+  const pt=document.getElementById('assess-pt');if(pt)pt.textContent=fw.name+' Readiness by Dimension';
+  const navBtn=document.getElementById('nav-adkar-btn');if(navBtn)navBtn.textContent=fw.name.split(' ')[0];
+  // Migrate legacy scores if needed
+  const migrated=migrateScores(p.adkarScores);
+  if(migrated!==p.adkarScores){p.adkarScores=migrated;}
+  // Ensure scores exist for all dims
+  dims.forEach(d=>{if(p.adkarScores[d.key]===undefined)p.adkarScores[d.key]=3;});
+  if(!p.adkarNotes)p.adkarNotes={};
+  dims.forEach(d=>{if(p.adkarNotes[d.key]===undefined)p.adkarNotes[d.key]='';});
+  const grid=document.getElementById('p-adkar-grid');
+  grid.style.gridTemplateColumns='repeat('+Math.min(dims.length,5)+',1fr)';
+  grid.innerHTML=dims.map(d=>`
+    <div class="ak-col"><div class="ak-hd"><div class="ak-ltr">${esc(d.letter)}</div><div class="ak-wrd">${esc(d.word)}</div></div>
     <div class="ak-bd"><label>Readiness Score</label>
-    <div class="ak-sr"><input type="range" class="ak-sl" min="1" max="5" value="${p.adkarScores[d.key]}" oninput="updatePAdkar('${d.key}',this.value)">
-    <div class="ak-vl" id="pav-${d.key}">${p.adkarScores[d.key]}</div></div>
-    <div class="ak-bar"><div class="ak-bar-fill" id="pab-${d.key}" style="width:${p.adkarScores[d.key]/5*100}%;background:${adkarColor(p.adkarScores[d.key])}"></div></div>
+    <div class="ak-sr"><input type="range" class="ak-sl" min="1" max="5" value="${p.adkarScores[d.key]||3}" oninput="updatePAdkar('${d.key}',this.value)">
+    <div class="ak-vl" id="pav-${d.key}">${p.adkarScores[d.key]||3}</div></div>
+    <div class="ak-bar"><div class="ak-bar-fill" id="pab-${d.key}" style="width:${(p.adkarScores[d.key]||3)/5*100}%;background:${adkarColor(p.adkarScores[d.key]||3)}"></div></div>
     <label style="margin-top:3px">Qualitative Notes</label>
-    <textarea class="ak-notes" placeholder="${d.desc}..." oninput="updatePAdkarNote('${d.key}',this.value)">${esc(p.adkarNotes[d.key])}</textarea>
+    <textarea class="ak-notes" placeholder="${esc(d.desc)}..." oninput="updatePAdkarNote('${d.key}',this.value)">${esc(p.adkarNotes[d.key]||'')}</textarea>
     </div></div>`).join('');
   updatePAdkarSummary();
 }
@@ -1219,14 +1274,17 @@ function updatePAdkar(k,v){
 function updatePAdkarNote(k,v){const p=getProj();if(!p)return;p.adkarNotes[k]=v;touch('proj');schedSave();}
 function updatePAdkarSummary(){
   const p=getProj();if(!p)return;
-  const vals=Object.values(p.adkarScores);const avg=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
+  const dims=getActiveDims();
+  const vals=dims.map(d=>p.adkarScores[d.key]||3);const avg=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
   document.getElementById('p-adkar-overall').textContent=avg+'/5';
+  const sumL=document.getElementById('ak-sum-label');if(sumL)sumL.textContent='Overall '+fwShort()+' Score';
   document.getElementById('p-adkar-int').textContent=
     avg>=4?'Strong organizational readiness. Sustain momentum through targeted reinforcement and visible sponsor engagement.'
     :avg>=3?'Moderate readiness. Targeted interventions recommended for dimensions scoring below 3.'
     :avg>=2?'Readiness gaps identified. Structured engagement, coaching, and sponsor activation required prior to go-live.'
     :'Critical readiness deficit. Recommend formal escalation to executive sponsor before proceeding.';
   const kpi=document.getElementById('p-kpi-adkar');if(kpi)kpi.textContent=avg+'/5';
+  const kpiL=document.getElementById('p-kpi-adkar-label');if(kpiL)kpiL.textContent=fwShort()+' Score';
 }
 
 function addPSH(){
@@ -1295,7 +1353,7 @@ function renderPSH(){
         </div>
       </div>
       <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('prein-${sh.id}',this)" aria-expanded="false">
-        <div class="exp-tog-l">Reinforcement Plan — ADKAR R Alignment<span class="exp-badge ${rr}">${badgeLabel(rr)}</span></div>
+        <div class="exp-tog-l">Reinforcement Plan — ${fwShort()} Alignment<span class="exp-badge ${rr}">${badgeLabel(rr)}</span></div>
         <span class="exp-arr" id="parr-rein-${sh.id}">&#9660;</span></button>
         <div class="exp-body" id="prein-${sh.id}">
           <div class="rein-grid">
@@ -1306,7 +1364,7 @@ function renderPSH(){
             <div class="rein-field" style="grid-column:1/-1"><label>Post Go-Live Check-In Intervals</label>
               <div class="rein-intervals">${['2 Weeks','30 Days','60 Days','90 Days','6 Months'].map(iv=>`<label class="intv-cb"><input type="checkbox" ${sh.rein.intervals.includes(iv)?'checked':''} onchange="updatePReinIv(${sh.id},'${iv}',this.checked)"> ${iv}</label>`).join('')}</div></div>
           </div>
-          <div class="ak-r-note"><strong>ADKAR Reinforcement Score: ${adkarR}/5 —</strong> ${rNote}</div>
+          <div class="ak-r-note"><strong>${fwShort()} Reinforcement Score: ${adkarR}/5 —</strong> ${rNote}</div>
         </div>
       </div>
     </div></div>`;
@@ -1416,6 +1474,7 @@ const CHART_RED='rgba(139,26,26,0.85)';const CHART_BLUE='rgba(74,111,165,0.85)';
 const CHART_GRAY='rgba(180,180,180,0.5)';
 
 function renderProjCharts(){
+  getActiveDims();
   const p=getProj();if(!p)return;
   // Gate Readiness Donut
   destroyChart('proj-gates');
@@ -1594,7 +1653,7 @@ function renderExecAgencyHM(){
   });});
   const agencies=Object.keys(agencyMap);
   if(!agencies.length){el.innerHTML='';return;}
-  let h='<thead><tr><th class="phm-rh">Agency</th><th>Releases</th><th>Avg Gate</th><th>Avg ADKAR</th><th>Risk Flags</th></tr></thead><tbody>';
+  let h='<thead><tr><th class="phm-rh">Agency</th><th>Releases</th><th>Avg Gate</th><th>Avg '+fwShort()+'</th><th>Risk Flags</th></tr></thead><tbody>';
   agencies.forEach(a=>{const d=agencyMap[a];
     const avgG=d.gateScores.length?Math.round(d.gateScores.reduce((s,v)=>s+v,0)/d.gateScores.length):null;
     const avgA=d.adkars.length?(d.adkars.reduce((s,v)=>s+v,0)/d.adkars.length).toFixed(1):null;
@@ -1632,7 +1691,7 @@ function generatePortfolioNarratives(){
   if(highReady.length)insights.push({icon:'✓',cls:'good',text:`${highReady.length} release${highReady.length>1?'s are':' is'} at 80%+ gate readiness: ${highReady.map(r=>r.name).join(', ')}.`});
   // ADKAR strengths
   const strongAdkar=releases.filter(r=>{const rl=relRollup(r);return rl.adkar!==null&&parseFloat(rl.adkar)>=4;});
-  if(strongAdkar.length)insights.push({icon:'✓',cls:'good',text:`${strongAdkar.length} release${strongAdkar.length>1?'s show':' shows'} strong ADKAR scores (4+/5).`});
+  if(strongAdkar.length)insights.push({icon:'✓',cls:'good',text:`${strongAdkar.length} release${strongAdkar.length>1?'s show':' shows'} strong ${fwShort()} scores (4+/5).`});
   if(!insights.length)insights.push({icon:'—',cls:'neutral',text:'Portfolio data is insufficient to generate insights. Add projects and score gates to begin.'});
   return insights;
 }
@@ -1658,7 +1717,7 @@ function renderBenchmarkCard(){
     <div class="bench-txt">
       <div class="bench-label">Portfolio Benchmark</div>
       Gate readiness at ${gs}% places this project in the <strong>${pos.label}</strong> across your portfolio.
-      ${adkPos?` ADKAR score of ${adk}/5 is <strong>${adkPos.label}</strong>.`:''}
+      ${adkPos?` ${fwShort()} score of ${adk}/5 is <strong>${adkPos.label}</strong>.`:''}
     </div>
   </div>`;
 }
@@ -1795,6 +1854,543 @@ function removeImpactAction(gi,ai){
 }
 
 // ════════════════════════════════════════════════════════
+// GAP ANALYSIS
+// ════════════════════════════════════════════════════════
+const GAP_SEVERITIES=['Critical','High','Medium','Low'];
+function gapSummary(p){
+  const g=(p.gapAnalysis?.gaps)||[];
+  return{total:g.length,critical:g.filter(x=>x.severity==='Critical').length,high:g.filter(x=>x.severity==='High').length};
+}
+function addGap(){
+  const p=getProj();if(!p)return;
+  if(!p.gapAnalysis)p.gapAnalysis={gaps:[]};
+  p.gapAnalysis.gaps.push({id:uid(),description:'',severity:'Medium',trainingImpact:''});
+  touch('proj');schedSave();renderPGaps();
+}
+function updateGap(gapId,field,value){
+  const p=getProj();if(!p)return;
+  const gap=(p.gapAnalysis?.gaps||[]).find(g=>g.id===gapId);if(!gap)return;
+  gap[field]=value;
+  touch('proj');schedSave();
+  if(field==='severity')renderPGaps();
+}
+function removeGap(gapId){
+  const p=getProj();if(!p||!p.gapAnalysis)return;
+  p.gapAnalysis.gaps=p.gapAnalysis.gaps.filter(g=>g.id!==gapId);
+  touch('proj');schedSave();renderPGaps();
+}
+function renderPGaps(){
+  const p=getProj();if(!p)return;
+  if(!p.gapAnalysis)p.gapAnalysis={gaps:[]};
+  const el=document.getElementById('ptab-gaps');if(!el)return;
+  const gaps=p.gapAnalysis.gaps;
+  const s=gapSummary(p);
+  const sevCls=sev=>sev==='Critical'?'sev-crit':sev==='High'?'sev-high':sev==='Medium'?'sev-med':'sev-low';
+  let h='<div class="gap-summary-strip">';
+  h+='<div class="gap-stat"><span class="gap-stat-val">'+s.total+'</span><span class="gap-stat-lbl">Total Gaps</span></div>';
+  h+='<div class="gap-stat"><span class="gap-stat-val sev-crit">'+s.critical+'</span><span class="gap-stat-lbl">Critical</span></div>';
+  h+='<div class="gap-stat"><span class="gap-stat-val sev-high">'+s.high+'</span><span class="gap-stat-lbl">High</span></div>';
+  h+='</div>';
+  h+='<div style="margin-bottom:12px"><button class="btn-gold" onclick="addGap()">+ Add Gap</button>';
+  h+='<span style="margin-left:12px;font-size:10px;color:var(--ink-60);font-style:italic">Gaps received from implementation team — focus on training/adoption impact</span></div>';
+  if(gaps.length===0){
+    h+='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No gaps recorded yet. Click "+ Add Gap" to log gaps from the implementation team\'s analysis.</div>';
+  }else{
+    gaps.forEach(g=>{
+      h+='<div class="gap-row">';
+      h+='<div class="gap-row-head">';
+      h+='<span class="sev-badge '+sevCls(g.severity)+'">'+g.severity+'</span>';
+      h+='<select class="gap-sev-sel" onchange="updateGap(\''+g.id+'\',\'severity\',this.value)">';
+      GAP_SEVERITIES.forEach(sv=>{h+='<option'+(sv===g.severity?' selected':'')+'>'+sv+'</option>';});
+      h+='</select>';
+      h+='<button class="btn-del-sm" onclick="removeGap(\''+g.id+'\')" title="Remove gap">&times;</button>';
+      h+='</div>';
+      h+='<div class="gap-row-fields">';
+      h+='<div class="gap-field gap-field-desc"><label>Gap Description</label><textarea rows="2" oninput="updateGap(\''+g.id+'\',\'description\',this.value)" placeholder="What gap was identified by the implementation team?">'+esc(g.description)+'</textarea></div>';
+      h+='<div class="gap-field gap-field-impact"><label>Training / Adoption Impact</label><textarea rows="2" oninput="updateGap(\''+g.id+'\',\'trainingImpact\',this.value)" placeholder="How does this affect training or adoption? How will OCM address it?">'+esc(g.trainingImpact)+'</textarea></div>';
+      h+='</div></div>';
+    });
+  }
+  el.innerHTML=h;
+}
+// ════════════════════════════════════════════════════════
+// FEATURE: CROSS-PORTFOLIO SATURATION INTELLIGENCE
+// ════════════════════════════════════════════════════════
+function renderSaturationMap(){
+  const el=document.getElementById('sat-map');if(!el)return;
+  // Collect all stakeholder groups across all releases/projects
+  const groupMap={};// normalized name → {name, projects:[{relName, projName, golive, adoptScore, impactLevel}]}
+  releases.forEach(r=>{
+    (r.projects||[]).forEach(p=>{
+      const projInfo={relName:r.name,projName:p.name,golive:p.golive||r.golive||'',relId:r.id,projId:p.id};
+      // From stakeholders
+      (p.stakeholders||[]).forEach(sh=>{
+        const norm=sh.name.trim().toLowerCase();
+        if(!groupMap[norm])groupMap[norm]={name:sh.name,projects:[]};
+        groupMap[norm].projects.push({...projInfo,adoptScore:adoptScore(sh.factors),impactLevel:null,source:'stakeholder'});
+      });
+      // From impact assessment groups
+      (p.impactAssessment?.groups||[]).forEach(ig=>{
+        const norm=ig.name.trim().toLowerCase();
+        if(!groupMap[norm])groupMap[norm]={name:ig.name,projects:[]};
+        // Only add if not already from stakeholder in same project
+        const existing=groupMap[norm].projects.find(x=>x.projId===p.id);
+        if(existing){existing.impactLevel=ig.level;}
+        else{groupMap[norm].projects.push({...projInfo,adoptScore:null,impactLevel:ig.level,source:'impact'});}
+      });
+    });
+  });
+  // Filter to groups appearing in 2+ projects for the saturation view, but show all
+  const groups=Object.values(groupMap).sort((a,b)=>b.projects.length-a.projects.length);
+  // Update collapse summary stat
+  const satSummary=document.getElementById('sat-summary-stat');
+  if(!groups.length){
+    if(satSummary)satSummary.textContent='No stakeholder groups found';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No stakeholder groups found. Add stakeholders to projects to see saturation data.</div>';return;
+  }
+  const satHigh=groups.filter(g=>g.projects.length>=3).length;
+  const satMod=groups.filter(g=>g.projects.length===2).length;
+  if(satSummary){
+    const parts=[];
+    if(satHigh)parts.push(satHigh+' high saturation');
+    if(satMod)parts.push(satMod+' moderate');
+    parts.push(groups.length+' total groups');
+    satSummary.textContent=parts.join(' · ');
+  }
+  // Get unique projects as columns
+  const allProjs=[];const projSet=new Set();
+  releases.forEach(r=>(r.projects||[]).forEach(p=>{if(!projSet.has(p.id)){projSet.add(p.id);allProjs.push({id:p.id,name:p.name,relName:r.name,golive:p.golive||r.golive||'',relId:r.id});}}));
+  // Build table
+  let h='<div class="sat-alert-strip">';
+  const saturated=groups.filter(g=>g.projects.length>=3);
+  const moderate=groups.filter(g=>g.projects.length===2);
+  h+='<div class="sat-alert-item"><span class="sat-alert-val'+(saturated.length?' sev-crit':'')+'">'+saturated.length+'</span><span class="sat-alert-lbl">High Saturation (3+)</span></div>';
+  h+='<div class="sat-alert-item"><span class="sat-alert-val'+(moderate.length?' sev-high':'')+'">'+moderate.length+'</span><span class="sat-alert-lbl">Moderate (2 projects)</span></div>';
+  h+='<div class="sat-alert-item"><span class="sat-alert-val">'+groups.length+'</span><span class="sat-alert-lbl">Total Groups</span></div>';
+  h+='</div>';
+  h+='<div class="phm-scroll"><table class="phm-tbl sat-tbl"><thead><tr><th>Stakeholder Group</th><th>Projects</th>';
+  allProjs.forEach(pr=>{h+='<th class="sat-proj-th" title="'+esc(pr.relName)+' → '+esc(pr.name)+'">'+esc(pr.name.length>15?pr.name.substring(0,14)+'…':pr.name)+'</th>';});
+  h+='</tr></thead><tbody>';
+  groups.forEach(g=>{
+    const satLevel=g.projects.length>=3?'sat-high':g.projects.length===2?'sat-mod':'sat-low';
+    h+='<tr class="'+satLevel+'">';
+    h+='<td class="sat-grp-name">'+esc(g.name)+'</td>';
+    h+='<td class="sat-count"><span class="sat-count-badge '+satLevel+'">'+g.projects.length+'</span></td>';
+    allProjs.forEach(pr=>{
+      const match=g.projects.find(x=>x.projId===pr.id);
+      if(match){
+        const scoreLabel=match.adoptScore!==null?match.adoptScore+'%':(match.impactLevel||'•');
+        const cls=match.adoptScore!==null?(match.adoptScore>=70?'sat-cell-ok':match.adoptScore>=40?'sat-cell-warn':'sat-cell-risk'):'sat-cell-impact';
+        h+='<td class="sat-cell '+cls+'" title="'+esc(g.name)+' in '+esc(pr.name)+(match.adoptScore!==null?': '+match.adoptScore+'% adoption':'')+'">'+scoreLabel+'</td>';
+      }else{
+        h+='<td class="sat-cell sat-cell-empty">—</td>';
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  if(saturated.length){
+    h+='<div class="sat-warnings">';
+    saturated.forEach(g=>{
+      const golives=g.projects.filter(p=>p.golive).map(p=>({name:p.projName,golive:p.golive})).sort((a,b)=>new Date(a.golive)-new Date(b.golive));
+      const overlapWarn=golives.length>=2;
+      h+='<div class="sat-warn-item"><span class="sev-badge sev-crit">SATURATED</span> <strong>'+esc(g.name)+'</strong> appears in '+g.projects.length+' projects';
+      if(overlapWarn){h+=' — go-live dates: '+golives.map(x=>x.name+' ('+fmtDate(x.golive)+')').join(', ');}
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
+
+// ════════════════════════════════════════════════════════
+// FEATURE: POST-GO-LIVE ADOPTION TRACKER
+// ════════════════════════════════════════════════════════
+const PL_INTERVALS=[{key:'d30',label:'30 Days'},{key:'d60',label:'60 Days'},{key:'d90',label:'90 Days'}];
+function renderPPostLaunch(){
+  const p=getProj();if(!p)return;
+  if(!p.postLaunch)p.postLaunch={};
+  const el=document.getElementById('ptab-postlaunch');if(!el)return;
+  const shs=p.stakeholders||[];
+  if(!shs.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">Add stakeholder groups first to track post-launch adoption.</div>';return;}
+  const goDate=new Date(p.golive||'');const now=new Date();const daysSince=Math.round((now-goDate)/(1000*60*60*24));
+  let h='<div class="pl-header">';
+  h+='<div class="pl-stat"><span class="pl-stat-val">'+daysSince+'</span><span class="pl-stat-lbl">Days Post Go-Live</span></div>';
+  h+='<div class="pl-stat"><span class="pl-stat-val">'+shs.length+'</span><span class="pl-stat-lbl">Groups Tracked</span></div>';
+  const allObs=shs.map(sh=>{const d=p.postLaunch[sh.id]||{};return PL_INTERVALS.filter(iv=>d[iv.key]?.adoption!==undefined).length;});
+  const totalObs=allObs.reduce((a,b)=>a+b,0);const totalPossible=shs.length*3;
+  h+='<div class="pl-stat"><span class="pl-stat-val">'+totalObs+'/'+totalPossible+'</span><span class="pl-stat-lbl">Observations Logged</span></div>';
+  h+='</div>';
+  shs.forEach(sh=>{
+    const data=p.postLaunch[sh.id]||{};
+    const preScore=adoptScore(sh.factors);
+    h+='<div class="pl-group">';
+    h+='<div class="pl-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span><span class="pl-pre-score">Pre-Launch: '+preScore+'%</span></div>';
+    h+='<div class="pl-intervals">';
+    PL_INTERVALS.forEach(iv=>{
+      const obs=data[iv.key]||{};
+      const active=daysSince>=parseInt(iv.key.substring(1));
+      h+='<div class="pl-iv '+(active?'pl-iv-active':'pl-iv-future')+'">';
+      h+='<div class="pl-iv-label">'+iv.label+'</div>';
+      if(active){
+        h+='<div class="pl-iv-fields">';
+        h+='<div class="pl-iv-field"><label>Adoption %</label><input type="number" min="0" max="100" value="'+(obs.adoption!==undefined?obs.adoption:'')+'" oninput="updatePL('+sh.id+',\''+iv.key+'\',\'adoption\',this.value)" placeholder="—"></div>';
+        h+='<div class="pl-iv-field"><label>Support Tickets</label><input type="number" min="0" value="'+(obs.tickets!==undefined?obs.tickets:'')+'" oninput="updatePL('+sh.id+',\''+iv.key+'\',\'tickets\',this.value)" placeholder="—"></div>';
+        h+='<div class="pl-iv-field"><label>Proficiency Score</label><input type="number" min="0" max="100" value="'+(obs.proficiency!==undefined?obs.proficiency:'')+'" oninput="updatePL('+sh.id+',\''+iv.key+'\',\'proficiency\',this.value)" placeholder="—"></div>';
+        h+='<div class="pl-iv-field pl-iv-notes"><label>Notes</label><textarea rows="1" oninput="updatePL('+sh.id+',\''+iv.key+'\',\'notes\',this.value)" placeholder="Observations...">'+esc(obs.notes||'')+'</textarea></div>';
+        h+='</div>';
+        // Show trend vs pre-launch
+        if(obs.adoption!==undefined){
+          const delta=obs.adoption-preScore;
+          const cls=delta>=0?'pl-trend-up':'pl-trend-down';
+          h+='<div class="pl-trend '+cls+'">'+(delta>=0?'▲':'▼')+' '+Math.abs(delta)+'% vs pre-launch prediction</div>';
+        }
+      }else{
+        h+='<div class="pl-iv-locked">Available in '+(parseInt(iv.key.substring(1))-daysSince)+' days</div>';
+      }
+      h+='</div>';
+    });
+    h+='</div></div>';
+  });
+  // Kirk L3/L4 outcomes section
+  const kirkShs=shs.filter(sh=>sh.kirk?.L3?.observable||sh.kirk?.L4?.outcome);
+  if(kirkShs.length){
+    h+='<div class="pl-kirk-sec">';
+    h+='<div class="pl-kirk-hd">Kirkpatrick L3/L4 Outcome Tracking</div>';
+    kirkShs.forEach(sh=>{
+      h+='<div class="pl-kirk-row"><strong>'+esc(sh.name)+'</strong>';
+      if(sh.kirk.L3?.observable)h+='<div class="pl-kirk-item"><span class="pl-kirk-tag">L3</span> Observable: '+esc(sh.kirk.L3.observable)+' (Interval: '+esc(sh.kirk.L3.interval||'30')+' days)</div>';
+      if(sh.kirk.L4?.outcome)h+='<div class="pl-kirk-item"><span class="pl-kirk-tag">L4</span> Outcome: '+esc(sh.kirk.L4.outcome)+' | Metric: '+esc(sh.kirk.L4.metric||'TBD')+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
+function updatePL(shId,interval,field,value){
+  const p=getProj();if(!p)return;
+  if(!p.postLaunch)p.postLaunch={};
+  if(!p.postLaunch[shId])p.postLaunch[shId]={};
+  if(!p.postLaunch[shId][interval])p.postLaunch[shId][interval]={};
+  p.postLaunch[shId][interval][field]=field==='notes'?value:(value===''?undefined:parseInt(value));
+  touch('proj');schedSave();
+}
+
+// ════════════════════════════════════════════════════════
+// FEATURE: CONFIGURABLE ASSESSMENT FRAMEWORKS
+// ════════════════════════════════════════════════════════
+const FRAMEWORK_PRESETS={
+  adkar:{name:'ADKAR (Prosci)',dims:[
+    {key:'d1',letter:'A',word:'Awareness',desc:'Awareness of the need for change'},
+    {key:'d2',letter:'D',word:'Desire',desc:'Desire to support and participate'},
+    {key:'d3',letter:'K',word:'Knowledge',desc:'Knowledge of how to change'},
+    {key:'d4',letter:'A',word:'Ability',desc:'Ability to implement required skills and behaviors'},
+    {key:'d5',letter:'R',word:'Reinforcement',desc:'Reinforcement to sustain the change'}]},
+  kotter:{name:'Kotter 8-Step',dims:[
+    {key:'d1',letter:'U',word:'Urgency',desc:'Creating a sense of urgency for change'},
+    {key:'d2',letter:'C',word:'Coalition',desc:'Building a guiding coalition'},
+    {key:'d3',letter:'V',word:'Vision',desc:'Forming a strategic vision and initiatives'},
+    {key:'d4',letter:'E',word:'Enlist',desc:'Enlisting a volunteer army'},
+    {key:'d5',letter:'A',word:'Action',desc:'Enabling action by removing barriers'},
+    {key:'d6',letter:'W',word:'Wins',desc:'Generating short-term wins'},
+    {key:'d7',letter:'S',word:'Sustain',desc:'Sustaining acceleration'},
+    {key:'d8',letter:'I',word:'Institute',desc:'Instituting change in culture'}]},
+  bridges:{name:'Bridges Transition',dims:[
+    {key:'d1',letter:'E',word:'Ending',desc:'Letting go of old ways and identities'},
+    {key:'d2',letter:'N',word:'Neutral Zone',desc:'Navigating the in-between uncertainty'},
+    {key:'d3',letter:'B',word:'New Beginning',desc:'Embracing the new identity and energy'}]},
+  mck7s:{name:'McKinsey 7S',dims:[
+    {key:'d1',letter:'S',word:'Strategy',desc:'Plan to build competitive advantage'},
+    {key:'d2',letter:'S',word:'Structure',desc:'Organization and reporting relationships'},
+    {key:'d3',letter:'S',word:'Systems',desc:'Daily activities and processes'},
+    {key:'d4',letter:'S',word:'Shared Values',desc:'Core values and culture'},
+    {key:'d5',letter:'S',word:'Style',desc:'Leadership and management approach'},
+    {key:'d6',letter:'S',word:'Staff',desc:'People and their capabilities'},
+    {key:'d7',letter:'S',word:'Skills',desc:'Competencies of the organization'}]},
+  pct:{name:'PCT Model',dims:[
+    {key:'d1',letter:'P',word:'People',desc:'Stakeholder readiness and engagement'},
+    {key:'d2',letter:'C',word:'Culture',desc:'Organizational culture alignment'},
+    {key:'d3',letter:'T',word:'Technology',desc:'Technology readiness and adoption'}]}
+};
+// Legacy key migration map: old ADKAR keys → new generic keys
+const LEGACY_KEY_MAP={A1:'d1',D:'d2',K:'d3',Ab:'d4',R:'d5'};
+
+function getFramework(){
+  const b=getBrand();
+  const fwId=b.frameworkId||'adkar';
+  if(fwId==='custom'&&b.customDims)return{name:'Custom',dims:b.customDims};
+  return FRAMEWORK_PRESETS[fwId]||FRAMEWORK_PRESETS.adkar;
+}
+function migrateScores(scores){
+  if(!scores)return{};
+  // If scores use legacy keys (A1,D,K,Ab,R), migrate to d1-d5
+  if(scores.A1!==undefined||scores.D!==undefined){
+    const migrated={};
+    Object.entries(LEGACY_KEY_MAP).forEach(([old,nw])=>{if(scores[old]!==undefined)migrated[nw]=scores[old];});
+    return migrated;
+  }
+  return scores;
+}
+function getActiveDims(){
+  const fw=getFramework();
+  const dims=[...fw.dims];
+  // Update ADKAR_DIMS to match current framework (for backward compat)
+  ADKAR_DIMS.length=0;
+  dims.forEach(d=>ADKAR_DIMS.push(d));
+  return dims;
+}
+function fwName(){
+  const b=getBrand();const fw=b.frameworkId||'adkar';
+  const names={adkar:'ADKAR',kotter:'Kotter 8-Step',bridges:'Bridges Transition',mck7s:'McKinsey 7S',pct:'PCT',custom:'Assessment'};
+  return b.frameworkName||names[fw]||'Assessment';
+}
+function fwShort(){
+  const b=getBrand();const fw=b.frameworkId||'adkar';
+  const shorts={adkar:'ADKAR',kotter:'Kotter',bridges:'Bridges',mck7s:'7S',pct:'PCT',custom:'Assessment'};
+  return shorts[fw]||'Assessment';
+}
+function applyFrameworkPreset(fwId){
+  const b=getBrand();
+  b.frameworkId=fwId;
+  if(fwId!=='custom'){
+    const preset=FRAMEWORK_PRESETS[fwId];
+    if(preset){
+      b.adkarLabels={};
+      preset.dims.forEach(d=>{b.adkarLabels[d.key]=d.word;});
+    }
+  }
+  saveBrand(b);
+  renderFrameworkDimInputs();
+}
+function renderFrameworkDimInputs(){
+  const b=getBrand();const grid=document.getElementById('brand-dims-grid');if(!grid)return;
+  const fw=getFramework();
+  const fwSel=document.getElementById('brand-framework');if(fwSel)fwSel.value=b.frameworkId||'adkar';
+  grid.innerHTML=fw.dims.map((d,i)=>`<div style="display:flex;gap:6px;align-items:center">
+    <input type="text" class="modal-inp" style="width:40px;text-align:center;flex-shrink:0" value="${esc(d.letter)}" data-dim-idx="${i}" data-dim-field="letter" onchange="updateDimLabel(${i},'letter',this.value)">
+    <input type="text" class="modal-inp" style="flex:1" value="${esc(d.word)}" data-dim-idx="${i}" data-dim-field="word" onchange="updateDimLabel(${i},'word',this.value)">
+    ${fw.dims.length>2?'<button class="btn-del-sm" onclick="removeDim('+i+')">&times;</button>':''}
+  </div>`).join('');
+}
+function updateDimLabel(idx,field,value){
+  const b=getBrand();
+  const fw=getFramework();
+  if(idx<fw.dims.length){
+    fw.dims[idx][field]=value;
+    b.frameworkId='custom';b.customDims=fw.dims;
+    b.adkarLabels={};fw.dims.forEach(d=>{b.adkarLabels[d.key]=d.word;});
+    saveBrand(b);
+  }
+}
+function addFrameworkDim(){
+  const b=getBrand();const fw=getFramework();
+  if(fw.dims.length>=10){alert('Maximum 10 dimensions');return;}
+  const nk='d'+(fw.dims.length+1);
+  fw.dims.push({key:nk,letter:'?',word:'New Dimension',desc:'Description'});
+  b.frameworkId='custom';b.customDims=fw.dims;
+  b.adkarLabels={};fw.dims.forEach(d=>{b.adkarLabels[d.key]=d.word;});
+  saveBrand(b);renderFrameworkDimInputs();
+}
+function removeDim(idx){
+  const b=getBrand();const fw=getFramework();
+  if(fw.dims.length<=2)return;
+  fw.dims.splice(idx,1);
+  // Re-key dimensions
+  fw.dims.forEach((d,i)=>{d.key='d'+(i+1);});
+  b.frameworkId='custom';b.customDims=fw.dims;
+  b.adkarLabels={};fw.dims.forEach(d=>{b.adkarLabels[d.key]=d.word;});
+  saveBrand(b);renderFrameworkDimInputs();
+}
+
+// ════════════════════════════════════════════════════════
+// FEATURE: STAKEHOLDER PULSE SURVEYS
+// ════════════════════════════════════════════════════════
+function renderPPulse(){
+  const p=getProj();if(!p)return;
+  if(!p.pulseConfig)p.pulseConfig={};
+  if(!p.pulseResults)p.pulseResults={};
+  // Sync real survey responses from localStorage before rendering
+  syncPulseResponses();
+  const el=document.getElementById('ptab-pulse');if(!el)return;
+  const shs=p.stakeholders||[];
+  const dims=getActiveDims();
+  if(!shs.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">Add stakeholder groups first to create pulse surveys.</div>';return;}
+  const hasAnyResults=shs.some(sh=>(p.pulseResults[sh.id]||{}).responses>0);
+  let h='';
+  if(!hasAnyResults&&isDemoMode){
+    h+='<div style="margin-bottom:14px"><button class="btn-gold" onclick="loadPulseDemoData()">Load Sample Survey Data</button>';
+    h+='<span style="margin-left:10px;font-size:10px;color:var(--ink-60);font-style:italic">Generates links and simulates stakeholder responses for all groups</span></div>';
+  }
+  shs.forEach(sh=>{
+    const cfg=p.pulseConfig[sh.id]||{};
+    const results=p.pulseResults[sh.id]||{};
+    const linkId=cfg.linkId||null;
+    const responseCount=results.responses||0;
+    h+='<div class="pulse-group">';
+    h+='<div class="pulse-group-hd">';
+    h+='<span class="pulse-group-name">'+esc(sh.name)+'</span>';
+    if(linkId){
+      h+='<span class="pulse-badge pulse-active">'+responseCount+' response'+(responseCount!==1?'s':'')+'</span>';
+    }
+    h+='</div>';
+    // Survey link management
+    if(!linkId){
+      h+='<button class="btn-gold btn-sm" onclick="createPulseLink('+sh.id+')">Generate Survey Link</button>';
+      h+='<span style="margin-left:8px;font-size:10px;color:var(--ink-60)">Creates an anonymous survey mapped to your assessment dimensions</span>';
+    }else{
+      const url=window.location.origin+'/pulse?link='+linkId;
+      h+='<div class="pulse-link-box">';
+      h+='<div class="pulse-link-url"><input type="text" value="'+esc(url)+'" readonly class="pulse-link-inp" onclick="this.select()"><button class="btn-sm" onclick="navigator.clipboard.writeText(\''+esc(url)+'\');this.textContent=\'Copied!\';setTimeout(()=>this.textContent=\'Copy\',1500)">Copy</button></div>';
+      h+='<div class="pulse-link-meta">Created '+fmtDate(cfg.created)+' &nbsp;|&nbsp; '+responseCount+' responses</div>';
+      h+='</div>';
+    }
+    // Show results comparison if we have data
+    if(responseCount>0){
+      h+='<div class="pulse-compare">';
+      h+='<div class="pulse-compare-hd">Team Assessment vs. Stakeholder Feedback</div>';
+      // Build gap analysis data
+      const gapData=[];
+      dims.forEach(d=>{
+        const team=migrateScores(p.adkarScores)[d.key]||3;
+        const survey=results.scores?.[d.key]||3;
+        const diff=+(team-survey).toFixed(1);
+        gapData.push({dim:d,team,survey,diff,absDiff:Math.abs(diff)});
+      });
+      // Insight summary
+      const blindSpots=gapData.filter(g=>g.diff>=1);// team scored higher than stakeholders
+      const underEst=gapData.filter(g=>g.diff<=-1);// team scored lower than stakeholders
+      const aligned=gapData.filter(g=>g.absDiff<1);
+      h+='<div class="pulse-insights">';
+      if(blindSpots.length){
+        h+='<div class="pulse-insight pulse-insight-warn"><strong>Potential blind spots:</strong> Your team rated <strong>'+blindSpots.map(g=>g.dim.word).join(', ')+'</strong> higher than stakeholders did. Stakeholders may not be as ready as your team believes — consider deeper engagement or targeted interventions.</div>';
+      }
+      if(underEst.length){
+        h+='<div class="pulse-insight pulse-insight-pos"><strong>Underestimated strengths:</strong> Stakeholders rated <strong>'+underEst.map(g=>g.dim.word).join(', ')+'</strong> higher than your team expected. This is a positive signal — leverage these areas to build momentum.</div>';
+      }
+      if(aligned.length===gapData.length){
+        h+='<div class="pulse-insight pulse-insight-ok"><strong>Strong alignment:</strong> Your team\'s assessment closely matches stakeholder feedback across all dimensions. Continue current approach.</div>';
+      }
+      h+='</div>';
+      // Bars
+      h+='<div class="pulse-bars">';
+      gapData.forEach(g=>{
+        const gapCls=g.absDiff>=2?'pulse-gap-high':g.absDiff>=1?'pulse-gap-mod':'pulse-gap-low';
+        const arrow=g.diff>0.5?'▼':g.diff<-0.5?'▲':'≈';
+        const arrowLabel=g.diff>0.5?'Stakeholders lower':g.diff<-0.5?'Stakeholders higher':'Aligned';
+        h+='<div class="pulse-bar-row">';
+        h+='<div class="pulse-dim-lbl">'+esc(g.dim.word)+'</div>';
+        h+='<div class="pulse-dual-bar">';
+        h+='<div class="pulse-bar-prac" style="width:'+(g.team/5*100)+'%" title="Team Assessment: '+g.team+'/5"></div>';
+        h+='<div class="pulse-bar-pop" style="width:'+(g.survey/5*100)+'%" title="Stakeholder Feedback: '+g.survey.toFixed(1)+'/5"></div>';
+        h+='</div>';
+        h+='<div class="pulse-score-vals"><span>Team:'+g.team+'</span><span class="'+gapCls+'" title="'+arrowLabel+'">'+arrow+' Survey:'+g.survey.toFixed(1)+'</span></div>';
+        h+='</div>';
+      });
+      h+='</div>';
+      h+='<div class="pulse-legend"><span class="pulse-leg-prac">■ Team Assessment</span><span class="pulse-leg-pop">■ Stakeholder Feedback</span><span style="margin-left:auto;font-size:9px;color:var(--ink-35)">'+responseCount+' responses</span></div>';
+      h+='</div>';
+    }
+    // Simulate results button (for demo/testing)
+    if(linkId&&responseCount===0){
+      h+='<button class="btn-sm" style="margin-top:8px;opacity:0.6" onclick="simulatePulseResults('+sh.id+')">Simulate Responses (Demo)</button>';
+    }
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+function loadPulseDemoData(){
+  const p=getProj();if(!p)return;
+  if(!p.pulseConfig)p.pulseConfig={};
+  if(!p.pulseResults)p.pulseResults={};
+  (p.stakeholders||[]).forEach(sh=>{
+    if(!p.pulseConfig[sh.id]){
+      p.pulseConfig[sh.id]={linkId:uid()+'_'+Date.now().toString(36),created:new Date().toISOString().split('T')[0],active:true};
+    }
+    const dims=getActiveDims();const scores={};
+    dims.forEach(d=>{
+      const pracScore=migrateScores(p.adkarScores)[d.key]||3;
+      const variance=(Math.random()-0.5)*2;
+      scores[d.key]=Math.max(1,Math.min(5,+(pracScore+variance).toFixed(1)));
+    });
+    p.pulseResults[sh.id]={responses:Math.floor(Math.random()*40)+10,scores};
+  });
+  touch('proj');schedSave();renderPPulse();
+}
+function createPulseLink(shId){
+  const p=getProj();if(!p)return;
+  if(!p.pulseConfig)p.pulseConfig={};
+  const linkId=uid()+'_'+Date.now().toString(36);
+  p.pulseConfig[shId]={linkId,created:new Date().toISOString().split('T')[0],active:true};
+  if(!p.pulseResults)p.pulseResults={};
+  p.pulseResults[shId]={responses:0,scores:{}};
+  // Store link context for pulse.html
+  const sh=p.stakeholders.find(s=>s.id===shId||s.name===shId);
+  const links=JSON.parse(localStorage.getItem('adoptiq_pulse_links')||'{}');
+  links[linkId]={projectName:p.name,groupName:sh?.name||'',created:new Date().toISOString()};
+  localStorage.setItem('adoptiq_pulse_links',JSON.stringify(links));
+  touch('proj');schedSave();renderPPulse();
+}
+function syncPulseResponses(){
+  // Aggregate real survey responses from localStorage into project pulseResults
+  const rawResponses=JSON.parse(localStorage.getItem('adoptiq_pulse_responses')||'[]');
+  if(!rawResponses.length)return;
+  const pulseLinks=JSON.parse(localStorage.getItem('adoptiq_pulse_links')||'{}');
+  // Group responses by linkId
+  const byLink={};
+  rawResponses.forEach(r=>{if(r.linkId){if(!byLink[r.linkId])byLink[r.linkId]=[];byLink[r.linkId].push(r);}});
+  // For each release/project, find matching links and aggregate
+  let updated=false;
+  releases.forEach(rel=>{
+    (rel.projects||[]).forEach(p=>{
+      if(!p.pulseConfig)return;
+      (p.stakeholders||[]).forEach(sh=>{
+        const cfg=p.pulseConfig[sh.id];
+        if(!cfg||!cfg.linkId)return;
+        const responses=byLink[cfg.linkId];
+        if(!responses||!responses.length)return;
+        // Aggregate scores: average across all responses per dimension
+        const dimTotals={};const dimCounts={};
+        responses.forEach(resp=>{
+          if(!resp.scores)return;
+          Object.entries(resp.scores).forEach(([key,val])=>{
+            if(!dimTotals[key])dimTotals[key]=0;
+            if(!dimCounts[key])dimCounts[key]=0;
+            dimTotals[key]+=val;dimCounts[key]++;
+          });
+        });
+        const avgScores={};
+        Object.keys(dimTotals).forEach(k=>{avgScores[k]=+(dimTotals[k]/dimCounts[k]).toFixed(1);});
+        if(!p.pulseResults)p.pulseResults={};
+        const prev=p.pulseResults[sh.id];
+        const newCount=responses.length;
+        // Only update if count changed (avoid unnecessary saves)
+        if(!prev||prev.responses!==newCount){
+          p.pulseResults[sh.id]={responses:newCount,scores:avgScores};
+          updated=true;
+        }
+      });
+    });
+  });
+  if(updated){schedSave();}
+}
+
+function simulatePulseResults(shId){
+  const p=getProj();if(!p)return;
+  if(!p.pulseResults)p.pulseResults={};
+  const dims=getActiveDims();
+  const scores={};
+  dims.forEach(d=>{
+    // Simulate population scores with some variance from practitioner scores
+    const pracScore=migrateScores(p.adkarScores)[d.key]||3;
+    const variance=(Math.random()-0.5)*2;// ±1
+    scores[d.key]=Math.max(1,Math.min(5,+(pracScore+variance).toFixed(1)));
+  });
+  const responses=Math.floor(Math.random()*40)+10;
+  p.pulseResults[shId]={responses,scores};
+  touch('proj');schedSave();renderPPulse();
+}
+
+// ════════════════════════════════════════════════════════
 // PROGRESS TRACKING (Weekly Snapshots)
 // ════════════════════════════════════════════════════════
 async function saveSnapshot(){
@@ -1852,12 +2448,12 @@ function exportProjectSummary(){
     t+=`\n${gate.label} — ${gate.sub}: ${Math.round(grn/tot*100)}% (${grn}/${tot})\n`;
     gate.items.forEach((item,i)=>{const s=p.gateState[gate.id+'_'+i];const sym=s==='green'?'[COMPLETE]   ':s==='yellow'?'[PARTIAL]    ':s==='red'?'[INCOMPLETE] ':s==='gray'?'[NOT STARTED]':'[NOT SET]    ';t+=`  ${sym} ${item.text}\n`;});
   });
-  t+='\n\nADKAR ASSESSMENT\n'+'─'.repeat(45)+'\n';
+  t+='\n\n'+fwName().toUpperCase()+' ASSESSMENT\n'+'─'.repeat(45)+'\n';
   t+=`Overall Score: ${avg}/5\n\n`;
   ADKAR_DIMS.forEach(d=>{t+=`${d.word} (${d.letter}): ${p.adkarScores[d.key]}/5\n`;if(p.adkarNotes[d.key])t+=`  Notes: ${p.adkarNotes[d.key]}\n`;});
   t+='\n\nACTIVE RISK FLAGS ('+flags.length+')\n'+'─'.repeat(45)+'\n';
   if(!flags.length){t+='No active risk flags.\n';}
-  else{flags.forEach((fl,i)=>{t+=`\nFlag ${i+1}: ${fl.gate} — ${fl.sub}\n  Gap:          ${fl.item}\n  Consequence:  ${fl.consequence}\n`;const ow=document.getElementById('own_'+fl.key),du=document.getElementById('due_'+fl.key);if(ow?.value)t+=`  Owner:        ${ow.value}\n`;if(du?.value)t+=`  Resolution:   ${du.value}\n`;});}
+  else{flags.forEach((fl,i)=>{t+=`\nFlag ${i+1}: ${fl.gate} — ${fl.sub}\n  Gap:          ${fl.item}\n  Consequence:  ${fl.consequence}\n`;const ow=fl.defOwner||(p.flagOwners&&p.flagOwners[fl.key])||'';const du=(p.flagDueDates&&p.flagDueDates[fl.key])||'';if(ow)t+=`  Owner:        ${ow}\n`;if(du)t+=`  Resolution:   ${du}\n`;});}
   t+='\n\nSTAKEHOLDER ASSESSMENT SUMMARY\n'+'─'.repeat(45)+'\n';
   if(!p.stakeholders.length){t+='No stakeholder groups scored.\n';}
   else{p.stakeholders.forEach(sh=>{const sc=adoptScore(sh.factors),{tier}=adoptTier(sc);t+=`\n${sh.name}\n  Adoption Likelihood:   ${sc}% — ${tier}\n  Measurement:           ${badgeLabel(kirkReady(sh))}\n  Reinforcement Plan:    ${badgeLabel(reinReady(sh))}\n`;const los=sh.objectives.filter(o=>o.trim());if(los.length){t+=`  Learning Objectives (${los.length}):\n`;los.forEach((o,i)=>{t+=`    ${i+1}. ${o}\n`;});}AF.forEach(f=>{t+=`  ${f.label}: ${sh.factors[f.key]}/5 — ${FD[sh.factors[f.key]]}\n`;});if(sh.kirk.L4.outcome)t+=`  L4 Outcome: ${sh.kirk.L4.outcome}\n`;if(sh.rein.owner)t+=`  Reinforcement Owner: ${sh.rein.owner}\n`;});}
@@ -1950,7 +2546,7 @@ function exportProjectPDF(){
   });
   // ADKAR
   y=pdfCheckPage(doc,y,w,h,pg,40);
-  y=pdfSection(doc,y,'ADKAR Assessment',w);
+  y=pdfSection(doc,y,fwName()+' Assessment',w);
   const avg=projAdkarAvg(p);
   doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text(`Overall Score: ${avg}/5`,14,y);y+=6;
   doc.setFont('helvetica','normal');
@@ -1991,7 +2587,7 @@ function exportProjectPDF(){
     y=doc.lastAutoTable.finalY+6;
   }
   pdfFooter(doc,w,h,pg[0]);
-  window.open(URL.createObjectURL(doc.output('blob')),'_blank');
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
 }
 
 function exportReleasePDF(){
@@ -2015,7 +2611,7 @@ function exportReleasePDF(){
       const gs=projGateScore(p);const avg=projAdkarAvg(p);
       return[p.name,p.status,(p.agencies||[]).join(', ')||'—',gs!==null?gs+'%':'—',avg+'/5',String(getProjFlags(p).length)];
     });
-    doc.autoTable({startY:y,head:[['Project','Status','Agencies','Gate Score','ADKAR','Flags']],body:rows,
+    doc.autoTable({startY:y,head:[['Project','Status','Agencies','Gate Score',fwShort(),'Flags']],body:rows,
       margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},
@@ -2038,7 +2634,7 @@ function exportReleasePDF(){
     y+=3;
   });
   pdfFooter(doc,w,h,pg[0]);
-  window.open(URL.createObjectURL(doc.output('blob')),'_blank');
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
 }
 function getProjFlags(p){
   const flags=[];
@@ -2106,7 +2702,7 @@ function exportHandoffPDF(){
   const relRows=releases.map(r=>{const rl=relRollup(r);const rg=relRAG(r);
     return[r.name,rg.label,rl.gateScore!==null?rl.gateScore+'%':'—',rl.adkar||'—',String(rl.flags),r.golive?fmtDate(r.golive):'—'];
   });
-  doc.autoTable({startY:y,head:[['Release','RAG','Gate %','ADKAR','Flags','Go-Live']],body:relRows,
+  doc.autoTable({startY:y,head:[['Release','RAG','Gate %',fwShort(),'Flags','Go-Live']],body:relRows,
     margin:{left:mg,right:mg},styles:{fontSize:8,cellPadding:3},
     headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:[248,247,244]}
@@ -2127,7 +2723,7 @@ function exportHandoffPDF(){
       const pRows=r.projects.map(p=>{const gs=projGateScore(p);const avg=projAdkarAvg(p);
         return[p.name,p.status||'—',gs!==null?gs+'%':'—',avg+'/5',String(getProjFlags(p).length)];
       });
-      doc.autoTable({startY:y,head:[['Project','Status','Gate %','ADKAR','Flags']],body:pRows,
+      doc.autoTable({startY:y,head:[['Project','Status','Gate %',fwShort(),'Flags']],body:pRows,
         margin:{left:mg,right:mg},styles:{fontSize:8,cellPadding:3},
         headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
         alternateRowStyles:{fillColor:[248,247,244]}
@@ -2151,7 +2747,7 @@ function exportHandoffPDF(){
       y+=4;
       // ADKAR
       y=pdfCheckPage(doc,y,w,h,pg,28);
-      y=pdfSection(doc,y,p.name+' — ADKAR Assessment',w);
+      y=pdfSection(doc,y,p.name+' — '+fwName()+' Assessment',w);
       const adkar=p.adkarScores||{};
       doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(12,31,63);
       doc.text('Overall: '+projAdkarAvg(p)+'/5',mg,y);y+=7;
@@ -2192,6 +2788,462 @@ function exportHandoffPDF(){
 }
 
 // ════════════════════════════════════════════════════════
+// OCM DELIVERABLE GENERATOR
+// ════════════════════════════════════════════════════════
+function toggleGenMenu(){const m=document.getElementById('gen-menu');if(m)m.classList.toggle('open');}
+document.addEventListener('click',e=>{const m=document.getElementById('gen-menu');if(m&&!e.target.closest('.dropdown-gen'))m.classList.remove('open');});
+
+const ADKAR_MSG_FOCUS={
+  A1:{focus:'Why we are changing',channel:'Town halls, leadership memos, FAQs'},
+  D:{focus:'What is in it for me',channel:'1:1 meetings, testimonials, incentives'},
+  K:{focus:'How to operate in the new way',channel:'Training sessions, job aids, demos'},
+  Ab:{focus:'Practice and proficiency building',channel:'Sandbox environments, coaching, super-users'},
+  R:{focus:'Sustaining the change',channel:'Recognition programs, KPI dashboards, check-ins'},
+  d1:{focus:'Why we are changing',channel:'Town halls, leadership memos, FAQs'},
+  d2:{focus:'What is in it for me',channel:'1:1 meetings, testimonials, incentives'},
+  d3:{focus:'How to operate in the new way',channel:'Training sessions, job aids, demos'},
+  d4:{focus:'Practice and proficiency building',channel:'Sandbox environments, coaching, super-users'},
+  d5:{focus:'Sustaining the change',channel:'Recognition programs, KPI dashboards, check-ins'},
+  d6:{focus:'Building urgency and coalition',channel:'Stakeholder workshops, leadership alignment sessions'},
+  d7:{focus:'Communicating the vision',channel:'All-hands meetings, visual roadmaps, story-driven messaging'},
+  d8:{focus:'Empowering action and removing barriers',channel:'Process redesign, quick wins, barrier removal sessions'}
+};
+const RESIST_INTERVENTIONS={
+  resistance:'Sponsor engagement sessions, 1:1 stakeholder meetings, address concerns directly',
+  env:'Training environment remediation, technical readiness checks, infrastructure validation',
+  window:'Schedule adjustment, micro-learning modules, staggered rollout',
+  complexity:'Simplified job aids, super-user support network, reduced scope per wave',
+  saturation:'Change sequencing, timeline spacing, initiative consolidation',
+  leadership:'Manager coaching program, cascaded messaging toolkits, leadership alignment workshops'
+};
+
+function calcReadinessRec(p){
+  const gate=projGateScore(p);
+  const adkar=parseFloat(projAdkarAvg(p));
+  const flags=getProjFlags(p).filter(f=>f.key&&(p.gateState||{})[f.key]==='red').length;
+  const gaps=p.gapAnalysis?.gaps||[];
+  const critGaps=gaps.filter(g=>g.severity==='Critical').length;
+  if(gate>=80&&adkar>=3.5&&flags===0&&critGaps===0)return{status:'READY',label:'Ready to Proceed',color:[29,104,64]};
+  if(gate<50||adkar<2.5||flags>=3||critGaps>0)return{status:'NOT_READY',label:'Not Ready',color:[184,50,50]};
+  return{status:'CONDITIONAL',label:'Proceed with Conditions',color:[184,146,42]};
+}
+
+function pdfCover(doc,w,h,title,subtitle,p,r,brand){
+  doc.setFillColor(12,31,63);doc.rect(0,0,w,h,'F');
+  doc.setFontSize(32);doc.setFont('helvetica','bold');doc.setTextColor(184,146,42);
+  const fnLines=doc.splitTextToSize(brand.firmName||'AdoptIQ',w-60);
+  doc.text(fnLines,w/2,70,{align:'center'});
+  doc.setDrawColor(184,146,42);doc.setLineWidth(0.5);doc.line(40,90,w-40,90);
+  doc.setFontSize(18);doc.setTextColor(255,255,255);doc.text(title,w/2,110,{align:'center'});
+  doc.setFontSize(11);doc.setTextColor(200,200,200);doc.text(subtitle||'',w/2,122,{align:'center'});
+  doc.setFontSize(10);doc.setTextColor(184,146,42);
+  const info=['Project: '+(p?.name||''),'Release: '+(r?.name||''),
+    'Agencies: '+(p?.agencies?.join(', ')||'N/A'),'Go-Live: '+(r?.golive||p?.golive||'TBD'),
+    'Generated: '+new Date().toLocaleDateString()];
+  info.forEach((line,i)=>doc.text(line,w/2,155+i*8,{align:'center'}));
+  doc.setFontSize(8);doc.setTextColor(100,100,100);doc.text('Powered by AdoptIQ',w/2,h-15,{align:'center'});
+}
+
+function genStakeholderAnalysis(){
+  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  const p=getProj();const r=getRel();if(!p||!r)return;
+  try{
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const brand=getBrand();
+  pdfCover(doc,w,h,'Stakeholder Analysis','Adoption Risk Assessment & Engagement Strategy',p,r,brand);
+  // Page 2: Inventory
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  y=pdfSection(doc,y,'Stakeholder Group Inventory',w);
+  const shs=p.stakeholders||[];const igs=(p.impactAssessment?.groups)||[];
+  if(shs.length===0){doc.setFontSize(10);doc.setTextColor(100,100,100);doc.text('No stakeholder groups have been added to this project.',14,y+6);y+=14;}
+  else{
+    const rows=shs.map(sh=>{const sc=adoptScore(sh.factors);const t=adoptTier(sc);
+      const ig=igs.find(g=>g.name===sh.name);
+      return[sh.name,ig?.level||'—',sc+'%',t.tier,sh.objectives?.length||0];});
+    doc.autoTable({startY:y,head:[['Group','Impact','Adoption %','Risk Tier','Objectives']],body:rows,
+      margin:{left:14,right:14},styles:{fontSize:8,cellPadding:2.5},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // Per-group details
+  shs.forEach(sh=>{
+    y=pdfCheckPage(doc,y,w,h,pg,100);
+    y=pdfSection(doc,y,sh.name,w);
+    const sc=adoptScore(sh.factors);const t=adoptTier(sc);
+    const ig=igs.find(g=>g.name===sh.name);
+    // Impact & current/future state
+    if(ig){
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+      doc.text('Impact Level: '+ig.level,14,y+4);y+=8;
+      doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+      if(ig.currentState){doc.setFont('helvetica','bold');doc.text('Current State:',14,y+4);doc.setFont('helvetica','normal');
+        const csLines=doc.splitTextToSize(ig.currentState,w-32);doc.text(csLines,14,y+9);y+=9+csLines.length*4;}
+      if(ig.futureState){doc.setFont('helvetica','bold');doc.text('Future State:',14,y+4);doc.setFont('helvetica','normal');
+        const fsLines=doc.splitTextToSize(ig.futureState,w-32);doc.text(fsLines,14,y+9);y+=9+fsLines.length*4;}
+      y+=4;
+    }
+    // Adoption risk
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text('Adoption Likelihood: '+sc+'% ('+t.tier+')',14,y+4);y+=10;
+    AF.forEach(f=>{
+      const val=sh.factors?.[f.key]||3;
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
+      doc.text(f.label+': '+val+'/5',14,y+3);
+      const barCol=val>=4?[29,104,64]:val>=3?[184,146,42]:[184,50,50];
+      pdfBar(doc,70,y,80,val/5*100,barCol[0],barCol[1],barCol[2]);y+=7;
+    });
+    y+=4;
+    // Kirkpatrick
+    if(sh.kirk){
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Kirkpatrick Evaluation Plan',14,y+3);y+=8;
+      const kRows=[];
+      if(sh.kirk.L1?.method)kRows.push(['L1: Reaction',sh.kirk.L1.method,sh.kirk.L1.timing||'']);
+      if(sh.kirk.L2?.method)kRows.push(['L2: Learning',sh.kirk.L2.method,sh.kirk.L2.assessment||'']);
+      if(sh.kirk.L3?.observable)kRows.push(['L3: Behavior',sh.kirk.L3.observable,sh.kirk.L3.interval?sh.kirk.L3.interval+' days post go-live':'']);
+      if(sh.kirk.L4?.outcome)kRows.push(['L4: Results',sh.kirk.L4.outcome,sh.kirk.L4.metric||'']);
+      if(kRows.length){doc.autoTable({startY:y,head:[['Level','Method/Indicator','Standard/Timing']],body:kRows,
+        margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+        headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+        alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+        y=doc.lastAutoTable.finalY+8;}
+    }
+    // Reinforcement
+    if(sh.rein?.owner){
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Reinforcement Plan',14,y+3);y+=8;
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+      doc.text('Owner: '+(sh.rein.owner||'TBD'),14,y+3);y+=5;
+      if(sh.rein.activities){const aLines=doc.splitTextToSize('Activities: '+sh.rein.activities,w-28);doc.text(aLines,14,y+3);y+=3+aLines.length*4;}
+      if(sh.rein.intervals?.length){doc.text('Intervals: '+sh.rein.intervals.join(', '),14,y+3);y+=5;}
+      if(sh.rein.escalation){const eLines=doc.splitTextToSize('Escalation: '+sh.rein.escalation,w-28);doc.text(eLines,14,y+3);y+=3+eLines.length*4;}
+      y+=6;
+    }
+  });
+  pdfFooter(doc,w,h,pg[0]);
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  toggleGenMenu();
+  }catch(e){console.error('Stakeholder Analysis PDF:',e);alert('Error generating PDF: '+e.message);}
+}
+
+function genTrainingPlan(){
+  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  const p=getProj();const r=getRel();if(!p||!r)return;
+  try{
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const brand=getBrand();
+  pdfCover(doc,w,h,'Training Plan','Kirkpatrick-Aligned Training Strategy',p,r,brand);
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  // Training scope
+  y=pdfSection(doc,y,'Training Scope',w);
+  const shs=p.stakeholders||[];
+  doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
+  doc.text('Total stakeholder groups: '+shs.length,14,y+5);
+  doc.text('Estimated end users: '+(p.estimatedUsers||'TBD'),14,y+11);
+  doc.text('Training required: '+(p.trainingRequired?'Yes':'No'),14,y+17);y+=24;
+  // Per-group requirements
+  if(shs.length){
+    y=pdfSection(doc,y,'Training Requirements by Group',w);
+    const rows=shs.map(sh=>[sh.name,sh.objectives?.join('; ')||'None defined',
+      sh.kirk?.L1?.method||'TBD',sh.kirk?.L1?.timing||'TBD',
+      sh.kirk?.L2?.method||'TBD',sh.kirk?.L2?.assessment||'TBD',kirkReady(sh).toUpperCase()]);
+    doc.autoTable({startY:y,head:[['Group','Learning Objectives','Delivery Method','Timing','Assessment','Standard','Kirk Status']],body:rows,
+      margin:{left:14,right:14},styles:{fontSize:6.5,cellPadding:2},columnStyles:{1:{cellWidth:45}},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // Post-training observation (L3/L4)
+  const l34=shs.filter(sh=>sh.kirk?.L3?.observable||sh.kirk?.L4?.outcome);
+  if(l34.length){
+    y=pdfCheckPage(doc,y,w,h,pg,40);
+    y=pdfSection(doc,y,'Post-Training Measurement (L3/L4)',w);
+    const rows34=l34.map(sh=>[sh.name,sh.kirk?.L3?.observable||'—',
+      sh.kirk?.L3?.interval?(sh.kirk.L3.interval+' days post go-live'):'—',
+      sh.kirk?.L4?.outcome||'—',sh.kirk?.L4?.metric||'—']);
+    doc.autoTable({startY:y,head:[['Group','Observable Behavior (L3)','Observation Interval','Business Outcome (L4)','Success Metric']],body:rows34,
+      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // Gap analysis training impacts
+  const gaps=(p.gapAnalysis?.gaps||[]).filter(g=>g.trainingImpact);
+  if(gaps.length){
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'Training Adjustments from Gap Analysis',w);
+    const gRows=gaps.map(g=>[g.severity,g.description?.substring(0,80)||'',g.trainingImpact,g.status]);
+    doc.autoTable({startY:y,head:[['Severity','Gap','Training Impact','Status']],body:gRows,
+      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // Training team
+  const trainRes=RES_ROLES.filter(ro=>['ocm_train','smes'].includes(ro.key))
+    .flatMap(ro=>(p.resources?.[ro.key]||[]).filter(r=>r.name).map(r=>([ro.label,r.name,r.contact||''])));
+  if(trainRes.length){
+    y=pdfCheckPage(doc,y,w,h,pg,25);
+    y=pdfSection(doc,y,'Training Team',w);
+    doc.autoTable({startY:y,head:[['Role','Name','Contact']],body:trainRes,
+      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  pdfFooter(doc,w,h,pg[0]);
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  toggleGenMenu();
+  }catch(e){console.error('Training Plan PDF:',e);alert('Error generating PDF: '+e.message);}
+}
+
+function genCommsPlan(){
+  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  const p=getProj();const r=getRel();if(!p||!r)return;
+  try{
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const brand=getBrand();
+  pdfCover(doc,w,h,'Communications Plan',fwName()+'-Aligned Messaging Strategy',p,r,brand);
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  // ADKAR gap-driven objectives
+  y=pdfSection(doc,y,'Communications Objectives',w);
+  const scores=p.adkarScores||{A1:3,D:3,K:3,Ab:3,R:3};
+  const gapDims=ADKAR_DIMS.filter(d=>(scores[d.key]||3)<3);
+  doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
+  if(gapDims.length===0){doc.text('All '+fwShort()+' dimensions are at acceptable levels (3+/5). Communications should focus on sustaining momentum.',14,y+5);y+=12;}
+  else{
+    doc.text('The following '+fwShort()+' gaps require targeted communications:',14,y+5);y+=10;
+    gapDims.forEach(d=>{
+      const mf=ADKAR_MSG_FOCUS[d.key]||{focus:'General awareness building',channel:'Multiple channels'};
+      doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);
+      doc.text(d.word+' ('+scores[d.key]+'/5)',14,y+4);
+      doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+      doc.text('Message focus: '+mf.focus,24,y+10);
+      doc.text('Recommended channels: '+mf.channel,24,y+15);y+=22;
+    });
+  }
+  // Audience matrix
+  const shs=p.stakeholders||[];
+  if(shs.length){
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'Audience Matrix',w);
+    const igs=(p.impactAssessment?.groups)||[];
+    const rows=shs.map(sh=>{
+      const sc=adoptScore(sh.factors);const t=adoptTier(sc);
+      const ig=igs.find(g=>g.name===sh.name);
+      const lowestFactor=AF.length?AF.reduce((min,f)=>(sh.factors?.[f.key]||3)<(sh.factors?.[min.key]||3)?f:min,AF[0]):null;
+      const msgKey=lowestFactor?(lowestFactor.key==='resistance'?'A1':lowestFactor.key==='leadership'?'R':
+        lowestFactor.key==='complexity'?'K':lowestFactor.key==='env'?'Ab':'D'):'A1';
+      const mfEntry=ADKAR_MSG_FOCUS[msgKey]||{focus:'General awareness',channel:'Multiple channels'};
+      return[sh.name,ig?.level||'—',mfEntry.focus,mfEntry.channel,t.tier];
+    });
+    doc.autoTable({startY:y,head:[['Audience','Impact','Key Message Focus','Channel','Risk Tier']],body:rows,
+      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2.5},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // ADKAR scores summary
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,fwName()+' Assessment Summary',w);
+  ADKAR_DIMS.forEach(d=>{
+    const val=scores[d.key]||3;const note=(p.adkarNotes||{})[d.key]||'';
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text(d.word+': '+val+'/5',14,y+4);
+    const barCol=val>=4?[29,104,64]:val>=3?[184,146,42]:[184,50,50];
+    pdfBar(doc,60,y+1,80,val/5*100,barCol[0],barCol[1],barCol[2]);y+=8;
+    if(note){doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(100,100,100);
+      const nLines=doc.splitTextToSize(note,w-28);doc.text(nLines,16,y+2);y+=2+nLines.length*4;}
+    y+=2;
+  });
+  pdfFooter(doc,w,h,pg[0]);
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  toggleGenMenu();
+  }catch(e){console.error('Comms Plan PDF:',e);alert('Error generating PDF: '+e.message);}
+}
+
+function genResistancePlan(){
+  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  const p=getProj();const r=getRel();if(!p||!r)return;
+  try{
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const brand=getBrand();
+  pdfCover(doc,w,h,'Resistance Management Plan','Risk Mitigation & Adoption Sustainment',p,r,brand);
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  // Risk summary
+  y=pdfSection(doc,y,'Risk Summary',w);
+  const flags=getProjFlags(p);const shs=p.stakeholders||[];
+  const critSH=shs.filter(sh=>adoptScore(sh.factors)<60);
+  const adkar=parseFloat(projAdkarAvg(p));
+  const gaps=(p.gapAnalysis?.gaps||[]).filter(g=>g.description);
+  const critGaps=gaps.filter(g=>g.severity==='Critical');
+  doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
+  doc.text('Active risk flags: '+flags.length,14,y+5);
+  doc.text('Critical/high-risk stakeholder groups: '+critSH.length,14,y+11);
+  doc.text(fwShort()+' average: '+adkar+'/5'+(adkar<3?' (below threshold)':''),14,y+17);
+  doc.text('Open implementation gaps: '+gaps.length+' ('+critGaps.length+' critical)',14,y+23);y+=32;
+  // Active risk flags
+  if(flags.length){
+    y=pdfSection(doc,y,'Active Risk Flags',w);
+    const fRows=flags.map(f=>[f.gate||'',f.item||'',f.consequence||'',f.defOwner||'Unassigned']);
+    doc.autoTable({startY:y,head:[['Gate','Gap Item','Consequence','Owner']],body:fRows,
+      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+      headStyles:{fillColor:[184,50,50],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // Implementation gaps
+  if(gaps.length){
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'Implementation Gaps Affecting Adoption',w);
+    const gRows=gaps.map(g=>[g.severity,g.description?.substring(0,80)||'',g.trainingImpact||'—']);
+    doc.autoTable({startY:y,head:[['Severity','Gap Description','Training / Adoption Impact']],body:gRows,
+      margin:{left:14,right:14},styles:{fontSize:6.5,cellPadding:2},
+      headStyles:{fillColor:[184,146,42],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // Resistance indicators by group
+  if(critSH.length){
+    y=pdfCheckPage(doc,y,w,h,pg,40);
+    y=pdfSection(doc,y,'Resistance Indicators by Group',w);
+    critSH.forEach(sh=>{
+      y=pdfCheckPage(doc,y,w,h,pg,35);
+      const sc=adoptScore(sh.factors);
+      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);
+      doc.text(sh.name+' — '+sc+'% adoption likelihood',14,y+4);y+=9;
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+      const lowFactors=AF.filter(f=>(sh.factors?.[f.key]||3)<=2).sort((a,b)=>(sh.factors?.[a.key]||3)-(sh.factors?.[b.key]||3));
+      lowFactors.forEach(f=>{
+        doc.text('• '+f.label+' ('+(sh.factors?.[f.key]||3)+'/5): '+(RESIST_INTERVENTIONS[f.key]||'Targeted intervention required'),16,y+3);y+=6;
+      });
+      if(lowFactors.length===0&&AF.length){
+        const allF=AF.map(f=>({...f,val:sh.factors?.[f.key]||3})).sort((a,b)=>a.val-b.val);
+        if(allF[0])doc.text('• Lowest factor: '+allF[0].label+' ('+allF[0].val+'/5): '+(RESIST_INTERVENTIONS[allF[0].key]||'Targeted intervention required'),16,y+3);y+=6;
+      }
+      y+=4;
+    });
+  }
+  // ADKAR barrier analysis
+  const adkarGaps=ADKAR_DIMS.filter(d=>(p.adkarScores?.[d.key]||3)<3);
+  if(adkarGaps.length){
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,fwShort()+' Barrier Analysis',w);
+    adkarGaps.forEach(d=>{
+      const val=p.adkarScores[d.key];const note=(p.adkarNotes||{})[d.key]||'';
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);
+      doc.text(d.word+': '+val+'/5',14,y+4);y+=7;
+      if(note){doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(80,80,80);
+        const nLines=doc.splitTextToSize(note,w-28);doc.text(nLines,16,y+2);y+=2+nLines.length*4+2;}
+    });
+  }
+  // Reinforcement plans
+  const reinShs=shs.filter(sh=>sh.rein?.owner);
+  if(reinShs.length){
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'Reinforcement Plans',w);
+    const rRows=reinShs.map(sh=>[sh.name,sh.rein.owner,sh.rein.activities||'',
+      sh.rein.intervals?.join(', ')||'',sh.rein.escalation||'']);
+    doc.autoTable({startY:y,head:[['Group','Owner','Activities','Intervals','Escalation']],body:rRows,
+      margin:{left:14,right:14},styles:{fontSize:6.5,cellPadding:2},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  pdfFooter(doc,w,h,pg[0]);
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  toggleGenMenu();
+  }catch(e){console.error('Resistance Plan PDF:',e);alert('Error generating PDF: '+e.message);}
+}
+
+function genReadinessRec(){
+  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  const p=getProj();const r=getRel();if(!p||!r)return;
+  try{
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const brand=getBrand();const rec=calcReadinessRec(p);
+  pdfCover(doc,w,h,'Adoption Readiness Recommendation','Gate Review Assessment',p,r,brand);
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  // Recommendation status
+  y=pdfSection(doc,y,'Recommendation',w);
+  doc.setFillColor(rec.color[0],rec.color[1],rec.color[2]);
+  doc.roundedRect(14,y+2,w-28,16,3,3,'F');
+  doc.setFontSize(14);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
+  doc.text(rec.label.toUpperCase(),w/2,y+12,{align:'center'});y+=26;
+  // Evidence dashboard
+  y=pdfSection(doc,y,'Evidence Dashboard',w);
+  const gate=projGateScore(p);const adkar=parseFloat(projAdkarAvg(p));
+  const flags=getProjFlags(p);const shs=p.stakeholders||[];
+  const gaps=(p.gapAnalysis?.gaps||[]).filter(g=>g.description);
+  const metrics=[['Gate Readiness',(gate||0)+'%',gate>=80?'Pass':gate>=50?'Marginal':'Fail'],
+    [fwShort()+' Average',adkar+'/5',adkar>=3.5?'Pass':adkar>=2.5?'Marginal':'Fail'],
+    ['Active Risk Flags',flags.length+'',flags.length===0?'Pass':flags.length<=2?'Marginal':'Fail'],
+    ['Open Gaps',gaps.length+'',gaps.filter(g=>g.severity==='Critical').length===0?'Pass':'Fail'],
+    ['Stakeholder Groups',shs.length+'','—']];
+  doc.autoTable({startY:y,head:[['Metric','Value','Assessment']],body:metrics,
+    margin:{left:14,right:14},styles:{fontSize:9,cellPadding:3},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+  // ADKAR breakdown
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,fwShort()+' Readiness',w);
+  ADKAR_DIMS.forEach(d=>{
+    const val=p.adkarScores?.[d.key]||3;
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+    doc.text(d.word,14,y+4);
+    const c=val>=4?[29,104,64]:val>=3?[184,146,42]:[184,50,50];
+    pdfBar(doc,55,y+1,90,val/5*100,c[0],c[1],c[2]);
+    doc.text(val+'/5',150,y+4);y+=8;
+  });y+=6;
+  // Stakeholder readiness
+  if(shs.length){
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'Stakeholder Readiness Summary',w);
+    const sRows=shs.map(sh=>{const sc=adoptScore(sh.factors);return[sh.name,sc+'%',adoptTier(sc).tier,kirkReady(sh).toUpperCase(),reinReady(sh).toUpperCase()];});
+    doc.autoTable({startY:y,head:[['Group','Adoption %','Risk Tier','Kirkpatrick','Reinforcement']],body:sRows,
+      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2.5},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  // Risk flags
+  if(flags.length){
+    y=pdfCheckPage(doc,y,w,h,pg,25);
+    y=pdfSection(doc,y,'Risk Flags Requiring Resolution',w);
+    const fRows=flags.map(f=>[f.gate||'',f.item||'',f.consequence||'']);
+    doc.autoTable({startY:y,head:[['Gate','Gap','Consequence']],body:fRows,
+      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+      headStyles:{fillColor:[184,50,50],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+10;
+  }
+  pdfFooter(doc,w,h,pg[0]);
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  toggleGenMenu();
+  }catch(e){console.error('Readiness Rec PDF:',e);alert('Error generating PDF: '+e.message);}
+}
+
+function genFullPackage(){
+  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  const p=getProj();const r=getRel();if(!p||!r)return;
+  // Generate all 5 individually (each opens in new tab)
+  // For a combined PDF, we'd need to merge — for now, generate the most comprehensive one: Readiness Recommendation
+  // which contains evidence from all areas
+  alert('Generating all 5 deliverables. Each will open in a separate tab.');
+  toggleGenMenu();
+  setTimeout(()=>genStakeholderAnalysis(),100);
+  setTimeout(()=>genTrainingPlan(),300);
+  setTimeout(()=>genCommsPlan(),500);
+  setTimeout(()=>genResistancePlan(),700);
+  setTimeout(()=>genReadinessRec(),900);
+}
+
+// ════════════════════════════════════════════════════════
 // TEAM COLLABORATION + RBAC
 // ════════════════════════════════════════════════════════
 let currentUserRole='owner'; // default for own releases
@@ -2204,7 +3256,7 @@ function setDemoMode(on){
   });
 }
 function exitDemo(){
-  localStorage.removeItem('adoptiq_data');
+  localStorage.removeItem(storageKey());
   isDemoMode=false;
   setDemoMode(false);
   releases=[];
@@ -2359,7 +3411,7 @@ async function loadDemoData(){
   p1a.resources.ocm_impl=[{name:'James Mitchell',contact:''}];
   p1a.resources.pm=[{name:'Asha Patel',contact:''}];
   p1a.resources.func=[{name:'Dr. Emily Wilson',contact:''}];
-  p1a.stakeholders=[{name:'Attending Physicians',factors:{resistance:4,env:3,window:2,complexity:5,saturation:4,leadership:4},objectives:['Document patient encounters in new EHR','Generate clinical quality reports'],kirk:{L1:{method:'In-person workshop',timing:'Pre-go-live'},L2:{method:'Case-based assessment',assessment:'90% accuracy'},L3:{observable:'Documentation compliance',interval:'14-day post go-live'},L4:{outcome:'Zero clinical safety events',metric:'Safety event tracker'}},rein:{owner:'Chief Medical Officer',activities:'Weekly physician council + lunch sessions',intervals:['Week 1','Week 2','Week 3'],escalation:'Escalate if < 80% documentation compliance'}}];
+  p1a.stakeholders=[{id:uid(),name:'Attending Physicians',factors:{resistance:4,env:3,window:2,complexity:5,saturation:4,leadership:4},objectives:['Document patient encounters in new EHR','Generate clinical quality reports'],kirk:{L1:{method:'In-person workshop',timing:'Pre-go-live'},L2:{method:'Case-based assessment',assessment:'90% accuracy'},L3:{observable:'Documentation compliance',interval:'14-day post go-live'},L4:{outcome:'Zero clinical safety events',metric:'Safety event tracker'}},rein:{owner:'Chief Medical Officer',activities:'Weekly physician council + lunch sessions',intervals:['Week 1','Week 2','Week 3'],escalation:'Escalate if < 80% documentation compliance'}}];
   const p1b=newProject('Nursing Documentation',['HCA Healthcare'],8500);
   p1b.status='In Progress';
   p1b.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'yellow',g1_4:'yellow',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'yellow',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'yellow'};
@@ -2367,13 +3419,19 @@ async function loadDemoData(){
   p1b.resources.ocm_train=[{name:'Patricia Johnson',contact:''}];
   p1b.resources.ocm_impl=[{name:'Michael Chen',contact:''}];
   p1b.resources.pm=[{name:'Sophia Rodriguez',contact:''}];
-  p1b.stakeholders=[{name:'RN Staff',factors:{resistance:3,env:4,window:3,complexity:4,saturation:3,leadership:3},objectives:['Complete shift assessments','Enter vital signs + interventions'],kirk:{L1:{method:'Classroom + hands-on lab',timing:'2 days pre-go-live'},L2:{method:'Simulation with scenarios',assessment:'Pass/fail'},L3:{observable:'Shift charting time',interval:'30-day post go-live'},L4:{outcome:'Patient safety metrics maintained',metric:'Safety dashboard'}},rein:{owner:'Chief Nursing Officer',activities:'Daily floor huddles + super-user rounds',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate to Nursing Leadership if issues arise'}}];
+  p1b.stakeholders=[{id:uid(),name:'RN Staff',factors:{resistance:3,env:4,window:3,complexity:4,saturation:3,leadership:3},objectives:['Complete shift assessments','Enter vital signs + interventions'],kirk:{L1:{method:'Classroom + hands-on lab',timing:'2 days pre-go-live'},L2:{method:'Simulation with scenarios',assessment:'Pass/fail'},L3:{observable:'Shift charting time',interval:'30-day post go-live'},L4:{outcome:'Patient safety metrics maintained',metric:'Safety dashboard'}},rein:{owner:'Chief Nursing Officer',activities:'Daily floor huddles + super-user rounds',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate to Nursing Leadership if issues arise'}}];
   p1a.impactAssessment={groups:[
     {name:'Attending Physicians',level:'High',changeTypes:['Technology','Process'],currentState:'Paper-based charting with legacy EHR for order entry. Physicians dictate notes for transcription.',futureState:'Full electronic documentation with CPOE, real-time clinical decision support, and integrated patient portal.',actions:[{text:'Complete physician workflow analysis',done:true},{text:'Schedule hands-on EHR lab sessions',done:true},{text:'Assign super-user physician champions per department',done:false},{text:'Develop quick-reference workflow cards',done:false}]},
     {name:'Medical Assistants',level:'Medium',changeTypes:['Technology','People'],currentState:'Manual vitals entry and paper intake forms. Limited system access.',futureState:'Tablet-based intake with auto-populated patient history and vitals integration.',actions:[{text:'Identify MA training cohorts by clinic',done:true},{text:'Create role-specific job aids',done:false}]}
   ]};
   p1b.impactAssessment={groups:[
     {name:'RN Staff — Inpatient',level:'High',changeTypes:['Technology','Process','People'],currentState:'Shift handoffs via paper reports. Medication scanning on legacy system.',futureState:'Electronic shift handoff with barcode medication administration (BCMA) and real-time alerts.',actions:[{text:'Map current nursing workflows per unit',done:true},{text:'Build simulation scenarios for BCMA',done:true},{text:'Coordinate with Pharmacy on med reconciliation',done:false}]}
+  ]};
+  p1a.gapAnalysis={gaps:[
+    {id:uid(),description:'EHR order entry workflow does not support verbal orders — physicians must enter all orders directly into the system.',severity:'High',trainingImpact:'Proxy order entry role requires new training module for clinical support staff. Adds 2 hours to training curriculum.'},
+    {id:uid(),description:'Legacy lab interface does not support real-time results feed — 15-minute delay in lab result availability.',severity:'Medium',trainingImpact:'Users must be trained on expected latency and manual refresh workflow during transition period.'},
+    {id:uid(),description:'Patient portal registration requires dual authentication not supported by current SSO configuration.',severity:'Critical',trainingImpact:'Front desk staff need training on manual registration fallback process. Portal training for patients deferred until SSO is resolved.'},
+    {id:uid(),description:'Custom clinical note templates from legacy system have been migrated and validated.',severity:'Low',trainingImpact:'No additional training impact — templates match existing workflow.'}
   ]};
   r1.projects=[p1a,p1b];
   releases.push(r1);
@@ -2388,7 +3446,7 @@ async function loadDemoData(){
   p2a.resources.ocm_impl=[{name:'Lisa Anderson',contact:''}];
   p2a.resources.pm=[{name:'David Thompson',contact:''}];
   p2a.resources.func=[{name:'Michelle Lee',contact:''}];
-  p2a.stakeholders=[{name:'Branch Tellers',factors:{resistance:3,env:3,window:3,complexity:3,saturation:2,leadership:3},objectives:['Process deposits/withdrawals','Handle wire transfers','Customer authentication verification'],kirk:{L1:{method:'Role-based training modules',timing:'2 weeks pre-go-live'},L2:{method:'Transaction simulation',assessment:'100 test cases'},L3:{observable:'Avg transaction time',interval:'14-day post go-live'},L4:{outcome:'Zero fraudulent transactions',metric:'Risk dashboard'}},rein:{owner:'Branch Managers',activities:'Daily check-ins + super-user support',intervals:['Week 1','Week 2','Week 4'],escalation:'Escalate if transaction errors exceed 0.5%'}}];
+  p2a.stakeholders=[{id:uid(),name:'Branch Tellers',factors:{resistance:3,env:3,window:3,complexity:3,saturation:2,leadership:3},objectives:['Process deposits/withdrawals','Handle wire transfers','Customer authentication verification'],kirk:{L1:{method:'Role-based training modules',timing:'2 weeks pre-go-live'},L2:{method:'Transaction simulation',assessment:'100 test cases'},L3:{observable:'Avg transaction time',interval:'14-day post go-live'},L4:{outcome:'Zero fraudulent transactions',metric:'Risk dashboard'}},rein:{owner:'Branch Managers',activities:'Daily check-ins + super-user support',intervals:['Week 1','Week 2','Week 4'],escalation:'Escalate if transaction errors exceed 0.5%'}}];
   const p2b=newProject('Online Banking',['JPMorgan'],45000);
   p2b.status='Not Started';
   p2b.gateState={g1_0:'yellow',g1_1:'yellow',g1_2:'red',g1_3:'red',g1_4:'red'};
@@ -2399,6 +3457,8 @@ async function loadDemoData(){
   p2a.impactAssessment={groups:[
     {name:'Branch Tellers',level:'High',changeTypes:['Technology','Process'],currentState:'Legacy teller terminal with manual transaction entry. Paper-based customer verification.',futureState:'Modern teller platform with biometric auth, real-time fraud detection, and integrated CRM.',actions:[{text:'Complete branch-by-branch readiness assessment',done:true},{text:'Deploy practice environment to pilot branches',done:false},{text:'Train branch managers as local champions',done:false}]}
   ]};
+  p2b.stakeholders=[{id:uid(),name:'Branch Tellers',factors:{resistance:3,env:2,window:3,complexity:4,saturation:3,leadership:3},objectives:['Navigate new online banking portal','Assist customers with digital migration','Troubleshoot common login issues'],kirk:{L1:{method:'eLearning + branch huddles',timing:'4 weeks pre-launch'},L2:{method:'Scenario-based quiz',assessment:'85% pass rate'},L3:{observable:'Customer assist accuracy',interval:'30-day post launch'},L4:{outcome:'Reduce in-branch transactions 20%',metric:'Transaction analytics'}},rein:{owner:'Branch Manager',activities:'Weekly huddles + floor support',intervals:['Week 1','Week 2','Month 1'],escalation:'Escalate if adoption below 60%'}}];
+  p2b.impactAssessment={groups:[{name:'Branch Tellers',level:'Medium',changeTypes:['Technology','Process'],currentState:'Assist customers in-branch for all banking needs.',futureState:'Guide customers to self-service digital channels, handle exceptions only.',actions:[{text:'Develop digital migration talking points',done:false},{text:'Pilot with select branches',done:false}]}]};
   r2.projects=[p2a,p2b];
   releases.push(r2);
 
@@ -2411,7 +3471,8 @@ async function loadDemoData(){
   p3a.resources.ocm_train=[{name:'Klaus Weber',contact:''}];
   p3a.resources.ocm_impl=[{name:'Marco Rossi',contact:''}];
   p3a.resources.pm=[{name:'Anna Schmidt',contact:''}];
-  p3a.stakeholders=[{name:'Machine Operators',factors:{resistance:4,env:2,window:2,complexity:5,saturation:3,leadership:2},objectives:['Operate in new MES','Enter production data','Respond to system alerts'],kirk:{L1:{method:'Hands-on factory training',timing:'3 days pre-go-live'},L2:{method:'Production simulation line',assessment:'Pass safety + speed checks'},L3:{observable:'Downtime reduction',interval:'30-day post cutover'},L4:{outcome:'5% efficiency improvement',metric:'Production metrics'}},rein:{owner:'Plant Manager',activities:'Shift leader check-ins + production reviews',intervals:['Daily','Week 1','Week 4'],escalation:'Stop production if error rate > 2%'}},{name:'Warehouse Staff',factors:{resistance:3,env:3,window:3,complexity:4,saturation:3,leadership:3},objectives:['Pick items per SAP','Manage inventory transfers','Scan and reconcile'],kirk:{L1:{method:'Classroom SAP basics',timing:'1 week pre-cutover'},L2:{method:'Mock warehouse drill',assessment:'Speed + accuracy'},L3:{observable:'Inventory accuracy',interval:'14-day post go-live'},L4:{outcome:'Cycle count time < 2 hours',metric:'Inventory reports'}},rein:{owner:'Warehouse Manager',activities:'Daily huddles + floor supervision',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate if cycle counts fail'}}];
+  p3a.stakeholders=[{id:uid(),name:'Machine Operators',factors:{resistance:4,env:2,window:2,complexity:5,saturation:3,leadership:2},objectives:['Operate in new MES','Enter production data','Respond to system alerts'],kirk:{L1:{method:'Hands-on factory training',timing:'3 days pre-go-live'},L2:{method:'Production simulation line',assessment:'Pass safety + speed checks'},L3:{observable:'Downtime reduction',interval:'30-day post cutover'},L4:{outcome:'5% efficiency improvement',metric:'Production metrics'}},rein:{owner:'Plant Manager',activities:'Shift leader check-ins + production reviews',intervals:['Daily','Week 1','Week 4'],escalation:'Stop production if error rate > 2%'}},{id:uid(),name:'Warehouse Staff',factors:{resistance:3,env:3,window:3,complexity:4,saturation:3,leadership:3},objectives:['Pick items per SAP','Manage inventory transfers','Scan and reconcile'],kirk:{L1:{method:'Classroom SAP basics',timing:'1 week pre-cutover'},L2:{method:'Mock warehouse drill',assessment:'Speed + accuracy'},L3:{observable:'Inventory accuracy',interval:'14-day post go-live'},L4:{outcome:'Cycle count time < 2 hours',metric:'Inventory reports'}},rein:{owner:'Warehouse Manager',activities:'Daily huddles + floor supervision',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate if cycle counts fail'}},{id:uid(),name:'HR Business Partners',factors:{resistance:2,env:3,window:3,complexity:3,saturation:3,leadership:4},objectives:['Support workforce transition communications','Manage role changes in HRIS','Coordinate retraining programs'],kirk:{L1:{method:'Virtual briefing',timing:'2 weeks pre-cutover'},L2:{method:'Scenario walkthrough',assessment:'Role mapping proficiency'},L3:{observable:'HRIS update accuracy',interval:'30-day post cutover'},L4:{outcome:'Zero workforce disruption grievances',metric:'HR case log'}},rein:{owner:'HR Director',activities:'Monthly alignment meetings + change impact reviews',intervals:['Month 1','Month 2'],escalation:'Escalate if grievances filed'}}];
+  p3a.impactAssessment={groups:[{name:'Machine Operators',level:'Critical',changeTypes:['Technology','Process','Role'],currentState:'Manual production tracking with paper-based work orders.',futureState:'Digital MES with real-time production monitoring and automated work orders.',actions:[{text:'Complete floor-by-floor readiness assessment',done:false},{text:'Set up training simulation line',done:false}]},{name:'HR Business Partners',level:'Medium',changeTypes:['Process'],currentState:'Manual workforce planning and role definitions.',futureState:'SAP-integrated workforce planning with automated role mapping.',actions:[{text:'Map current roles to new SAP structure',done:false}]}]};
   r3.projects=[p3a];
   releases.push(r3);
 
@@ -2433,14 +3494,14 @@ async function loadDemoData(){
   // Release 5: State Benefits Portal (Government - Live)
   const r5=newRelease('State Benefits Portal Modernization',['GSA','DeloitteGov'],'2025-11-30','Active Production');
   const p5a=newProject('Case Management System',['GSA'],12500);
-  p5a.status='Completed';
+  p5a.status='Complete';
   p5a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
   migrateResources(p5a);
   p5a.resources.ocm_train=[{name:'Patricia Walsh',contact:''}];
   p5a.resources.ocm_impl=[{name:'Charles Thompson',contact:''}];
   p5a.resources.pm=[{name:'Rebecca Martinez',contact:''}];
   p5a.resources.func=[{name:'Dr. Jonathan Lee',contact:''}];
-  p5a.stakeholders=[{name:'Case Workers',factors:{resistance:2,env:3,window:4,complexity:3,saturation:2,leadership:4},objectives:['Manage benefit applications','Process claims quickly','Document client interactions'],kirk:{L1:{method:'Classroom + online modules',timing:'6 weeks pre-launch'},L2:{method:'Job shadowing + practice cases',assessment:'100% accuracy required'},L3:{observable:'Case processing time',interval:'30-day post launch'},L4:{outcome:'Zero benefits processing delays',metric:'Claims dashboard'}},rein:{owner:'Regional Director',activities:'Weekly supervisor check-ins + monthly town halls',intervals:['Weekly','Monthly'],escalation:'Escalate if processing time exceeds SLA'}},{name:'Agency Leadership',factors:{resistance:1,env:4,window:5,complexity:2,saturation:1,leadership:5},objectives:['Monitor system performance','Meet constituent service metrics','Track budget savings'],kirk:{L1:{method:'Executive briefing',timing:'2 weeks pre-launch'},L2:{method:'Dashboard training',assessment:'Operational proficiency'},L3:{observable:'System availability',interval:'Ongoing'},L4:{outcome:'90% constituent satisfaction',metric:'Feedback surveys'}},rein:{owner:'Deputy Commissioner',activities:'Monthly performance reviews + quarterly steering committee',intervals:['Monthly','Quarterly'],escalation:'Escalate if system availability < 99.5%'}}];
+  p5a.stakeholders=[{id:uid(),name:'Case Workers',factors:{resistance:2,env:3,window:4,complexity:3,saturation:2,leadership:4},objectives:['Manage benefit applications','Process claims quickly','Document client interactions'],kirk:{L1:{method:'Classroom + online modules',timing:'6 weeks pre-launch'},L2:{method:'Job shadowing + practice cases',assessment:'100% accuracy required'},L3:{observable:'Case processing time',interval:'30-day post launch'},L4:{outcome:'Zero benefits processing delays',metric:'Claims dashboard'}},rein:{owner:'Regional Director',activities:'Weekly supervisor check-ins + monthly town halls',intervals:['Weekly','Monthly'],escalation:'Escalate if processing time exceeds SLA'}},{id:uid(),name:'Agency Leadership',factors:{resistance:1,env:4,window:5,complexity:2,saturation:1,leadership:5},objectives:['Monitor system performance','Meet constituent service metrics','Track budget savings'],kirk:{L1:{method:'Executive briefing',timing:'2 weeks pre-launch'},L2:{method:'Dashboard training',assessment:'Operational proficiency'},L3:{observable:'System availability',interval:'Ongoing'},L4:{outcome:'90% constituent satisfaction',metric:'Feedback surveys'}},rein:{owner:'Deputy Commissioner',activities:'Monthly performance reviews + quarterly steering committee',intervals:['Monthly','Quarterly'],escalation:'Escalate if system availability < 99.5%'}}];
   const p5b=newProject('Public Portal & Self-Service',['GSA'],8300);
   p5b.status='Completed';
   p5b.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
@@ -2448,9 +3509,28 @@ async function loadDemoData(){
   p5b.resources.ocm_train=[{name:'Margaret Chen',contact:''}];
   p5b.resources.ocm_impl=[{name:'William Rodriguez',contact:''}];
   p5b.resources.pm=[{name:'Katherine Johnson',contact:''}];
-  p5b.stakeholders=[{name:'Constituents/Public Users',factors:{resistance:3,env:2,window:3,complexity:2,saturation:2,leadership:2},objectives:['Access benefit information','Submit applications online','Track application status'],kirk:{L1:{method:'Website tutorials + FAQs',timing:'Ongoing'},L2:{method:'Call center training pilot',assessment:'Support staff proficiency'},L3:{observable:'Portal usage adoption',interval:'30-day post launch'},L4:{outcome:'50% online submission rate',metric:'Portal analytics'}},rein:{owner:'Help Desk Manager',activities:'Daily monitoring + weekly optimization',intervals:['Daily','Weekly'],escalation:'Escalate if 311 call volume spikes'}}];
+  p5b.stakeholders=[{id:uid(),name:'Constituents/Public Users',factors:{resistance:3,env:2,window:3,complexity:2,saturation:2,leadership:2},objectives:['Access benefit information','Submit applications online','Track application status'],kirk:{L1:{method:'Website tutorials + FAQs',timing:'Ongoing'},L2:{method:'Call center training pilot',assessment:'Support staff proficiency'},L3:{observable:'Portal usage adoption',interval:'30-day post launch'},L4:{outcome:'50% online submission rate',metric:'Portal analytics'}},rein:{owner:'Help Desk Manager',activities:'Daily monitoring + weekly optimization',intervals:['Daily','Weekly'],escalation:'Escalate if 311 call volume spikes'}},{id:uid(),name:'Agency Leadership',factors:{resistance:1,env:4,window:5,complexity:2,saturation:1,leadership:5},objectives:['Monitor portal adoption metrics','Ensure constituent satisfaction','Report to oversight committee'],kirk:{L1:{method:'Executive dashboard walkthrough',timing:'1 week pre-launch'},L2:{method:'Dashboard proficiency check',assessment:'Operational'},L3:{observable:'Dashboard usage frequency',interval:'Monthly'},L4:{outcome:'Positive constituent feedback trend',metric:'Satisfaction surveys'}},rein:{owner:'Deputy Commissioner',activities:'Quarterly steering committee + monthly KPI review',intervals:['Monthly','Quarterly'],escalation:'Escalate if satisfaction drops below 80%'}}];
+  p5b.impactAssessment={groups:[{name:'Constituents/Public Users',level:'High',changeTypes:['Technology','Process'],currentState:'In-person and phone-based service delivery.',futureState:'Digital self-service portal for benefits and applications.',actions:[{text:'Develop accessibility compliance plan',done:true},{text:'User testing with diverse populations',done:false}]},{name:'Agency Leadership',level:'Low',changeTypes:['Process'],currentState:'Manual reporting and in-person oversight.',futureState:'Real-time digital dashboards and automated reporting.',actions:[{text:'Dashboard training for leadership team',done:false}]}]};
   r5.projects=[p5a,p5b];
   releases.push(r5);
+
+  // Release 6: Completed project with post-launch data
+  const r6=newRelease('Payroll Modernization',['ADP','Deloitte'],'2026-02-15','Complete');
+  const p6a=newProject('Payroll Engine',['ADP'],1200);
+  p6a.status='Complete';p6a.golive='2026-02-15';
+  p6a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green',g3_2:'green',g3_3:'green',g3_4:'green',g3_5:'green',g4_0:'green',g4_1:'green',g4_2:'green',g4_3:'green',g4_4:'green',g4_5:'green'};
+  migrateResources(p6a);
+  p6a.adkarScores={A1:4,D:4,K:3,Ab:3,R:4};
+  p6a.stakeholders=[
+    {id:uid(),name:'Payroll Specialists',factors:{resistance:4,env:4,window:3,complexity:3,saturation:4,leadership:4},objectives:['Process biweekly payroll','Handle tax filings','Manage garnishments'],kirk:{L1:{method:'Instructor-led workshops',timing:'3 weeks pre go-live'},L2:{method:'Parallel payroll run',assessment:'Zero-variance test'},L3:{observable:'Processing time per cycle',interval:'30'},L4:{outcome:'Zero payroll errors for 3 cycles',metric:'Error rate dashboard'}},rein:{owner:'Payroll Manager',activities:'Weekly check-ins + error review',intervals:['Week 1','Week 2','Month 1'],escalation:'Escalate if error rate exceeds 0.1%'}},
+    {id:uid(),name:'HR Business Partners',factors:{resistance:3,env:3,window:4,complexity:2,saturation:3,leadership:4},objectives:['Run compensation reports','Manage employee records','Support managers with payroll queries'],kirk:{L1:{method:'Self-paced eLearning',timing:'2 weeks pre go-live'},L2:{method:'Report generation quiz',assessment:'Pass/Fail'},L3:{observable:'Report accuracy',interval:'30'},L4:{outcome:'Reduced payroll queries to HR',metric:'Ticket volume'}},rein:{owner:'HR Director',activities:'Monthly review + refresher sessions',intervals:['Month 1','Month 2','Month 3'],escalation:'Escalate if query volume increases'}}
+  ];
+  // Post-launch observation data
+  p6a.postLaunch={};
+  p6a.postLaunch[p6a.stakeholders[0].id]={d30:{adoption:82,tickets:14,proficiency:78,notes:'Strong adoption, minor issues with garnishment module.'},d60:{adoption:91,tickets:6,proficiency:88,notes:'Significant improvement. Team is self-sufficient.'}};
+  p6a.postLaunch[p6a.stakeholders[1].id]={d30:{adoption:68,tickets:22,proficiency:65,notes:'Struggling with new report builder. Additional coaching scheduled.'}};
+  r6.projects=[p6a];
+  releases.push(r6);
 
   await saveData();setDemoMode(true);renderPortfolio();renderAlerts();
   initTopBrand();
@@ -2510,7 +3590,7 @@ async function renderAuditLog(){
   container.innerHTML='<div style="color:var(--ink-60);font-size:12px;padding:8px 0">Loading\u2026</div>';
   const{data,error}=await _supabase.from('audit_log').select('*').eq('user_id',currentUserId).order('created_at',{ascending:false}).limit(50);
   if(error||!data||!data.length){container.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet.</p></div>';return;}
-  const ACTION_LABELS={release_created:'Release Created',release_deleted:'Release Removed',project_created:'Project Added',project_deleted:'Project Removed',gate_updated:'Gate Updated',adkar_updated:'ADKAR Updated'};
+  const ACTION_LABELS={release_created:'Release Created',release_deleted:'Release Removed',project_created:'Project Added',project_deleted:'Project Removed',gate_updated:'Gate Updated',adkar_updated:fwShort()+' Updated'};
   container.innerHTML=data.map(row=>{
     const ts=new Date(row.created_at);
     const tsStr=ts.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+ts.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
@@ -2524,28 +3604,36 @@ async function renderAuditLog(){
 function renderAlerts(){
   const bar=document.getElementById('alert-bar');if(!bar)return;
   const today=new Date();today.setHours(0,0,0,0);
+  const dismissed=JSON.parse(sessionStorage.getItem('adoptiq_dismissed_alerts')||'[]');
   const alerts=[];
   releases.forEach(r=>{
     const rl=relRollup(r);
     if(r.golive){
       const d=daysTo(r.golive);
       if(d!==null&&d<0)
-        alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> go-live was <strong>${Math.abs(d)} day${Math.abs(d)===1?'':'s'} ago</strong> — release is overdue.`});
+        alerts.push({id:'overdue-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> go-live was <strong>${Math.abs(d)} day${Math.abs(d)===1?'':'s'} ago</strong> — release is overdue.`});
       else if(d!==null&&d===0)
-        alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live <strong>today</strong> — final readiness check required.`});
+        alerts.push({id:'today-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live <strong>today</strong> — final readiness check required.`});
       else if(d!==null&&d<=7)
-        alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} day${d===1?'':'s'}</strong> — final readiness check required.`});
+        alerts.push({id:'7day-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} day${d===1?'':'s'}</strong> — final readiness check required.`});
       else if(d!==null&&d<=30&&rl.status.cls!=='on-track')
-        alerts.push({cls:'warn',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} days</strong> and is ${rl.status.label}.`});
+        alerts.push({id:'30day-'+r.id,cls:'warn',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} days</strong> and is ${rl.status.label}.`});
     }
     if(rl.status.cls==='critical')
-      alerts.push({cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> is <strong>Critical</strong> — ${rl.flags} active risk flag${rl.flags===1?'':'s'} require attention.`});
+      alerts.push({id:'crit-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> is <strong>Critical</strong> — ${rl.flags} active risk flag${rl.flags===1?'':'s'} require attention.`});
   });
-  // Deduplicate (7-day alert supersedes 30-day)
-  const seen=new Set();const deduped=alerts.filter(a=>{const k=a.msg;if(seen.has(k))return false;seen.add(k);return true;});
+  // Deduplicate and filter dismissed
+  const seen=new Set();const deduped=alerts.filter(a=>{const k=a.id;if(seen.has(k)||dismissed.includes(k))return false;seen.add(k);return true;});
   if(!deduped.length){bar.style.display='none';return;}
   bar.style.display='block';
-  bar.innerHTML=`<div style="max-width:1440px;margin:0 auto;padding:4px 0">${deduped.map(a=>`<div class="alert-item"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span></div>`).join('')}</div>`;
+  bar.innerHTML=`<div style="max-width:1440px;margin:0 auto;padding:4px 0">${deduped.map(a=>`<div class="alert-item" data-alert-id="${a.id}"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span><button class="alert-dismiss" onclick="dismissAlert('${a.id}')" title="Dismiss">&times;</button></div>`).join('')}</div>`;
+}
+function dismissAlert(alertId){
+  const dismissed=JSON.parse(sessionStorage.getItem('adoptiq_dismissed_alerts')||'[]');
+  dismissed.push(alertId);
+  sessionStorage.setItem('adoptiq_dismissed_alerts',JSON.stringify(dismissed));
+  const item=document.querySelector(`.alert-item[data-alert-id="${alertId}"]`);
+  if(item){item.style.transition='opacity 0.2s';item.style.opacity='0';setTimeout(()=>{item.remove();const bar=document.getElementById('alert-bar');if(bar&&!bar.querySelector('.alert-item'))bar.style.display='none';},200);}
 }
 
 // ════════════════════════════════════════════════════════
@@ -2762,6 +3850,7 @@ let _trendSnapshots=[];
 
 async function renderTrendCharts(){
   const container=document.getElementById('trends-sec');if(!container)return;
+  const tatEl=document.getElementById('trend-adkar-title');if(tatEl)tatEl.textContent=fwShort()+' Score Trend';
   let snapshots=[];
   if(isDemoMode){
     snapshots=generateDemoSnapshots();
@@ -2805,7 +3894,7 @@ async function renderTrendCharts(){
   if(kpiEl)kpiEl.innerHTML=`
     <div class="trend-kpi"><div class="trend-kpi-label">Gate Readiness</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,'%',false)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">Risk Flags</div><div class="trend-kpi-val">${curFlags!=null?curFlags:'—'}</div>${deltaHtml(flagDelta,'',true)}</div>
-    <div class="trend-kpi"><div class="trend-kpi-label">ADKAR Score</div><div class="trend-kpi-val">${curAdkar!=null?curAdkar+'/5':'—'}</div>${deltaHtml(adkarDelta,'',false)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">${fwShort()} Score</div><div class="trend-kpi-val">${curAdkar!=null?curAdkar+'/5':'—'}</div>${deltaHtml(adkarDelta,'',false)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">Weeks Tracked</div><div class="trend-kpi-val">${recent.length}</div><span class="trend-delta trend-neutral">${labels[0]} — ${labels[labels.length-1]}</span></div>
   `;
 
@@ -2829,7 +3918,7 @@ async function renderTrendCharts(){
   if(adkarAvgs.length>=3){
     const last3=adkarAvgs.slice(-3);
     const flat=last3.every((v,_,a)=>v!=null&&Math.abs(v-a[0])<0.2);
-    if(flat&&curAdkar!=null&&curAdkar<4)insights.push({icon:'&#9724;',cls:'warn',text:`ADKAR scores have been flat at <strong>${curAdkar}/5</strong> for 3+ weeks — reinforcement activities may need attention.`});
+    if(flat&&curAdkar!=null&&curAdkar<4)insights.push({icon:'&#9724;',cls:'warn',text:`${fwShort()} scores have been flat at <strong>${curAdkar}/5</strong> for 3+ weeks — reinforcement activities may need attention.`});
   }
   // Per-release insights: find biggest mover
   if(recent.length>=2){
@@ -2849,7 +3938,27 @@ async function renderTrendCharts(){
   }
 
   const insEl=document.getElementById('trend-insights');
-  if(insEl)insEl.innerHTML=insights.length?insights.map(i=>`<div class="trend-insight ${i.cls}"><span class="trend-insight-icon ${i.cls}">${i.icon}</span><span>${i.text}</span></div>`).join(''):'<div class="es"><p class="es-txt">Collecting data — insights will appear as trends emerge.</p></div>';
+  const insOverflow=document.getElementById('trend-insights-overflow');
+  const insToggle=document.getElementById('trend-insights-toggle');
+  if(insEl){
+    if(!insights.length){
+      insEl.innerHTML='<div class="es"><p class="es-txt">Collecting data — insights will appear as trends emerge.</p></div>';
+      if(insOverflow)insOverflow.style.display='none';
+      if(insToggle)insToggle.style.display='none';
+    } else {
+      const top=insights.slice(0,2);const rest=insights.slice(2);
+      insEl.innerHTML=top.map(i=>`<div class="trend-insight ${i.cls}"><span class="trend-insight-icon ${i.cls}">${i.icon}</span><span>${i.text}</span></div>`).join('');
+      if(rest.length&&insOverflow&&insToggle){
+        insOverflow.innerHTML=rest.map(i=>`<div class="trend-insight ${i.cls}"><span class="trend-insight-icon ${i.cls}">${i.icon}</span><span>${i.text}</span></div>`).join('');
+        insOverflow.style.display='none';
+        insToggle.style.display='block';
+        insToggle.textContent='Show all insights (+'+(rest.length)+' more)';
+      } else {
+        if(insOverflow)insOverflow.style.display='none';
+        if(insToggle)insToggle.style.display='none';
+      }
+    }
+  }
 
   // ── Charts ──
   // Gate Readiness with 80% goal line
@@ -2887,7 +3996,7 @@ async function renderTrendCharts(){
   const ac=document.getElementById('chart-trend-adkar');
   if(ac){
     chartInstances['trend-adkar']=new Chart(ac,{type:'line',data:{
-      labels,datasets:[{label:'ADKAR Avg',data:adkarAvgs,borderColor:CHART_GOLD,backgroundColor:'rgba(184,146,42,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GOLD,borderWidth:2}]
+      labels,datasets:[{label:fwShort()+' Avg',data:adkarAvgs,borderColor:CHART_GOLD,backgroundColor:'rgba(184,146,42,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GOLD,borderWidth:2}]
     },options:{responsive:true,maintainAspectRatio:false,
       scales:{y:{min:0,max:5,ticks:{stepSize:1,font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
         x:{ticks:{font:{size:9},color:chartSubColor(),maxRotation:45},grid:{display:false}}},
@@ -2897,6 +4006,15 @@ async function renderTrendCharts(){
 
   // ── Sparklines on release cards ──
   renderReleaseSparklines(snapshots);
+}
+
+function toggleTrendInsights(){
+  const overflow=document.getElementById('trend-insights-overflow');
+  const btn=document.getElementById('trend-insights-toggle');
+  if(!overflow||!btn)return;
+  const showing=overflow.style.display!=='none';
+  overflow.style.display=showing?'none':'flex';
+  btn.textContent=showing?btn.textContent.replace('Hide','Show all'):btn.textContent.replace(/Show all.*/,'Hide extra insights');
 }
 
 function avgGateForRel(r){

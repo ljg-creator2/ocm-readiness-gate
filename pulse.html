@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Readiness Pulse Survey</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--navy:#0C1F3F;--gold:#B8922A;--gold-light:#D4AC4E;--surface:#F8F7F4;--ink:#1A1A1A;--ink-60:#6B7280;--border:#E5E2DB;--r6:6px;--r8:8px;--font-b:'DM Sans',system-ui,-apple-system,sans-serif}
+  body{font-family:var(--font-b);background:var(--surface);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+  .header{width:100%;background:var(--navy);padding:20px 0;text-align:center}
+  .header-inner{max-width:640px;margin:0 auto;padding:0 24px}
+  .logo{color:var(--gold);font-size:22px;font-weight:700;letter-spacing:0.02em}
+  .firm{color:rgba(255,255,255,0.7);font-size:11px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;margin-top:4px}
+  .main{max-width:640px;width:100%;padding:32px 24px;flex:1}
+  .card{background:#fff;border:1px solid var(--border);border-radius:var(--r8);padding:32px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+  .survey-title{font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px}
+  .survey-sub{font-size:13px;color:var(--ink-60);line-height:1.5;margin-bottom:24px}
+  .survey-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+  .meta-item{font-size:12px}
+  .meta-label{color:var(--ink-60);font-weight:500;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px}
+  .meta-val{color:var(--ink);font-weight:600}
+  .q-group{margin-bottom:28px}
+  .q-label{font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px;line-height:1.4}
+  .q-desc{font-size:12px;color:var(--ink-60);margin-bottom:10px}
+  .likert{display:flex;gap:8px;flex-wrap:wrap}
+  .likert label{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:52px}
+  .likert input[type="radio"]{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+  .likert input:focus+.likert-btn{outline:2px solid var(--gold);outline-offset:2px}
+  .likert-btn{width:44px;height:44px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--ink-60);transition:all 0.15s;background:#fff}
+  .likert input:checked+.likert-btn{background:var(--navy);border-color:var(--navy);color:#fff}
+  .likert-btn:hover{border-color:var(--gold);color:var(--gold)}
+  .likert-label{font-size:9px;color:var(--ink-60);text-transform:uppercase;letter-spacing:0.04em;text-align:center;max-width:56px}
+  .open-q{margin-bottom:24px}
+  .open-q label{display:block;font-size:13px;font-weight:600;color:var(--navy);margin-bottom:8px}
+  .open-q textarea{width:100%;min-height:80px;padding:12px;border:1px solid var(--border);border-radius:var(--r6);font-family:var(--font-b);font-size:13px;resize:vertical;transition:border-color 0.15s}
+  .open-q textarea:focus{outline:none;border-color:var(--gold)}
+  .btn-submit{display:block;width:100%;padding:14px;background:var(--gold);color:#fff;border:none;border-radius:var(--r6);font-family:var(--font-b);font-size:14px;font-weight:600;letter-spacing:0.04em;cursor:pointer;transition:background 0.15s}
+  .btn-submit:hover{background:var(--gold-light)}
+  .btn-submit:disabled{opacity:0.5;cursor:not-allowed}
+  .anonymous-note{text-align:center;font-size:11px;color:var(--ink-60);margin-top:12px;padding:8px;background:rgba(184,146,42,0.08);border-radius:var(--r6)}
+  .thank-you{text-align:center;padding:60px 24px}
+  .thank-icon{font-size:48px;margin-bottom:16px}
+  .thank-title{font-size:22px;font-weight:700;color:var(--navy);margin-bottom:8px}
+  .thank-text{font-size:14px;color:var(--ink-60);line-height:1.6}
+  .error-state{text-align:center;padding:60px 24px}
+  .error-state h2{font-size:18px;color:var(--navy);margin-bottom:8px}
+  .error-state p{font-size:13px;color:var(--ink-60)}
+  .footer{text-align:center;padding:20px;font-size:11px;color:var(--ink-60)}
+  @media(max-width:480px){
+    .main{padding:16px}
+    .card{padding:20px}
+    .likert{gap:6px}
+    .likert-btn{width:38px;height:38px;font-size:14px}
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">AdoptIQ</div>
+    <div class="firm" id="firm-name"></div>
+  </div>
+</div>
+
+<div class="main" id="survey-container">
+  <div class="card" id="survey-card">
+    <div id="loading" style="text-align:center;padding:40px;color:var(--ink-60)">Loading survey...</div>
+  </div>
+</div>
+
+<div class="footer">Powered by AdoptIQ</div>
+
+<script>
+(function(){
+  const params=new URLSearchParams(window.location.search);
+  const linkId=params.get('link');
+  const card=document.getElementById('survey-card');
+  const firmEl=document.getElementById('firm-name');
+
+  // Try to load survey context from localStorage (demo mode)
+  const pulseLinks=JSON.parse(localStorage.getItem('adoptiq_pulse_links')||'{}');
+  const linkData=pulseLinks[linkId];
+
+  if(!linkId||!linkData){
+    card.innerHTML=`<div class="error-state">
+      <h2>Survey Not Found</h2>
+      <p>This survey link is invalid or has expired. Please contact your change management team for a new link.</p>
+    </div>`;
+    return;
+  }
+
+  // Load brand
+  const brand=JSON.parse(localStorage.getItem('adoptiq_brand')||'{}');
+  firmEl.textContent=brand.firmName||'';
+
+  // Get framework dimensions
+  const FRAMEWORK_PRESETS={
+    adkar:{dims:[{key:'d1',word:'Awareness',letter:'A'},{key:'d2',word:'Desire',letter:'D'},{key:'d3',word:'Knowledge',letter:'K'},{key:'d4',word:'Ability',letter:'Ab'},{key:'d5',word:'Reinforcement',letter:'R'}]},
+    kotter:{dims:[{key:'d1',word:'Urgency',letter:'U'},{key:'d2',word:'Coalition',letter:'C'},{key:'d3',word:'Vision',letter:'V'},{key:'d4',word:'Empowerment',letter:'E'},{key:'d5',word:'Short-Term Wins',letter:'W'},{key:'d6',word:'Consolidation',letter:'Co'},{key:'d7',word:'Anchoring',letter:'An'},{key:'d8',word:'Communication',letter:'Cm'}]},
+    bridges:{dims:[{key:'d1',word:'Letting Go',letter:'LG'},{key:'d2',word:'Neutral Zone',letter:'NZ'},{key:'d3',word:'New Beginning',letter:'NB'}]},
+    mck7s:{dims:[{key:'d1',word:'Strategy',letter:'St'},{key:'d2',word:'Structure',letter:'Sr'},{key:'d3',word:'Systems',letter:'Sy'},{key:'d4',word:'Style',letter:'Sl'},{key:'d5',word:'Staff',letter:'Sf'},{key:'d6',word:'Skills',letter:'Sk'},{key:'d7',word:'Shared Values',letter:'SV'}]},
+    pct:{dims:[{key:'d1',word:'People',letter:'P'},{key:'d2',word:'Culture',letter:'C'},{key:'d3',word:'Technology',letter:'T'}]}
+  };
+  const fwId=brand.frameworkId||'adkar';
+  let dims=FRAMEWORK_PRESETS[fwId]?.dims||FRAMEWORK_PRESETS.adkar.dims;
+  // Apply custom labels if present
+  if(brand.adkarLabels){
+    dims=dims.map(d=>{
+      const custom=brand.adkarLabels[d.key];
+      return custom?{...d,word:custom}:d;
+    });
+  }
+
+  const LIKERT_LABELS=['Strongly Disagree','Disagree','Neutral','Agree','Strongly Agree'];
+  const DIM_QUESTIONS={
+    'Awareness':'I understand why this change is happening and its purpose.',
+    'Desire':'I want to participate in and support this change.',
+    'Knowledge':'I know what I need to do differently after this change.',
+    'Ability':'I feel confident I can perform effectively in the new way.',
+    'Reinforcement':'I believe this change will be sustained and supported long-term.',
+    'Urgency':'I understand the urgency and importance of this change.',
+    'Coalition':'I see strong leadership support for this change.',
+    'Vision':'The vision for this change is clear and compelling.',
+    'Empowerment':'I feel empowered to take action and contribute.',
+    'Short-Term Wins':'I can see early progress and quick wins from this change.',
+    'Consolidation':'Previous changes have been well-managed and sustained.',
+    'Anchoring':'I believe this change will become part of our culture.',
+    'Communication':'The communication about this change has been clear and timely.',
+    'Letting Go':'I understand what we are moving away from and why.',
+    'Neutral Zone':'I feel supported during this transition period.',
+    'New Beginning':'I am excited about and prepared for the new way of working.',
+    'Strategy':'The strategic direction of this change is clear.',
+    'Structure':'The organizational structure supports this change.',
+    'Systems':'The systems and tools are ready for this change.',
+    'Style':'Leadership style supports this transition.',
+    'Staff':'The right people are in place to drive this change.',
+    'Skills':'I have the skills needed (or will receive training).',
+    'Shared Values':'This change aligns with our organizational values.',
+    'People':'The people impacts of this change have been considered.',
+    'Culture':'This change aligns with our organizational culture.',
+    'Technology':'The technology supporting this change is adequate.'
+  };
+
+  // Build survey form
+  let html=`
+    <div class="survey-title">Readiness Pulse Survey</div>
+    <div class="survey-sub">Your feedback helps us understand how prepared you feel for this change. All responses are anonymous and confidential.</div>
+    <div class="survey-meta">
+      <div class="meta-item"><div class="meta-label">Project</div><div class="meta-val">${linkData.projectName||'—'}</div></div>
+      <div class="meta-item"><div class="meta-label">Your Group</div><div class="meta-val">${linkData.groupName||'—'}</div></div>
+    </div>
+    <form id="pulse-form">`;
+
+  dims.forEach((d,i)=>{
+    const question=DIM_QUESTIONS[d.word]||`Rate your readiness on: ${d.word}`;
+    html+=`<div class="q-group">
+      <div class="q-label">${i+1}. ${question}</div>
+      <div class="likert">`;
+    for(let v=1;v<=5;v++){
+      html+=`<label><input type="radio" name="dim_${d.key}" value="${v}" required><div class="likert-btn">${v}</div><div class="likert-label">${LIKERT_LABELS[v-1]}</div></label>`;
+    }
+    html+=`</div></div>`;
+  });
+
+  html+=`
+    <div class="open-q">
+      <label>What concerns you most about this change?</label>
+      <textarea id="q-concerns" placeholder="Optional — share any concerns or challenges you foresee..."></textarea>
+    </div>
+    <div class="open-q">
+      <label>What would help you feel more prepared?</label>
+      <textarea id="q-prepared" placeholder="Optional — let us know how we can better support you..."></textarea>
+    </div>
+    <button type="submit" class="btn-submit">Submit My Feedback</button>
+    <div class="anonymous-note">Your responses are completely anonymous. No identifying information is collected.</div>
+    </form>`;
+
+  card.innerHTML=html;
+
+  // Handle form submission
+  document.getElementById('pulse-form').addEventListener('submit',function(e){
+    e.preventDefault();
+    const scores={};
+    dims.forEach(d=>{
+      const sel=document.querySelector(`input[name="dim_${d.key}"]:checked`);
+      scores[d.key]=sel?parseInt(sel.value):3;
+    });
+    const response={
+      linkId:linkId,
+      scores:scores,
+      concerns:document.getElementById('q-concerns').value,
+      prepared:document.getElementById('q-prepared').value,
+      timestamp:new Date().toISOString()
+    };
+
+    // Store in localStorage (demo mode)
+    const responses=JSON.parse(localStorage.getItem('adoptiq_pulse_responses')||'[]');
+    responses.push(response);
+    localStorage.setItem('adoptiq_pulse_responses',JSON.stringify(responses));
+
+    // Show thank you
+    card.innerHTML=`<div class="thank-you">
+      <div class="thank-icon">&#10003;</div>
+      <div class="thank-title">Thank You!</div>
+      <div class="thank-text">Your feedback has been recorded. It will help us ensure this change is as smooth as possible for you and your team.</div>
+    </div>`;
+  });
+})();
+</script>
+</body>
+</html>
