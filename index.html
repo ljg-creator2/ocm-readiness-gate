@@ -156,6 +156,21 @@
   <div id="alert-bar" style="display:none;background:var(--amber-bg);border-bottom:2px solid var(--gold);padding:0 40px"></div>
   <div id="pending-invites-bar" style="display:none"></div>
 
+  <!-- Ask AdoptIQ NLQ Bar -->
+  <div class="aiq-bar" id="aiq-bar">
+    <div class="aiq-bar-inner">
+      <div class="aiq-search-wrap">
+        <span class="aiq-icon">✦</span>
+        <input type="text" id="aiq-input" class="aiq-input" placeholder="Ask AdoptIQ anything about your portfolio…" autocomplete="off" onkeydown="if(event.key==='Enter')askAdoptIQ()">
+        <button class="aiq-go" id="aiq-go-btn" onclick="askAdoptIQ()">Ask</button>
+      </div>
+      <div class="aiq-chips" id="aiq-chips"></div>
+    </div>
+  </div>
+  <div class="aiq-answer-area" id="aiq-answer-area" style="display:none"></div>
+  <!-- Mobile NLQ FAB -->
+  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ">✦</button>
+
   <div class="port-body" id="main-content">
     <div class="prog-strip">
       <div class="ps-card cn"><div class="ps-lbl">Active Releases</div><div class="ps-val" id="ps-total">0</div><div class="ps-sub">Across all agencies</div></div>
@@ -268,6 +283,39 @@
         <div class="port-collapse-body">
           <div class="panel" style="border:none;box-shadow:none;margin:0">
             <div class="pb"><div id="sat-map"></div></div>
+          </div>
+          <!-- Saturation Forecast -->
+          <div id="sat-forecast-sec" style="display:none">
+            <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:20px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+                <div>
+                  <div class="sf-title">Saturation Forecast</div>
+                  <div class="sf-subtitle">AI-powered change load prediction &amp; sequencing</div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="sf-mode-btn sf-mode-active" id="sf-btn-forecast" onclick="switchSFMode('forecast')">Forecast</button>
+                  <button class="sf-mode-btn" id="sf-btn-whatif" onclick="switchSFMode('whatif')">What If</button>
+                  <button class="sf-mode-btn" id="sf-btn-sequencing" onclick="switchSFMode('sequencing')">Sequencing</button>
+                </div>
+              </div>
+              <div id="sf-forecast-panel">
+                <div id="sf-forecast-content" class="sf-content-area">
+                  <div class="sf-empty-state">
+                    <div style="font-size:28px;margin-bottom:8px">📊</div>
+                    <div class="sf-title" style="font-size:13px;margin-bottom:4px">Forecast Change Load</div>
+                    <div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">AI analyzes your portfolio timeline to predict stakeholder saturation peaks</div>
+                    <button class="sf-analyze-btn" onclick="runSaturationForecast()">Generate Forecast</button>
+                  </div>
+                </div>
+              </div>
+              <div id="sf-whatif-panel" style="display:none">
+                <div id="sf-whatif-content" class="sf-content-area"></div>
+              </div>
+              <div id="sf-sequencing-panel" style="display:none">
+                <div id="sf-sequencing-content" class="sf-content-area"></div>
+              </div>
+              <div class="sf-disclaimer">AI-generated analysis — verify recommendations with project stakeholders before making scheduling decisions.</div>
+            </div>
           </div>
         </div>
       </details>
@@ -557,11 +605,11 @@
       <div class="dropdown-gen">
         <button class="btn-gold btn-gen" onclick="toggleGenMenu()">Generate ▾</button>
         <div class="gen-menu" id="gen-menu">
-          <button onclick="genStakeholderAnalysis()">Stakeholder Analysis</button>
-          <button onclick="genTrainingPlan()">Training Plan</button>
-          <button onclick="genCommsPlan()">Communications Plan</button>
-          <button onclick="genResistancePlan()">Resistance Management Plan</button>
-          <button onclick="genReadinessRec()">Readiness Recommendation</button>
+          <button onclick="openGenModal('stakeholder','Stakeholder Analysis')">Stakeholder Analysis</button>
+          <button onclick="openGenModal('training','Training Plan')">Training Plan</button>
+          <button onclick="openGenModal('comms','Communications Plan')">Communications Plan</button>
+          <button onclick="openGenModal('resistance','Resistance Management Plan')">Resistance Management Plan</button>
+          <button onclick="openGenModal('readiness','Readiness Recommendation')">Readiness Recommendation</button>
           <hr>
           <button onclick="genFullPackage()">Full OCM Package</button>
         </div>

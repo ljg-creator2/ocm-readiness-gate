@@ -931,8 +931,286 @@ function renderPortfolio(){
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('sat-sec').style.display=releases.length>=1?'block':'none';
-  renderSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();
+  renderSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();
   if(isReadOnly)applyReadOnlyRestrictions();
+}
+
+// ════════════════════════════════════════════════════════
+// ASK ADOPTIQ — Natural Language Query Interface
+// ════════════════════════════════════════════════════════
+const ASK_AIQ_URL='https://yufehucjvviwanbulcok.supabase.co/functions/v1/ask-adoptiq';
+const _aiqHistory=[];
+const MAX_AIQ_HISTORY=5;
+
+function toggleAiqMobile(){
+  const bar=document.getElementById('aiq-bar');
+  if(!bar)return;
+  bar.classList.toggle('mobile-open');
+  if(bar.classList.contains('mobile-open')){
+    setTimeout(()=>document.getElementById('aiq-input')?.focus(),100);
+  }
+}
+
+function renderAiqChips(){
+  const el=document.getElementById('aiq-chips');
+  if(!el)return;
+  const suggestions=generateAiqSuggestions();
+  let h='';
+  suggestions.forEach(s=>{
+    h+='<span class="aiq-chip" onclick="askAiqChip(\''+esc(s).replace(/'/g,"\\'")+'\')">'+esc(s)+'</span>';
+  });
+  // Add history chips if any
+  if(_aiqHistory.length){
+    h+='<span style="color:rgba(255,255,255,0.2);font-size:9px;padding:4px 0;margin-left:4px">|</span>';
+    _aiqHistory.slice().reverse().forEach(q=>{
+      h+='<span class="aiq-hist-chip" onclick="askAiqChip(\''+esc(q).replace(/'/g,"\\'")+'\')">'+esc(q)+'</span>';
+    });
+  }
+  el.innerHTML=h;
+}
+
+function generateAiqSuggestions(){
+  const suggestions=[];
+  // Check portfolio state and generate relevant suggestions
+  const atRisk=releases.filter(r=>relRollup(r).status==='Critical'||relRollup(r).status==='At Risk');
+  const totalFlags=releases.reduce((s,r)=>s+relRollup(r).flags,0);
+  const allProjects=releases.flatMap(r=>r.projects||[]);
+  const nearestGoLive=releases.filter(r=>r.golive&&new Date(r.golive)>new Date()).sort((a,b)=>new Date(a.golive)-new Date(b.golive))[0];
+
+  if(atRisk.length>0){
+    suggestions.push('Which projects need immediate attention?');
+  }else{
+    suggestions.push('What is the overall readiness of my portfolio?');
+  }
+  if(totalFlags>0){
+    suggestions.push('Summarize all active risk flags');
+  }
+  if(allProjects.length>1){
+    suggestions.push('Compare adoption scores across all projects');
+  }
+  if(nearestGoLive){
+    suggestions.push('How ready are we for the next go-live?');
+  }
+  // Always add a general question
+  if(suggestions.length<4){
+    suggestions.push('What are the biggest gaps in training readiness?');
+  }
+  return suggestions.slice(0,4);
+}
+
+function collectPortfolioData(){
+  return releases.map(rel=>{
+    const ru=relRollup(rel);
+    return{
+      releaseName:rel.name,
+      goLiveDate:rel.golive||null,
+      status:ru.status,
+      overallGateScore:ru.gate,
+      riskFlags:ru.flags,
+      agencies:rel.agencies||[],
+      projects:(rel.projects||[]).map(p=>{
+        const dims=getActiveDims();
+        const fwScores={};
+        dims.forEach(d=>{fwScores[d.word]=p.adkarScores?.[d.key]||3;});
+        const shs=(p.stakeholders||[]).map(s=>{
+          const sc=adoptScore(s.factors);
+          return{
+            name:s.name,
+            adoptionScore:sc,
+            tier:adoptTier(sc).tier,
+            kirkpatrickReady:kirkReady(s),
+            reinforcementReady:reinReady(s),
+            factors:Object.fromEntries(AF.map(f=>([f.label,s.factors?.[f.key]||3])))
+          };
+        });
+        const gs=projGateScore(p);
+        const gaps=(p.gapAnalysis?.gaps||[]).map(g=>({description:g.description||'',severity:g.severity||'Medium',status:g.status||'Open'}));
+        const flags=getProjFlags(p).map(f=>({gate:f.gate,item:f.item}));
+        const pulseInsights=p._pulseInsightsSummary||null;
+        return{
+          projectName:p.name,
+          status:p.status||'In Progress',
+          goLiveDate:p.golive||null,
+          agencies:p.agencies||[],
+          gateReadiness:gs!==null?gs+'%':'Not started',
+          frameworkScores:fwScores,
+          adoptionScore:Math.round(dims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/Math.max(dims.length,1)/5*100),
+          stakeholders:shs,
+          stakeholderCount:shs.length,
+          riskFlags:flags,
+          gaps:gaps,
+          pulseInsights
+        };
+      })
+    };
+  });
+}
+
+function askAiqChip(question){
+  const input=document.getElementById('aiq-input');
+  if(input){input.value=question;}
+  askAdoptIQ();
+}
+
+async function askAdoptIQ(){
+  const input=document.getElementById('aiq-input');
+  const btn=document.getElementById('aiq-go-btn');
+  const area=document.getElementById('aiq-answer-area');
+  if(!input||!area)return;
+  const question=input.value.trim();
+  if(!question)return;
+
+  // Add to history
+  const existIdx=_aiqHistory.indexOf(question);
+  if(existIdx>=0)_aiqHistory.splice(existIdx,1);
+  _aiqHistory.push(question);
+  if(_aiqHistory.length>MAX_AIQ_HISTORY)_aiqHistory.shift();
+
+  // Show loading
+  area.style.display='block';
+  area.innerHTML=`<div class="aiq-answer"><div class="aiq-answer-hdr"><div class="aiq-answer-q">${esc(question)}</div></div><div class="aiq-loading"><div class="spinner"></div><div class="aiq-loading-text">Analyzing your portfolio…</div></div></div>`;
+  if(btn){btn.disabled=true;btn.textContent='…';}
+  input.select();
+
+  // Close mobile bar
+  const bar=document.getElementById('aiq-bar');
+  if(bar)bar.classList.remove('mobile-open');
+
+  try{
+    const portfolioData=collectPortfolioData();
+    const response=await fetch(ASK_AIQ_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
+      body:JSON.stringify({question,portfolioData})
+    });
+    if(!response.ok){const err=await response.text();throw new Error(err);}
+    const result=await response.json();
+    renderAiqAnswer(question,result);
+  }catch(err){
+    console.error('Ask AdoptIQ error:',err);
+    area.innerHTML=`<div class="aiq-answer"><div class="aiq-answer-hdr"><div class="aiq-answer-q">${esc(question)}</div><button class="aiq-answer-close" onclick="closeAiqAnswer()">✕</button></div><div class="aiq-answer-body"><div style="color:#b83232;font-size:12px">Sorry, I couldn't analyze that right now. ${esc(err.message)}</div></div></div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Ask';}
+    renderAiqChips();
+  }
+}
+
+function closeAiqAnswer(){
+  const area=document.getElementById('aiq-answer-area');
+  if(area){area.style.display='none';area.innerHTML='';}
+}
+
+function renderAiqAnswer(question,result){
+  const area=document.getElementById('aiq-answer-area');
+  if(!area)return;
+  let h='<div class="aiq-answer">';
+  h+='<div class="aiq-answer-hdr"><div class="aiq-answer-q">'+esc(question)+'</div><button class="aiq-answer-close" onclick="closeAiqAnswer()">✕</button></div>';
+  h+='<div class="aiq-answer-body">';
+
+  // Answer text
+  if(result.answer_text){
+    h+='<div class="aiq-answer-text">'+esc(result.answer_text)+'</div>';
+  }
+
+  // Data points as metrics
+  if(result.data_points?.length&&(result.visualization_type==='metrics'||!result.visualization_type||result.visualization_type==='none')){
+    h+='<div class="aiq-metrics">';
+    result.data_points.forEach(dp=>{
+      h+='<div class="aiq-metric '+(dp.status||'neutral')+'">';
+      h+='<div class="aiq-metric-label">'+esc(dp.label)+'</div>';
+      h+='<div class="aiq-metric-val">'+esc(String(dp.value))+'</div>';
+      if(dp.detail)h+='<div class="aiq-metric-detail">'+esc(dp.detail)+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  // Table visualization
+  if(result.visualization_type==='table'&&result.visualization_data){
+    const vd=result.visualization_data;
+    if(vd.title)h+='<div class="aiq-chart-title">'+esc(vd.title)+'</div>';
+    h+='<div style="overflow-x:auto"><table class="aiq-table"><thead><tr>';
+    (vd.columns||[]).forEach(c=>{h+='<th>'+esc(c)+'</th>';});
+    h+='</tr></thead><tbody>';
+    (vd.rows||[]).forEach(row=>{
+      h+='<tr>';
+      (Array.isArray(row)?row:[row]).forEach(cell=>{h+='<td>'+esc(String(cell))+'</td>';});
+      h+='</tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+
+  // Chart visualization
+  if(result.visualization_type==='chart'&&result.visualization_data){
+    const vd=result.visualization_data;
+    const canvasId='aiq-chart-'+Date.now();
+    if(vd.title)h+='<div class="aiq-chart-title">'+esc(vd.title)+'</div>';
+    h+='<div class="aiq-chart-wrap"><canvas id="'+canvasId+'"></canvas></div>';
+    // Render chart after DOM update
+    setTimeout(()=>{
+      const canvas=document.getElementById(canvasId);
+      if(!canvas||!window.Chart)return;
+      const chartType=vd.chart_type||'bar';
+      const cfg={
+        type:chartType,
+        data:{
+          labels:vd.chart_labels||[],
+          datasets:[{
+            data:vd.chart_values||[],
+            backgroundColor:vd.chart_colors||['#0C1F3F','#b8922a','#6366f1','#1d6840','#b83232','#d97706','#0ea5e9'],
+            borderColor:chartType==='line'?(vd.chart_colors?.[0]||'#b8922a'):undefined,
+            borderWidth:chartType==='line'?2:0,
+            fill:chartType==='line'?false:undefined,
+            tension:0.3
+          }]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:chartType==='doughnut',position:'bottom',labels:{font:{size:9}}},tooltip:{bodyFont:{size:10}}},
+          scales:chartType==='doughnut'?{}:{y:{beginAtZero:true,ticks:{font:{size:9}}},x:{ticks:{font:{size:9}}}}
+        }
+      };
+      new Chart(canvas,cfg);
+    },100);
+  }
+
+  // List visualization
+  if(result.visualization_type==='list'&&result.visualization_data){
+    const vd=result.visualization_data;
+    if(vd.title)h+='<div class="aiq-chart-title">'+esc(vd.title)+'</div>';
+    h+='<div class="aiq-list">';
+    const items=vd.rows||vd.items||[];
+    items.forEach(item=>{
+      const text=Array.isArray(item)?item.join(' — '):String(item);
+      h+='<div class="aiq-list-item"><span class="aiq-list-bullet">▸</span><span>'+esc(text)+'</span></div>';
+    });
+    h+='</div>';
+  }
+
+  // Also show data_points for table/chart/list types
+  if(result.data_points?.length&&result.visualization_type&&result.visualization_type!=='metrics'&&result.visualization_type!=='none'){
+    h+='<div class="aiq-metrics">';
+    result.data_points.slice(0,4).forEach(dp=>{
+      h+='<div class="aiq-metric '+(dp.status||'neutral')+'">';
+      h+='<div class="aiq-metric-label">'+esc(dp.label)+'</div>';
+      h+='<div class="aiq-metric-val">'+esc(String(dp.value))+'</div>';
+      if(dp.detail)h+='<div class="aiq-metric-detail">'+esc(dp.detail)+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  // Follow-up suggestions
+  if(result.follow_up_suggestions?.length){
+    h+='<div class="aiq-followups">';
+    result.follow_up_suggestions.forEach(s=>{
+      h+='<span class="aiq-followup" onclick="askAiqChip(\''+esc(s).replace(/'/g,"\\'")+'\')">'+esc(s)+'</span>';
+    });
+    h+='</div>';
+  }
+
+  h+='</div></div>';
+  area.innerHTML=h;
 }
 
 function renderTimeline(){
@@ -2768,7 +3046,9 @@ function collectSmartRecsData(p){
     gateHistory,
     riskFlags:flags.map(f=>({gate:f.gate,sub:f.sub,item:f.item,consequence:f.consequence})),
     gaps,
-    acknowledgedRecs:p.acknowledgedRecs||[]
+    acknowledgedRecs:p.acknowledgedRecs||[],
+    pulseInsights:p._pulseInsightsSummary||null,
+    saturationForecast:window._saturationForecastSummary||null
   };
 }
 
@@ -3136,6 +3416,404 @@ function renderSaturationMap(){
     h+='</div>';
   }
   el.innerHTML=h;
+  // Show forecast section if we have saturated groups
+  const forecastSec=document.getElementById('sat-forecast-sec');
+  if(forecastSec){
+    const hasSaturated=groups.some(g=>g.projects.length>=2);
+    forecastSec.style.display=hasSaturated?'block':'none';
+    // Restore cached forecast if available
+    if(hasSaturated&&window._sfCache){renderSFForecastResult(window._sfCache);}
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// FEATURE: AI-POWERED SATURATION FORECAST
+// ════════════════════════════════════════════════════════
+const SAT_FORECAST_URL='https://yufehucjvviwanbulcok.supabase.co/functions/v1/saturation-forecast';
+let _sfCurrentMode='forecast';
+window._sfCache=null;
+window._sfWhatIfCache=null;
+window._sfSeqCache=null;
+
+function switchSFMode(mode){
+  _sfCurrentMode=mode;
+  ['forecast','whatif','sequencing'].forEach(m=>{
+    const panel=document.getElementById('sf-'+m+'-panel');
+    const btn=document.getElementById('sf-btn-'+m);
+    if(panel)panel.style.display=m===mode?'block':'none';
+    if(btn){btn.classList.toggle('sf-mode-active',m===mode);}
+  });
+  // Auto-populate What If controls or Sequencing on first switch
+  if(mode==='whatif'){renderWhatIfControls();}
+  if(mode==='sequencing'&&!window._sfSeqCache){renderSequencingEmpty();}
+  else if(mode==='sequencing'&&window._sfSeqCache){renderSequencingResult(window._sfSeqCache);}
+}
+
+function collectSaturationData(){
+  const groupMap={};
+  const projectList=[];
+  releases.forEach(r=>{
+    (r.projects||[]).forEach(p=>{
+      const golive=p.golive||r.golive||'';
+      const projEntry={id:p.id,name:p.name,release:r.name,golive,adoptionScore:null};
+      // Compute project-level adoption
+      if(p.stakeholders?.length){
+        const scores=p.stakeholders.map(sh=>adoptScore(sh.factors)).filter(s=>s!==null);
+        projEntry.adoptionScore=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):null;
+      }
+      projectList.push(projEntry);
+      (p.stakeholders||[]).forEach(sh=>{
+        const norm=sh.name.trim().toLowerCase();
+        if(!groupMap[norm])groupMap[norm]={name:sh.name,projects:[]};
+        groupMap[norm].projects.push({projectId:p.id,projectName:p.name,release:r.name,golive,adoptionScore:adoptScore(sh.factors),impactLevel:null});
+      });
+      (p.impactAssessment?.groups||[]).forEach(ig=>{
+        const norm=ig.name.trim().toLowerCase();
+        if(!groupMap[norm])groupMap[norm]={name:ig.name,projects:[]};
+        const existing=groupMap[norm].projects.find(x=>x.projectId===p.id);
+        if(existing){existing.impactLevel=ig.level;}
+        else{groupMap[norm].projects.push({projectId:p.id,projectName:p.name,release:r.name,golive,adoptionScore:null,impactLevel:ig.level});}
+      });
+    });
+  });
+  // Only include saturated groups (2+)
+  const saturatedGroups=Object.values(groupMap).filter(g=>g.projects.length>=2).sort((a,b)=>b.projects.length-a.projects.length);
+  return{groups:saturatedGroups,projects:projectList};
+}
+
+async function runSaturationForecast(){
+  const el=document.getElementById('sf-forecast-content');if(!el)return;
+  el.innerHTML='<div class="sf-loading"><div class="sf-spinner"></div><div>Analyzing saturation patterns and forecasting change load…</div></div>';
+  try{
+    const satData=collectSaturationData();
+    const response=await fetch(SAT_FORECAST_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
+      body:JSON.stringify({saturationData:satData,mode:'forecast'})
+    });
+    if(!response.ok){const err=await response.text();throw new Error(err);}
+    const result=await response.json();
+    if(result.error)throw new Error(result.error);
+    window._sfCache=result;
+    renderSFForecastResult(result);
+    // Feed to recommendations
+    feedSaturationToRecommendations(result);
+  }catch(err){
+    console.error('Saturation forecast error:',err);
+    el.innerHTML='<div class="sf-empty-state"><div style="color:#b83232;font-size:12px;margin-bottom:12px">Analysis failed: '+esc(err.message)+'</div><button class="sf-analyze-btn" onclick="runSaturationForecast()">Retry</button></div>';
+  }
+}
+
+function feedSaturationToRecommendations(result){
+  if(!result?.portfolioRisk)return;
+  // Store for smart recommendations engine
+  window._saturationForecastSummary={
+    overallSaturation:result.portfolioRisk.overallSaturation,
+    peakPeriod:result.portfolioRisk.peakPeriod,
+    criticalGroups:result.portfolioRisk.criticalGroups,
+    summary:result.portfolioRisk.summary
+  };
+}
+
+function renderSFForecastResult(result){
+  const el=document.getElementById('sf-forecast-content');if(!el)return;
+  const forecast=result.forecast||[];
+  const risk=result.portfolioRisk||{};
+  const months=result.timelineMonths||[];
+
+  let h='';
+  // Risk strip
+  const satColor=risk.overallSaturation==='critical'?'#b83232':risk.overallSaturation==='high'?'#d97706':risk.overallSaturation==='moderate'?'#2563eb':'#16a34a';
+  h+='<div class="sf-risk-strip">';
+  h+='<div class="sf-risk-item"><span class="sf-risk-val" style="color:'+satColor+'">'+esc(risk.overallSaturation||'—')+'</span><span class="sf-risk-lbl">Portfolio Saturation</span></div>';
+  h+='<div class="sf-risk-item"><span class="sf-risk-val">'+esc(risk.peakPeriod||'—')+'</span><span class="sf-risk-lbl">Peak Period</span></div>';
+  h+='<div class="sf-risk-item"><span class="sf-risk-val" style="color:#b83232">'+(risk.criticalGroups||0)+'</span><span class="sf-risk-lbl">Critical Groups</span></div>';
+  h+='<div style="flex:1;min-width:200px;font-size:12px;color:var(--ink);line-height:1.5;align-self:center">'+esc(risk.summary||'')+'</div>';
+  h+='</div>';
+
+  // Heatmap table
+  if(forecast.length&&months.length){
+    h+='<div class="sf-heatmap-wrap"><table class="sf-heatmap"><thead><tr><th style="text-align:left">Stakeholder Group</th><th>Risk</th>';
+    months.forEach(m=>{
+      const d=new Date(m+'-01');
+      const label=d.toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+      h+='<th>'+label+'</th>';
+    });
+    h+='</tr></thead><tbody>';
+    forecast.forEach(g=>{
+      h+='<tr><td class="sf-hm-grp">'+esc(g.group)+'</td>';
+      h+='<td><span class="sf-hm-risk '+(g.burnoutRisk||'low')+'">'+esc(g.burnoutRisk||'low')+'</span></td>';
+      months.forEach(m=>{
+        const mEntry=(g.monthlyLoad||[]).find(x=>x.month===m);
+        const intensity=mEntry?mEntry.intensity:0;
+        const cellClass='sf-cell-'+Math.min(10,Math.round(intensity*10));
+        const tooltip=mEntry?mEntry.activeProjects?.join(', ')||'':'No active changes';
+        const label=intensity>=0.8?'●●●':intensity>=0.6?'●●○':intensity>=0.4?'●○○':intensity>=0.2?'○○○':'○';
+        h+='<td class="'+cellClass+'" title="'+esc(g.group)+' — '+esc(m)+': '+(intensity*100).toFixed(0)+'% load\n'+esc(tooltip)+'">'+label+'</td>';
+      });
+      h+='</tr>';
+    });
+    h+='</tbody></table></div>';
+    // Legend
+    h+='<div class="sf-legend"><span class="sf-legend-label">Low</span><div class="sf-legend-bar">';
+    for(let i=0;i<=10;i++){
+      const colors=['rgba(22,163,106,0.08)','rgba(22,163,106,0.2)','rgba(22,163,106,0.35)','rgba(234,179,8,0.25)','rgba(234,179,8,0.4)','rgba(217,119,6,0.35)','rgba(217,119,6,0.5)','rgba(220,38,38,0.3)','rgba(220,38,38,0.45)','rgba(220,38,38,0.6)','rgba(153,27,27,0.7)'];
+      h+='<div class="sf-legend-seg" style="background:'+colors[i]+'"></div>';
+    }
+    h+='</div><span class="sf-legend-label">Critical</span></div>';
+  }
+
+  // Group detail cards
+  h+='<div class="sf-group-cards">';
+  forecast.forEach(g=>{
+    const riskCls='risk-'+(g.burnoutRisk||'low');
+    h+='<div class="sf-group-card '+riskCls+'">';
+    h+='<div class="sf-gc-name">'+esc(g.group)+'</div>';
+    h+='<div class="sf-gc-meta"><span>'+g.projectCount+' projects</span><span>Peak: '+esc(g.peakMonth||'—')+'</span><span>Intensity: '+esc(g.peakIntensity||'—')+'</span></div>';
+    h+='<div class="sf-gc-rec">'+esc(g.recommendation||'')+'</div>';
+    h+='</div>';
+  });
+  h+='</div>';
+
+  // Re-analyze button
+  h+='<div style="text-align:center;margin-top:16px"><button class="sf-analyze-btn" onclick="runSaturationForecast()">Re-Analyze</button></div>';
+  el.innerHTML=h;
+}
+
+// ── What If Mode ──
+function renderWhatIfControls(){
+  const el=document.getElementById('sf-whatif-content');if(!el)return;
+  const allProjs=[];
+  releases.forEach(r=>{
+    (r.projects||[]).forEach(p=>{
+      if(p.golive||r.golive){
+        allProjs.push({id:p.id,name:p.name,release:r.name,golive:p.golive||r.golive});
+      }
+    });
+  });
+  if(!allProjs.length){
+    el.innerHTML='<div class="sf-empty-state"><div style="font-size:12px;color:var(--ink-60)">No projects with go-live dates found. Add go-live dates to use What If mode.</div></div>';
+    return;
+  }
+  // Check for cached result
+  if(window._sfWhatIfCache){renderWhatIfResult(window._sfWhatIfCache,allProjs);return;}
+
+  let h='<div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">Adjust go-live dates to see how changes affect stakeholder saturation:</div>';
+  h+='<div class="sf-whatif-controls" id="sf-wi-controls">';
+  allProjs.forEach(pr=>{
+    h+='<div class="sf-wi-project" data-proj-id="'+pr.id+'">';
+    h+='<div class="sf-wi-name">'+esc(pr.name)+'</div>';
+    h+='<div class="sf-wi-orig">Original: '+fmtDate(pr.golive)+'</div>';
+    h+='<input type="date" class="sf-wi-date" id="sf-wi-date-'+pr.id+'" value="'+pr.golive+'" onchange="updateWhatIfDelta(\''+pr.id+'\',\''+pr.golive+'\')">';
+    h+='<span class="sf-wi-delta same" id="sf-wi-delta-'+pr.id+'">No change</span>';
+    h+='</div>';
+  });
+  h+='</div>';
+  h+='<button class="sf-wi-compare-btn" id="sf-wi-compare" onclick="runWhatIfComparison()">Compare Scenarios</button>';
+  el.innerHTML=h;
+}
+
+function updateWhatIfDelta(projId,originalDate){
+  const input=document.getElementById('sf-wi-date-'+projId);
+  const delta=document.getElementById('sf-wi-delta-'+projId);
+  if(!input||!delta)return;
+  const orig=new Date(originalDate);
+  const adj=new Date(input.value);
+  const diffDays=Math.round((adj-orig)/(1000*60*60*24));
+  if(diffDays===0){delta.className='sf-wi-delta same';delta.textContent='No change';}
+  else if(diffDays<0){delta.className='sf-wi-delta earlier';delta.textContent=Math.abs(diffDays)+'d earlier';}
+  else{delta.className='sf-wi-delta later';delta.textContent=diffDays+'d later';}
+}
+
+async function runWhatIfComparison(){
+  const btn=document.getElementById('sf-wi-compare');
+  if(btn){btn.disabled=true;btn.textContent='Analyzing…';}
+  const el=document.getElementById('sf-whatif-content');
+
+  // Collect adjusted dates
+  const original=collectSaturationData();
+  const adjusted={groups:[],projects:[]};
+  releases.forEach(r=>{
+    (r.projects||[]).forEach(p=>{
+      const dateInput=document.getElementById('sf-wi-date-'+p.id);
+      const newGolive=dateInput?dateInput.value:(p.golive||r.golive||'');
+      adjusted.projects.push({id:p.id,name:p.name,release:r.name,golive:newGolive});
+    });
+  });
+  // Rebuild groups with adjusted dates
+  const groupMap={};
+  releases.forEach(r=>{
+    (r.projects||[]).forEach(p=>{
+      const dateInput=document.getElementById('sf-wi-date-'+p.id);
+      const newGolive=dateInput?dateInput.value:(p.golive||r.golive||'');
+      (p.stakeholders||[]).forEach(sh=>{
+        const norm=sh.name.trim().toLowerCase();
+        if(!groupMap[norm])groupMap[norm]={name:sh.name,projects:[]};
+        groupMap[norm].projects.push({projectId:p.id,projectName:p.name,release:r.name,golive:newGolive,adoptionScore:adoptScore(sh.factors)});
+      });
+    });
+  });
+  adjusted.groups=Object.values(groupMap).filter(g=>g.projects.length>=2);
+
+  try{
+    const response=await fetch(SAT_FORECAST_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
+      body:JSON.stringify({saturationData:{original,adjusted},mode:'whatif'})
+    });
+    if(!response.ok){const err=await response.text();throw new Error(err);}
+    const result=await response.json();
+    if(result.error)throw new Error(result.error);
+    window._sfWhatIfCache=result;
+    const allProjs=[];
+    releases.forEach(r=>(r.projects||[]).forEach(p=>{if(p.golive||r.golive)allProjs.push({id:p.id,name:p.name,release:r.name,golive:p.golive||r.golive});}));
+    renderWhatIfResult(result,allProjs);
+  }catch(err){
+    console.error('What If error:',err);
+    if(el){
+      const existingControls=el.querySelector('.sf-whatif-controls');
+      if(!existingControls)renderWhatIfControls();
+      const errDiv=document.createElement('div');
+      errDiv.style.cssText='color:#b83232;font-size:12px;margin-top:12px';
+      errDiv.textContent='Analysis failed: '+err.message;
+      el.appendChild(errDiv);
+    }
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Compare Scenarios';}
+  }
+}
+
+function renderWhatIfResult(result,allProjs){
+  const el=document.getElementById('sf-whatif-content');if(!el)return;
+  const comp=result.comparison||{};
+  const forecast=result.adjustedForecast||[];
+  const months=result.timelineMonths||[];
+
+  let h='<div style="font-size:12px;color:var(--ink-60);margin-bottom:12px">Adjust go-live dates and re-compare:</div>';
+  h+='<div class="sf-whatif-controls" id="sf-wi-controls">';
+  allProjs.forEach(pr=>{
+    const dateInput=document.getElementById('sf-wi-date-'+pr.id);
+    const currentVal=dateInput?dateInput.value:pr.golive;
+    const orig=new Date(pr.golive);const adj=new Date(currentVal);
+    const diffDays=Math.round((adj-orig)/(1000*60*60*24));
+    const deltaCls=diffDays===0?'same':diffDays<0?'earlier':'later';
+    const deltaText=diffDays===0?'No change':diffDays<0?Math.abs(diffDays)+'d earlier':diffDays+'d later';
+    h+='<div class="sf-wi-project" data-proj-id="'+pr.id+'">';
+    h+='<div class="sf-wi-name">'+esc(pr.name)+'</div>';
+    h+='<div class="sf-wi-orig">Original: '+fmtDate(pr.golive)+'</div>';
+    h+='<input type="date" class="sf-wi-date" id="sf-wi-date-'+pr.id+'" value="'+currentVal+'" onchange="updateWhatIfDelta(\''+pr.id+'\',\''+pr.golive+'\')">';
+    h+='<span class="sf-wi-delta '+deltaCls+'" id="sf-wi-delta-'+pr.id+'">'+deltaText+'</span>';
+    h+='</div>';
+  });
+  h+='</div>';
+  h+='<button class="sf-wi-compare-btn" id="sf-wi-compare" onclick="runWhatIfComparison()">Re-Compare</button>';
+
+  // Verdict banner
+  const verdictIcon=comp.verdict==='recommended'?'✓':comp.verdict==='neutral'?'○':'✗';
+  const verdictLabel=comp.verdict==='recommended'?'Recommended Change':comp.verdict==='not_recommended'?'Not Recommended':'Neutral Impact';
+  h+='<div class="sf-wi-verdict '+(comp.verdict||'neutral')+'"><span style="font-size:18px;margin-right:6px">'+verdictIcon+'</span>'+verdictLabel+'</div>';
+
+  // Comparison metrics
+  h+='<div class="sf-wi-metrics">';
+  h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val">'+(comp.originalPeakLoad?Math.round(comp.originalPeakLoad*100)+'%':'—')+'</span><span class="sf-wi-metric-lbl">Original Peak Load</span></div>';
+  h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val" style="color:'+(comp.adjustedPeakLoad<comp.originalPeakLoad?'#16a34a':'#b83232')+'">'+(comp.adjustedPeakLoad?Math.round(comp.adjustedPeakLoad*100)+'%':'—')+'</span><span class="sf-wi-metric-lbl">Adjusted Peak Load</span></div>';
+  h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val" style="color:var(--gold)">'+esc(comp.improvement||'—')+'</span><span class="sf-wi-metric-lbl">Improvement</span></div>';
+  h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val">'+comp.originalCriticalMonths+' → '+comp.adjustedCriticalMonths+'</span><span class="sf-wi-metric-lbl">Critical Months</span></div>';
+  h+='</div>';
+
+  // Summary
+  if(result.summary){
+    h+='<div style="font-size:12px;color:var(--ink);line-height:1.6;margin-bottom:12px;padding:10px 14px;background:var(--surface);border-radius:var(--r6)">'+esc(result.summary)+'</div>';
+  }
+
+  // Adjusted forecast per group
+  if(forecast.length){
+    h+='<div class="sf-group-cards">';
+    forecast.forEach(g=>{
+      const riskCls='risk-'+(g.burnoutRisk||'low');
+      h+='<div class="sf-group-card '+riskCls+'">';
+      h+='<div class="sf-gc-name">'+esc(g.group)+'</div>';
+      h+='<div class="sf-gc-meta"><span>Risk: '+esc(g.burnoutRisk||'—')+'</span></div>';
+      if(g.improvement){h+='<div class="sf-gc-rec">'+esc(g.improvement)+'</div>';}
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
+
+// ── Sequencing Mode ──
+function renderSequencingEmpty(){
+  const el=document.getElementById('sf-sequencing-content');if(!el)return;
+  el.innerHTML='<div class="sf-empty-state"><div style="font-size:28px;margin-bottom:8px">🔄</div><div class="sf-title" style="font-size:13px;margin-bottom:4px">AI Sequencing Recommendations</div><div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">Get AI-powered suggestions for optimal project sequencing to minimize change fatigue</div><button class="sf-analyze-btn" onclick="runSequencingAnalysis()">Get Recommendations</button></div>';
+}
+
+async function runSequencingAnalysis(){
+  const el=document.getElementById('sf-sequencing-content');if(!el)return;
+  el.innerHTML='<div class="sf-loading"><div class="sf-spinner"></div><div>Analyzing optimal sequencing strategy…</div></div>';
+  try{
+    const satData=collectSaturationData();
+    const response=await fetch(SAT_FORECAST_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
+      body:JSON.stringify({saturationData:satData,mode:'sequencing'})
+    });
+    if(!response.ok){const err=await response.text();throw new Error(err);}
+    const result=await response.json();
+    if(result.error)throw new Error(result.error);
+    window._sfSeqCache=result;
+    renderSequencingResult(result);
+  }catch(err){
+    console.error('Sequencing error:',err);
+    el.innerHTML='<div class="sf-empty-state"><div style="color:#b83232;font-size:12px;margin-bottom:12px">Analysis failed: '+esc(err.message)+'</div><button class="sf-analyze-btn" onclick="runSequencingAnalysis()">Retry</button></div>';
+  }
+}
+
+function renderSequencingResult(result){
+  const el=document.getElementById('sf-sequencing-content');if(!el)return;
+  const recs=result.recommendations||[];
+  const sequence=result.optimalSequence||[];
+  let h='';
+
+  // Summary
+  if(result.summary){
+    h+='<div class="sf-seq-summary">'+esc(result.summary)+'</div>';
+  }
+
+  // Recommendation cards
+  if(recs.length){
+    h+='<div class="sf-seq-list">';
+    recs.forEach((r,i)=>{
+      h+='<div class="sf-seq-item">';
+      h+='<div class="sf-seq-priority">'+(i+1)+'</div>';
+      h+='<div class="sf-seq-body">';
+      h+='<div class="sf-seq-action">'+esc(r.action)+'</div>';
+      h+='<div class="sf-seq-detail">'+esc(r.detail)+'</div>';
+      h+='<div class="sf-seq-tags">';
+      if(r.type)h+='<span class="sf-seq-tag type-'+r.type+'">'+esc(r.type)+'</span>';
+      if(r.impact)h+='<span class="sf-seq-tag impact-'+r.impact+'">'+esc(r.impact)+' impact</span>';
+      if(r.affectedProjects?.length){h+='<span class="sf-seq-tag" style="background:rgba(12,31,63,0.08);color:var(--navy)">'+r.affectedProjects.map(esc).join(', ')+'</span>';}
+      h+='</div></div></div>';
+    });
+    h+='</div>';
+  }
+
+  // Optimal sequence timeline
+  if(sequence.length){
+    h+='<div class="sf-seq-timeline"><div class="sf-seq-timeline-title">Suggested Timeline Adjustments</div>';
+    sequence.forEach(s=>{
+      h+='<div class="sf-seq-tl-item">';
+      h+='<div class="sf-seq-tl-proj">'+esc(s.project)+'</div>';
+      h+='<div class="sf-seq-tl-dates"><span>'+fmtDate(s.originalGolive)+'</span><span class="sf-seq-tl-arrow">→</span><span class="sf-seq-tl-new">'+fmtDate(s.suggestedGolive)+'</span></div>';
+      h+='<div class="sf-seq-tl-reason">'+esc(s.reason||'')+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  // Re-analyze
+  h+='<div style="text-align:center;margin-top:16px"><button class="sf-analyze-btn" onclick="runSequencingAnalysis()">Re-Analyze</button></div>';
+  el.innerHTML=h;
 }
 
 // ════════════════════════════════════════════════════════
@@ -3431,8 +4109,75 @@ function renderPPulse(){
     }
     h+='</div>';
   });
+
+  // ── AI Insights Panel ──
+  const totalTextResponses=shs.reduce((a,sh)=>{
+    const r=p.pulseResults[sh.id];
+    return a+((r?.textResponses||[]).filter(t=>t.concerns||t.prepared).length);
+  },0);
+  if(totalTextResponses>0||hasAnyResults){
+    h+='<div class="pulse-ai-panel" id="pulse-ai-panel">';
+    h+='<div class="pulse-ai-hdr" onclick="togglePulseAI()">';
+    h+='<h3><span class="ai-sparkle">✦</span> AI Pulse Insights</h3>';
+    h+='<div class="pulse-ai-acts">';
+    const cached=p._pulseInsightsCache;
+    if(cached?.timestamp){h+='<span class="pulse-ai-meta">Analyzed '+fmtDate(cached.timestamp.split('T')[0])+'</span>';}
+    h+='<button class="pulse-ai-refresh" onclick="event.stopPropagation();refreshPulseInsights()" id="pulse-ai-refresh-btn"'+(totalTextResponses===0?' disabled title="Need text responses to analyze"':'')+'>'+(!cached?'Analyze':'Re-analyze')+'</button>';
+    h+='</div></div>';
+    h+='<div class="pulse-ai-body" id="pulse-ai-body" style="'+(cached?'':'display:none')+'">';
+    if(cached){
+      h+=renderPulseInsightsHTML(cached);
+    }else if(totalTextResponses>0){
+      h+='<div style="text-align:center;padding:20px;color:var(--ink-60);font-size:11px">Click <strong>Analyze</strong> to run AI-powered analysis on '+totalTextResponses+' open-ended responses.</div>';
+    }else{
+      h+='<div style="text-align:center;padding:20px;color:var(--ink-60);font-size:11px">No open-ended responses to analyze yet. Responses will appear as stakeholders complete surveys.</div>';
+    }
+    h+='</div></div>';
+  }
+
   el.innerHTML=h;
 }
+// Sample open-ended responses for demo data generation
+const DEMO_CONCERNS=[
+  "I'm worried the new system won't handle our edge cases. We've built workarounds over years that just work.",
+  "The timeline feels extremely aggressive. We barely finished the last migration and now this?",
+  "Nobody has explained how this affects my day-to-day. I keep hearing about 'transformation' but what does that mean for my role?",
+  "I've seen three of these initiatives in two years. None of them stuck. Why should I invest energy this time?",
+  "My manager doesn't seem to understand the new process either. How can they support us?",
+  "Training was too short. One 2-hour session for a completely new workflow is not realistic.",
+  "The communication has been confusing — different messages from leadership vs. project team.",
+  "I'm concerned about job security. If the system automates half our tasks, what happens to us?",
+  "We weren't consulted during the design phase. Now we're told to adopt something that doesn't fit our workflow.",
+  "The pilot group had major issues. Why are we rolling out to everyone before those are fixed?",
+  "I actually think this could be great if done right. The current system is painful.",
+  "Our team is stretched thin already. Adding change on top of our current workload is a recipe for burnout.",
+  "The executive sponsor hasn't been visible. It feels like this is a pet project, not a real priority.",
+  "I don't understand the urgency. The current system works fine for what I do.",
+  "Honestly I'm just going to wait and see. Not going to learn something that might get scrapped in 6 months.",
+  "Data migration concerns me most. If we lose historical records, compliance will be a nightmare.",
+  "The vendor demos looked good but our environment is way more complex. I doubt it'll be that smooth.",
+  "I appreciate the transparency from the project team. The town halls have been helpful.",
+  "Can we get more hands-on practice time? Videos and docs aren't enough for something this complex.",
+  "I'm excited about the new capabilities but nervous about the transition period."
+];
+const DEMO_PREPARED=[
+  "More hands-on training with realistic scenarios from our actual work, not generic examples.",
+  "Regular updates from leadership about what's changing and why, not just email blasts.",
+  "A dedicated go-to person for questions during the transition — not just a help desk ticket.",
+  "Seeing the pilot team's honest feedback and how issues were actually resolved.",
+  "Having my manager walk me through exactly how my role changes step by step.",
+  "Extended parallel running period so we can fall back if something goes wrong.",
+  "More time. This is being rushed and we need breathing room to learn properly.",
+  "Clear documentation of the new processes — not just system training but process training.",
+  "Understanding the 'why' better. I get that leadership wants this but I need to understand the benefits for our team.",
+  "Job security assurance. Hard to focus on learning when you're worried about being made redundant.",
+  "Access to a sandbox environment where I can practice without fear of breaking things.",
+  "Peer learning sessions with people who've already made the switch successfully.",
+  "Honest communication about what's not working yet, instead of just cheerleading.",
+  "Reduced workload during transition — we can't do our old job AND learn a new system at 100%.",
+  "Executive sponsorship that's more than a name on a slide. We need visible, active support."
+];
+
 function loadPulseDemoData(){
   const p=getProj();if(!p)return;
   if(!p.pulseConfig)p.pulseConfig={};
@@ -3447,7 +4192,16 @@ function loadPulseDemoData(){
       const variance=(Math.random()-0.5)*2;
       scores[d.key]=Math.max(1,Math.min(5,+(pracScore+variance).toFixed(1)));
     });
-    p.pulseResults[sh.id]={responses:Math.floor(Math.random()*40)+10,scores};
+    const numResp=Math.floor(Math.random()*12)+8;
+    // Generate open-ended text responses
+    const textResponses=[];
+    for(let i=0;i<numResp;i++){
+      textResponses.push({
+        concerns:DEMO_CONCERNS[Math.floor(Math.random()*DEMO_CONCERNS.length)],
+        prepared:DEMO_PREPARED[Math.floor(Math.random()*DEMO_PREPARED.length)]
+      });
+    }
+    p.pulseResults[sh.id]={responses:numResp,scores,textResponses};
   });
   touch('proj');schedSave();renderPPulse();
 }
@@ -3495,12 +4249,14 @@ function syncPulseResponses(){
         });
         const avgScores={};
         Object.keys(dimTotals).forEach(k=>{avgScores[k]=+(dimTotals[k]/dimCounts[k]).toFixed(1);});
+        // Collect text responses
+        const textResponses=responses.filter(r=>r.concerns||r.prepared).map(r=>({concerns:r.concerns||'',prepared:r.prepared||''}));
         if(!p.pulseResults)p.pulseResults={};
         const prev=p.pulseResults[sh.id];
         const newCount=responses.length;
         // Only update if count changed (avoid unnecessary saves)
         if(!prev||prev.responses!==newCount){
-          p.pulseResults[sh.id]={responses:newCount,scores:avgScores};
+          p.pulseResults[sh.id]={responses:newCount,scores:avgScores,textResponses};
           updated=true;
         }
       });
@@ -3520,9 +4276,261 @@ function simulatePulseResults(shId){
     const variance=(Math.random()-0.5)*2;// ±1
     scores[d.key]=Math.max(1,Math.min(5,+(pracScore+variance).toFixed(1)));
   });
-  const responses=Math.floor(Math.random()*40)+10;
-  p.pulseResults[shId]={responses,scores};
+  const numResp=Math.floor(Math.random()*12)+8;
+  const textResponses=[];
+  for(let i=0;i<numResp;i++){
+    textResponses.push({
+      concerns:DEMO_CONCERNS[Math.floor(Math.random()*DEMO_CONCERNS.length)],
+      prepared:DEMO_PREPARED[Math.floor(Math.random()*DEMO_PREPARED.length)]
+    });
+  }
+  p.pulseResults[shId]={responses:numResp,scores,textResponses};
   touch('proj');schedSave();renderPPulse();
+}
+
+// ════════════════════════════════════════════════════════
+// PULSE AI INSIGHTS ENGINE
+// ════════════════════════════════════════════════════════
+const PULSE_INSIGHTS_URL='https://yufehucjvviwanbulcok.supabase.co/functions/v1/pulse-insights';
+
+function togglePulseAI(){
+  const body=document.getElementById('pulse-ai-body');
+  if(body)body.style.display=body.style.display==='none'?'':'none';
+}
+
+function collectPulseInsightsData(p){
+  const shs=p.stakeholders||[];
+  const groups=[];
+  shs.forEach(sh=>{
+    const results=p.pulseResults?.[sh.id];
+    if(!results?.textResponses?.length)return;
+    groups.push({
+      groupName:sh.name,
+      responses:results.textResponses.map(t=>({concerns:t.concerns||'',prepared:t.prepared||''}))
+    });
+  });
+  const allResponses=groups.flatMap(g=>g.responses);
+  // Determine round number from history
+  const roundNumber=(p._pulseInsightsHistory||[]).length+1;
+  const previousAnalysis=(p._pulseInsightsHistory||[]).length>0
+    ?p._pulseInsightsHistory[p._pulseInsightsHistory.length-1]
+    :null;
+  return{responses:allResponses,groups,projectName:p.name,frameworkName:fwName(),roundNumber,previousAnalysis};
+}
+
+async function callPulseInsights(data){
+  const response=await fetch(PULSE_INSIGHTS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
+    body:JSON.stringify(data)
+  });
+  if(!response.ok){const err=await response.text();throw new Error('API error: '+err);}
+  return response.json();
+}
+
+function getPulseInsightsCacheKey(p){
+  const shs=p.stakeholders||[];
+  let hash='';
+  shs.forEach(sh=>{
+    const r=p.pulseResults?.[sh.id];
+    if(r?.textResponses){hash+=sh.id+':'+r.textResponses.length+';';}
+  });
+  return hash;
+}
+
+async function refreshPulseInsights(){
+  const p=getProj();if(!p)return;
+  const body=document.getElementById('pulse-ai-body');
+  const btn=document.getElementById('pulse-ai-refresh-btn');
+  if(!body)return;
+  body.style.display='';
+  body.innerHTML='<div class="pulse-ai-loading"><div class="spinner"></div><div>Analyzing open-ended responses with AI…</div></div>';
+  if(btn){btn.disabled=true;btn.textContent='Analyzing…';}
+  try{
+    const data=collectPulseInsightsData(p);
+    if(!data.responses.length){body.innerHTML='<div style="text-align:center;padding:20px;color:var(--ink-60);font-size:11px">No text responses to analyze.</div>';return;}
+    const analysis=await callPulseInsights(data);
+    analysis.timestamp=new Date().toISOString();
+    analysis._cacheKey=getPulseInsightsCacheKey(p);
+    // Save to project cache
+    p._pulseInsightsCache=analysis;
+    // Save to history for trend comparison
+    if(!p._pulseInsightsHistory)p._pulseInsightsHistory=[];
+    p._pulseInsightsHistory.push({themes:analysis.themes,resistance_signals:analysis.resistance_signals,timestamp:analysis.timestamp});
+    // Feed resistance signals into smart recommendations data
+    feedPulseToRecommendations(p,analysis);
+    touch('proj');schedSave();
+    body.innerHTML=renderPulseInsightsHTML(analysis);
+    // Render sentiment chart and trend chart
+    setTimeout(()=>{
+      renderPulseSentimentChart(analysis);
+      if((p._pulseInsightsHistory||[]).length>1)renderPulseTrendChart(p);
+    },100);
+    if(btn){btn.textContent='Re-analyze';}
+  }catch(err){
+    console.error('Pulse insights error:',err);
+    body.innerHTML='<div style="text-align:center;padding:20px;color:#b83232;font-size:11px">Analysis failed: '+esc(err.message)+'</div>';
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+function feedPulseToRecommendations(p,analysis){
+  // Store pulse insights summary on the project so smart recommendations can reference it
+  if(!p._pulseInsightsSummary)p._pulseInsightsSummary={};
+  p._pulseInsightsSummary={
+    topThemes:(analysis.themes||[]).slice(0,5).map(t=>({theme:t.theme,sentiment:t.sentiment,trend:t.trend,count:t.count})),
+    resistanceSignals:(analysis.resistance_signals||[]).map(s=>({signal:s.signal,severity:s.severity,group:s.group,type:s.type})),
+    sentimentBreakdown:analysis.sentiment_breakdown||{},
+    analyzedAt:analysis.timestamp
+  };
+}
+
+function renderPulseInsightsHTML(analysis){
+  let h='';
+
+  // 1. Summary narrative
+  if(analysis.summary){
+    h+='<div class="pai-section-hd">Executive Summary</div>';
+    h+='<div class="pai-summary">';
+    analysis.summary.split(/\n\n+/).forEach(para=>{
+      h+='<p>'+esc(para.trim())+'</p>';
+    });
+    h+='</div>';
+  }
+
+  // 2. Sentiment breakdown
+  if(analysis.sentiment_breakdown){
+    h+='<div class="pai-section-hd">Sentiment Distribution</div>';
+    h+='<div class="pai-sentiment">';
+    h+='<div class="pai-sentiment-chart"><canvas id="pai-sent-canvas" width="100" height="100"></canvas></div>';
+    h+='<div class="pai-sentiment-legend">';
+    const sb=analysis.sentiment_breakdown;
+    h+='<div class="pai-sentiment-item"><div class="pai-sent-dot pai-sent-pos"></div>Positive: '+(sb.positive||0)+'%</div>';
+    h+='<div class="pai-sentiment-item"><div class="pai-sent-dot pai-sent-neu"></div>Neutral: '+(sb.neutral||0)+'%</div>';
+    h+='<div class="pai-sentiment-item"><div class="pai-sent-dot pai-sent-neg"></div>Negative: '+(sb.negative||0)+'%</div>';
+    h+='<div class="pai-sentiment-item"><div class="pai-sent-dot pai-sent-mix"></div>Mixed: '+(sb.mixed||0)+'%</div>';
+    h+='</div></div>';
+  }
+
+  // 3. Themes
+  if(analysis.themes?.length){
+    h+='<div class="pai-section-hd">Top Themes <span style="font-weight:400;font-size:10px;color:var(--ink-60)">('+analysis.themes.length+' identified)</span></div>';
+    h+='<div class="pai-themes">';
+    analysis.themes.forEach(t=>{
+      const trendLabel={new:'● New',growing:'▲ Growing',stable:'— Stable',declining:'▼ Declining',resolved:'✓ Resolved'};
+      h+='<div class="pai-theme">';
+      h+='<div class="pai-theme-name" title="'+(esc(t.description||''))+'">'+esc(t.theme)+'</div>';
+      h+='<div class="pai-theme-count">'+t.count+'×</div>';
+      h+='<div class="pai-theme-sent '+(t.sentiment||'neutral')+'">'+esc(t.sentiment||'neutral')+'</div>';
+      h+='<div class="pai-theme-trend '+(t.trend||'new')+'">'+esc(trendLabel[t.trend]||t.trend||'new')+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  // 4. Resistance signals
+  if(analysis.resistance_signals?.length){
+    h+='<div class="pai-section-hd">⚠ Resistance Signals <span style="font-weight:400;font-size:10px;color:var(--ink-60)">('+analysis.resistance_signals.length+' detected)</span></div>';
+    h+='<div class="pai-signals">';
+    analysis.resistance_signals.forEach(s=>{
+      const typeLabels={active_resistance:'Active Resistance',confusion:'Confusion',disengagement:'Disengagement',fear:'Fear',skepticism:'Skepticism'};
+      h+='<div class="pai-signal '+(s.severity||'medium')+'">';
+      h+='<div class="pai-signal-top">';
+      h+='<span class="pai-signal-sev">'+(s.severity||'medium').toUpperCase()+'</span>';
+      h+='<span class="pai-signal-type">'+(typeLabels[s.type]||s.type||'')+'</span>';
+      if(s.group)h+='<span class="pai-signal-group">'+esc(s.group)+'</span>';
+      h+='</div>';
+      h+='<div class="pai-signal-text">'+esc(s.signal)+'</div>';
+      if(s.recommendation)h+='<div class="pai-signal-rec">→ '+esc(s.recommendation)+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  // 5. Key quotes
+  if(analysis.key_quotes?.length){
+    h+='<div class="pai-section-hd">Key Quotes <span style="font-weight:400;font-size:10px;color:var(--ink-60)">Representative anonymous responses</span></div>';
+    h+='<div class="pai-quotes">';
+    analysis.key_quotes.forEach(q=>{
+      h+='<div class="pai-quote">';
+      h+='<div class="pai-quote-text">'+esc(q.quote)+'</div>';
+      h+='<div class="pai-quote-meta">';
+      if(q.theme)h+='<span class="pai-quote-theme">'+esc(q.theme)+'</span>';
+      if(q.source_group)h+='<span class="pai-quote-group">'+esc(q.source_group)+'</span>';
+      if(q.sentiment){
+        const cls=q.sentiment==='positive'?'pai-sent-pos':q.sentiment==='negative'?'pai-sent-neg':'pai-sent-neu';
+        h+='<span class="pai-sent-dot '+cls+'" title="'+esc(q.sentiment)+'"></span>';
+      }
+      h+='</div></div>';
+    });
+    h+='</div>';
+  }
+
+  // 6. Trend chart placeholder (for multi-round)
+  const p=getProj();
+  if(p&&(p._pulseInsightsHistory||[]).length>1){
+    h+='<div class="pai-section-hd">Theme Trends Across Rounds</div>';
+    h+='<div class="pai-trend-chart"><canvas id="pai-trend-canvas"></canvas></div>';
+  }
+
+  // Disclaimer
+  h+='<div class="pai-disclaimer">Analysis generated by AI based on anonymous survey responses. Use professional judgment when interpreting results.</div>';
+
+  return h;
+}
+
+function renderPulseSentimentChart(analysis){
+  const canvas=document.getElementById('pai-sent-canvas');
+  if(!canvas||!window.Chart)return;
+  const sb=analysis.sentiment_breakdown||{};
+  new Chart(canvas,{
+    type:'doughnut',
+    data:{
+      labels:['Positive','Neutral','Negative','Mixed'],
+      datasets:[{data:[sb.positive||0,sb.neutral||0,sb.negative||0,sb.mixed||0],
+        backgroundColor:['#1d6840','#6366f1','#b83232','#d97706'],
+        borderWidth:0,hoverOffset:4}]
+    },
+    options:{responsive:false,maintainAspectRatio:true,
+      plugins:{legend:{display:false},tooltip:{bodyFont:{size:10}}},
+      cutout:'60%'
+    }
+  });
+}
+
+function renderPulseTrendChart(p){
+  const canvas=document.getElementById('pai-trend-canvas');
+  if(!canvas||!window.Chart)return;
+  const history=p._pulseInsightsHistory||[];
+  if(history.length<2)return;
+
+  // Collect all unique theme names across rounds
+  const allThemes=new Set();
+  history.forEach(h2=>{(h2.themes||[]).forEach(t=>allThemes.add(t.theme));});
+  const themeNames=[...allThemes].slice(0,6);// Top 6 themes
+
+  const colors=['#b8922a','#6366f1','#b83232','#1d6840','#d97706','#0ea5e9'];
+  const datasets=themeNames.map((name,i)=>({
+    label:name,
+    data:history.map(h2=>{const t=(h2.themes||[]).find(th=>th.theme===name);return t?t.count:0;}),
+    borderColor:colors[i%colors.length],
+    backgroundColor:colors[i%colors.length]+'20',
+    fill:false,tension:0.3,pointRadius:4,pointHoverRadius:6,borderWidth:2
+  }));
+
+  new Chart(canvas,{
+    type:'line',
+    data:{labels:history.map((_,i)=>'Round '+(i+1)),datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:9},usePointStyle:true,pointStyle:'circle',padding:10}},
+        tooltip:{bodyFont:{size:10}}},
+      scales:{
+        y:{beginAtZero:true,title:{display:true,text:'Mentions',font:{size:9}},ticks:{font:{size:9},stepSize:1}},
+        x:{ticks:{font:{size:9}}}
+      }
+    }
+  });
 }
 
 // ════════════════════════════════════════════════════════
@@ -3928,6 +4936,163 @@ function exportHandoffPDF(){
 function toggleGenMenu(){const m=document.getElementById('gen-menu');if(m)m.classList.toggle('open');}
 document.addEventListener('click',e=>{const m=document.getElementById('gen-menu');if(m&&!e.target.closest('.dropdown-gen'))m.classList.remove('open');});
 
+const NARRATIVE_URL='https://yufehucjvviwanbulcok.supabase.co/functions/v1/deliverable-narrative';
+let _genAudienceChoice='practitioner';
+let _genAIEnabled=true;
+let _genCurrentType=null;
+let _genCurrentLabel=null;
+
+function openGenModal(type,label){
+  toggleGenMenu();
+  _genCurrentType=type;_genCurrentLabel=label;
+  let existing=document.getElementById('gen-deliverable-modal');
+  if(existing)existing.remove();
+
+  const modal=document.createElement('div');
+  modal.id='gen-deliverable-modal';
+  modal.className='gen-modal';
+  modal.innerHTML=`<div class="gen-modal-box">
+    <h2>Generate ${esc(label)}</h2>
+    <div class="gen-modal-sub">Select audience depth and AI narrative options</div>
+    <div class="gen-aud-label">Audience Level</div>
+    <div class="gen-aud-opts">
+      <label class="gen-aud-opt${_genAudienceChoice==='executive'?' selected':''}" onclick="selectGenAud('executive',this)">
+        <input type="radio" name="gen-aud" value="executive"${_genAudienceChoice==='executive'?' checked':''}>
+        <div class="gen-aud-opt-text"><div class="gen-aud-opt-title">Executive</div><div class="gen-aud-opt-desc">High-level strategic summary for C-suite. Concise, impact-focused.</div></div>
+      </label>
+      <label class="gen-aud-opt${_genAudienceChoice==='practitioner'?' selected':''}" onclick="selectGenAud('practitioner',this)">
+        <input type="radio" name="gen-aud" value="practitioner"${_genAudienceChoice==='practitioner'?' checked':''}>
+        <div class="gen-aud-opt-text"><div class="gen-aud-opt-title">Practitioner</div><div class="gen-aud-opt-desc">Tactical detail for OCM practitioners and project managers. Methodology-grounded.</div></div>
+      </label>
+      <label class="gen-aud-opt${_genAudienceChoice==='full'?' selected':''}" onclick="selectGenAud('full',this)">
+        <input type="radio" name="gen-aud" value="full"${_genAudienceChoice==='full'?' checked':''}>
+        <div class="gen-aud-opt-text"><div class="gen-aud-opt-title">Full</div><div class="gen-aud-opt-desc">Comprehensive analysis for steering committees. All data included with deep narrative.</div></div>
+      </label>
+    </div>
+    <div class="gen-ai-toggle">
+      <input type="checkbox" id="gen-ai-check"${_genAIEnabled?' checked':''} onchange="_genAIEnabled=this.checked">
+      <label for="gen-ai-check"><strong>AI-Assisted Narrative</strong> — Generate consultant-grade executive summary from live project data</label>
+    </div>
+    <div class="gen-ai-note">AI narrative supplements existing data tables and charts. It does not replace structured content.</div>
+    <div id="gen-status" class="gen-status" style="display:none"></div>
+    <div class="gen-modal-acts">
+      <button class="btn-outline" onclick="closeGenModal()">Cancel</button>
+      <button class="btn-fill" id="gen-go-btn" onclick="executeGenerate()">Generate PDF</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)closeGenModal();});
+  requestAnimationFrame(()=>modal.classList.add('open'));
+}
+
+function selectGenAud(val,el){
+  _genAudienceChoice=val;
+  document.querySelectorAll('.gen-aud-opt').forEach(o=>o.classList.remove('selected'));
+  if(el)el.classList.add('selected');
+}
+
+function closeGenModal(){
+  const m=document.getElementById('gen-deliverable-modal');
+  if(m){m.classList.remove('open');setTimeout(()=>m.remove(),200);}
+}
+
+function collectNarrativeData(p){
+  // Reuse the smart recs data collector which has everything
+  const data=collectSmartRecsData(p);
+  // Add some extras
+  data.kirkpatrickDetails=p.stakeholders.map(s=>{
+    const k=s.kirk||{};
+    return{name:s.name,
+      L1:{method:k.L1?.method||'',timing:k.L1?.timing||''},
+      L2:{method:k.L2?.method||'',assessment:k.L2?.assessment||''},
+      L3:{interval:k.L3?.interval||'',observable:k.L3?.observable||''},
+      L4:{outcome:k.L4?.outcome||'',metric:k.L4?.metric||''}};
+  });
+  data.reinforcementDetails=p.stakeholders.map(s=>{
+    const r2=s.rein||{};
+    return{name:s.name,owner:r2.owner||'',activities:r2.activities||'',intervals:r2.intervals||[],escalation:r2.escalation||''};
+  });
+  data.impactDetails=(p.impactAssessment?.groups||[]).map(g=>({
+    name:g.name||'',impactLevel:g.impactLevel||'Medium',changeTypes:g.changeTypes||[],
+    currentState:g.currentState||'',futureState:g.futureState||'',
+    readinessActions:g.readinessActions?.length||0,completedActions:g.readinessActions?.filter(a=>a.done).length||0
+  }));
+  return data;
+}
+
+async function fetchNarrative(type,audience,data){
+  const response=await fetch(NARRATIVE_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
+    body:JSON.stringify({deliverableType:type,audience,projectData:data})
+  });
+  if(!response.ok){
+    const err=await response.json().catch(()=>({}));
+    throw new Error(err.error||'Narrative generation failed');
+  }
+  return await response.json();
+}
+
+async function executeGenerate(){
+  const p=getProj();const r=getRel();if(!p||!r)return;
+  const status=document.getElementById('gen-status');
+  const btn=document.getElementById('gen-go-btn');
+
+  let narrative=null;
+
+  if(_genAIEnabled){
+    if(status){status.style.display='block';status.className='gen-status';status.textContent='Generating AI narrative…';}
+    if(btn){btn.disabled=true;btn.textContent='Generating…';}
+    try{
+      const data=collectNarrativeData(p);
+      narrative=await fetchNarrative(_genCurrentType,_genAudienceChoice,data);
+    }catch(err){
+      if(status){status.className='gen-status error';status.textContent='AI narrative failed: '+err.message+'. Generating without AI.';}
+      await new Promise(r2=>setTimeout(r2,1500));
+      narrative=null;
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='Generate PDF';}
+    }
+  }
+
+  closeGenModal();
+
+  // Call the appropriate generator with narrative
+  const genFns={
+    stakeholder:genStakeholderAnalysis,
+    training:genTrainingPlan,
+    comms:genCommsPlan,
+    resistance:genResistancePlan,
+    readiness:genReadinessRec
+  };
+  const fn=genFns[_genCurrentType];
+  if(fn)fn(narrative,_genAudienceChoice);
+}
+
+// Helper: Insert AI narrative into PDF
+function pdfAINarrative(doc,y,w,h,pg,mg,narrativeText,sectionTitle){
+  if(!narrativeText)return y;
+  y=pdfCheckPage(doc,y,w,h,pg,30);
+  // Section label
+  doc.setFillColor(240,237,230);doc.roundedRect(mg,y,w-28,16,2,2,'F');
+  doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+  doc.text(sectionTitle||'AI-Assisted Analysis',mg+4,y+10);
+  doc.setFontSize(6);doc.setTextColor(140,140,140);doc.setFont('helvetica','italic');
+  doc.text('Generated from live project data. Review and adjust as needed.',w-mg,y+10,{align:'right'});
+  y+=20;
+
+  // Render narrative paragraphs
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(50,50,50);
+  const paragraphs=narrativeText.split(/\n\n+/).filter(p2=>p2.trim());
+  paragraphs.forEach(para=>{
+    const lines=doc.splitTextToSize(para.trim(),w-28);
+    y=pdfCheckPage(doc,y,w,h,pg,lines.length*4+8);
+    doc.text(lines,mg,y);
+    y+=lines.length*4+4;
+  });
+  return y+4;
+}
+
 const ADKAR_MSG_FOCUS={
   A1:{focus:'Why we are changing',channel:'Town halls, leadership memos, FAQs'},
   D:{focus:'What is in it for me',channel:'1:1 meetings, testimonials, incentives'},
@@ -4022,7 +5187,7 @@ function _trainingModality(sh){
   return'Instructor-led training (ILT/vILT)';
 }
 
-function genStakeholderAnalysis(){
+function genStakeholderAnalysis(aiNarrative,audience){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
@@ -4041,6 +5206,10 @@ function genStakeholderAnalysis(){
 
   // ── Page 2: Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  // AI Narrative (if available)
+  if(aiNarrative?.executiveSummary){
+    y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');
+  }
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   let execText='This analysis covers '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+' across the '+p.name+' initiative. ';
@@ -4223,7 +5392,7 @@ function genStakeholderAnalysis(){
   }catch(e){console.error('Stakeholder Analysis PDF:',e);alert('Error generating PDF: '+e.message);}
 }
 
-function genTrainingPlan(){
+function genTrainingPlan(aiNarrative,audience){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
@@ -4236,6 +5405,7 @@ function genTrainingPlan(){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   let trainExec='This training plan addresses '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+' for the '+p.name+' initiative. ';
@@ -4442,7 +5612,7 @@ function genTrainingPlan(){
   }catch(e){console.error('Training Plan PDF:',e);alert('Error generating PDF: '+e.message);}
 }
 
-function genCommsPlan(){
+function genCommsPlan(aiNarrative,audience){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
@@ -4458,6 +5628,7 @@ function genCommsPlan(){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   const posture=gapDims.length>=3?'proactive and intensive':gapDims.length>=1?'targeted':'sustainment-focused';
@@ -4624,7 +5795,7 @@ function genCommsPlan(){
   }catch(e){console.error('Comms Plan PDF:',e);alert('Error generating PDF: '+e.message);}
 }
 
-function genResistancePlan(){
+function genResistancePlan(aiNarrative,audience){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
@@ -4642,6 +5813,7 @@ function genResistancePlan(){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   const resistPosture=critSH.length>=3||critGaps.length>0?'critical':critSH.length>=1?'elevated':'manageable';
@@ -4871,7 +6043,7 @@ function genResistancePlan(){
   }catch(e){console.error('Resistance Plan PDF:',e);alert('Error generating PDF: '+e.message);}
 }
 
-function genReadinessRec(){
+function genReadinessRec(aiNarrative,audience){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
@@ -4893,6 +6065,7 @@ function genReadinessRec(){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   let recExec='Based on a comprehensive analysis of gate readiness ('+(gate||0)+'%), '+fwShort()+' assessment ('+adkar+'/5), '+
@@ -5102,6 +6275,11 @@ function genReadinessRec(){
     y=doc.lastAutoTable.finalY+10;
   }
 
+  // ── AI-Assisted Risk Narrative ──
+  if(aiNarrative?.riskNarrative){
+    y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.riskNarrative,'AI-Assisted Risk Narrative');
+  }
+
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
@@ -5111,13 +6289,13 @@ function genReadinessRec(){
 function genFullPackage(){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
-  alert('Generating all 5 deliverables. Each will open in a separate tab.');
+  alert('Generating all 5 deliverables (without AI narratives). Each will open in a separate tab.');
   toggleGenMenu();
-  setTimeout(()=>genStakeholderAnalysis(),100);
-  setTimeout(()=>genTrainingPlan(),300);
-  setTimeout(()=>genCommsPlan(),500);
-  setTimeout(()=>genResistancePlan(),700);
-  setTimeout(()=>genReadinessRec(),900);
+  setTimeout(()=>genStakeholderAnalysis(null,null),100);
+  setTimeout(()=>genTrainingPlan(null,null),300);
+  setTimeout(()=>genCommsPlan(null,null),500);
+  setTimeout(()=>genResistancePlan(null,null),700);
+  setTimeout(()=>genReadinessRec(null,null),900);
 }
 
 // ════════════════════════════════════════════════════════
