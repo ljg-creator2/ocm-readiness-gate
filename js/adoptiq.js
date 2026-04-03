@@ -565,7 +565,15 @@ function newProject(name,agencies,users){
     gapAnalysis:{gaps:[]},
     pulseConfig:{},
     pulseResults:{},
-    postLaunch:{}
+    postLaunch:{},
+    lifecycleSignals:{
+      requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},
+      design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},
+      testing:{qaDefects:0,uatDefects:0,uatParticipationRate:0,testingApproach:''},
+      deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
+    },
+    valueCase:{statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''},
+    proofPoints:[]
   };
 }
 
@@ -691,6 +699,303 @@ function facTier(v){if(v>=4)return'low';if(v>=3)return'mod';if(v>=2)return'high'
 function kirkReady(sh){if(!sh?.kirk)return'needed';let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100)>=75?'ready':Math.round(f/8*100)>=40?'partial':'needed';}
 function reinReady(sh){if(!sh?.rein)return'needed';let f=0;if(sh.rein.owner)f++;if(sh.rein.activities)f++;if(sh.rein.intervals?.length)f++;if(sh.rein.escalation)f++;return f>=3?'ready':f>=1?'partial':'needed';}
 function badgeLabel(r){return r==='ready'?'Ready':r==='partial'?'In Progress':'Not Started';}
+
+// ════════════════════════════════════════════════════════
+// LIFECYCLE HEALTH SCORING
+// ════════════════════════════════════════════════════════
+function calcLifecycleHealth(p){
+  if(!p?.lifecycleSignals)return{score:50,signals:[],hasData:false};
+  const ls=p.lifecycleSignals;
+  const signals=[];
+  let total=0,count=0;
+  function sig(key,val,g,y,r,label,redNote){
+    let strength='green',score=1.0;
+    if(val===null||val===undefined||val==='')return;
+    if(typeof val==='boolean'){
+      if(r===true&&val===true){strength='red';score=0.2;}
+      else if(g===false&&val===false){strength='green';score=1.0;}
+      else if(val===true){strength='yellow';score=0.6;}
+      else{strength='green';score=1.0;}
+    } else {
+      const n=parseFloat(val)||0;
+      if(n<=g)strength='green',score=1.0;
+      else if(n<=y)strength='yellow',score=0.6;
+      else strength='red',score=0.2;
+    }
+    signals.push({key,label,strength,score,value:val,redNote:strength==='red'?redNote:''});
+    total+=score;count++;
+  }
+  const req=ls.requirements||{},des=ls.design||{},tst=ls.testing||{},dep=ls.deployment||{};
+  // Requirements
+  if(req.onSchedule===false){signals.push({key:'req_schedule',label:'Requirements on schedule',strength:req.daysVariance>5?'red':'yellow',score:req.daysVariance>5?0.2:0.6,value:req.daysVariance,redNote:req.daysVariance>5?'Requirements completed more than 5 days late. This delay may compress downstream phases.':''});total+=req.daysVariance>5?0.2:0.6;count++;}
+  else if(req.onSchedule===true){signals.push({key:'req_schedule',label:'Requirements on schedule',strength:'green',score:1.0,value:true,redNote:''});total+=1.0;count++;}
+  if(req.reviewCycles){sig('req_reviews',req.reviewCycles,2,3,99,'Requirements review cycles','4+ review cycles suggests ongoing disputes or unclear scope. Consider a stakeholder alignment session.');}
+  if(req.disputes===true){signals.push({key:'req_disputes',label:'Unresolved disputes in requirements',strength:'red',score:0.2,value:true,redNote:'Unresolved disputes at requirements phase are a leading indicator of resistance and rework.'});total+=0.2;count++;}
+  // Design
+  if(des.scopeChangeRequests){sig('des_scope',des.scopeChangeRequests,0,2,99,'Design scope change requests','3+ scope changes during design indicates unstable requirements or stakeholder misalignment.');}
+  if(des.workaroundRequests){sig('des_workaround',des.workaroundRequests,0,2,99,'Stakeholder workaround requests','Workaround requests during design are a strong leading indicator of adoption resistance. Each request represents a stakeholder who does not believe the system will meet their needs.');}
+  if(des.reviewsDelayed===true){signals.push({key:'des_delay',label:'Design reviews delayed',strength:des.delayDays>5?'red':'yellow',score:des.delayDays>5?0.2:0.6,value:des.delayDays,redNote:des.delayDays>5?'Design review delays of more than 5 days compress testing and training timelines.':''});total+=des.delayDays>5?0.2:0.6;count++;}
+  // Testing
+  const qa=parseInt(tst.qaDefects)||0,uat=parseInt(tst.uatDefects)||0;
+  if(qa>0||uat>0){
+    const ratio=uat>0?Math.round(qa/uat):qa>0?999:0;
+    let rStr='green',rScr=1.0,rNote='';
+    if(ratio>=50){rStr='red';rScr=0.2;rNote=`UAT found ${uat} defect${uat!==1?'s':''} while QA found ${qa}. Users may not be testing thoroughly or are accepting known issues. This is a leading indicator of post-go-live resistance.`;}
+    else if(ratio>=10){rStr='yellow';rScr=0.6;rNote='QA-to-UAT ratio is elevated. Verify UAT test coverage is comprehensive and testers are exercising real-world scenarios.';}
+    signals.push({key:'tst_ratio',label:'QA-to-UAT defect ratio',strength:rStr,score:rScr,value:ratio+':1',redNote:rNote});
+    total+=rScr;count++;
+  }
+  if(tst.uatParticipationRate){
+    const rate=parseFloat(tst.uatParticipationRate)||0;
+    let rStr=rate>80?'green':rate>=60?'yellow':'red',rScr=rate>80?1.0:rate>=60?0.6:0.2;
+    signals.push({key:'tst_participation',label:'UAT participation rate',strength:rStr,score:rScr,value:rate+'%',redNote:rStr==='red'?`Only ${rate}% of invited users participated in UAT. Low participation means the system has not been adequately validated by real users.`:''});
+    total+=rScr;count++;
+  }
+  // Deployment
+  if(dep.goliveDateChanges){sig('dep_changes',dep.goliveDateChanges,0,1,99,'Go-live date changes','2+ go-live date changes erode stakeholder confidence and may indicate the project is not ready.');}
+  if(dep.supportTicketsWeek1){sig('dep_tickets',dep.supportTicketsWeek1,20,50,99,'Post-go-live support tickets (week 1)',`${dep.supportTicketsWeek1} support tickets in the first week suggests significant user difficulties. Consider extended hyper-care support.`);}
+  if(dep.workaroundRequestsPostGL){sig('dep_workaround_post',dep.workaroundRequestsPostGL,0,2,99,'Post-go-live workaround requests',`${dep.workaroundRequestsPostGL} workaround requests post go-live indicates users are not adopting the intended process. Targeted coaching intervention recommended.`);}
+  const score=count>0?Math.round((total/count)*100):50;
+  return{score,signals,hasData:count>0};
+}
+
+function signalStrengthBadge(strength){
+  const map={green:'<span class="sig-badge sig-green">Healthy</span>',yellow:'<span class="sig-badge sig-yellow">Watch</span>',red:'<span class="sig-badge sig-red">Concern</span>'};
+  return map[strength]||'';
+}
+
+// ════════════════════════════════════════════════════════
+// DATA SOURCE CLASSIFICATION
+// ════════════════════════════════════════════════════════
+function getDataSourceType(component,p){
+  if(!p)return'Estimated';
+  const shs=p.stakeholders||[];
+  switch(component){
+    case'framework':{
+      const hasPulse=p.pulseResults&&Object.keys(p.pulseResults).length>0;
+      if(hasPulse)return'Measured';
+      const hasNotes=Object.values(p.adkarNotes||{}).some(n=>n&&n.trim().length>0);
+      return hasNotes?'Observed':'Estimated';
+    }
+    case'sentiment':{
+      const hasTouchpoints=shs.some(sh=>(sh.touchpoints||[]).length>0);
+      const hasTrustHistory=shs.some(sh=>(sh.trustHistory||[]).length>=2);
+      if(hasTrustHistory&&hasTouchpoints)return'Measured';
+      if(hasTouchpoints)return'Observed';
+      return'Estimated';
+    }
+    case'training':{
+      const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
+      const avg=kirkPcts.length?kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length:0;
+      return avg>=75?'Measured':avg>=40?'Observed':'Estimated';
+    }
+    case'lifecycle':{
+      const lh=calcLifecycleHealth(p);
+      if(!lh.hasData)return'Estimated';
+      return lh.signals.length>=4?'Measured':'Observed';
+    }
+    case'comms':{
+      const dims=getActiveDims();
+      const cd=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
+      const hasNotes=cd.some(d=>(p.adkarNotes||{})[d.key]&&p.adkarNotes[d.key].trim().length>0);
+      const hasPulse=p.pulseResults&&Object.keys(p.pulseResults).length>0;
+      if(hasPulse)return'Measured';
+      return hasNotes?'Observed':'Estimated';
+    }
+    case'risk':{
+      const keys=Object.keys(p.gateState||{});
+      const assessed=keys.filter(k=>p.gateState[k]!=='gray').length;
+      const total=keys.length;
+      if(!total)return'Estimated';
+      return assessed/total>=0.75?'Measured':assessed/total>=0.4?'Observed':'Estimated';
+    }
+  }
+  return'Estimated';
+}
+function calcDataConfidence(p){
+  const components=['framework','sentiment','training','lifecycle','comms','risk'];
+  let measured=0,observed=0,estimated=0;
+  components.forEach(c=>{const t=getDataSourceType(c,p);if(t==='Measured')measured++;else if(t==='Observed')observed++;else estimated++;});
+  const total=components.length;
+  return{measured:Math.round(measured/total*100),observed:Math.round(observed/total*100),estimated:Math.round(estimated/total*100)};
+}
+function dataSourceBadge(type){
+  if(type==='Measured')return'<span class="ds-badge ds-measured">Measured</span>';
+  if(type==='Observed')return'<span class="ds-badge ds-observed">Observed</span>';
+  return'<span class="ds-badge ds-estimated">Estimated</span>';
+}
+
+// ════════════════════════════════════════════════════════
+// MULTI-SOURCE SENTIMENT SCORE
+// ════════════════════════════════════════════════════════
+function sentimentScore(sh,pulseScores){
+  const base=adoptScore(sh.factors);
+  let modifier=0;
+  const trust=sh.trust||3;
+  if(trust<3)modifier-=(3-trust)*8;
+  else if(trust>3)modifier+=(trust-3)*4;
+  const ai=sh.anxietyIndicators||{};
+  if((ai.whatDoesThisMeanFreq||0)>5)modifier-=5;
+  if((ai.extraReviewCycles||0)>2)modifier-=5;
+  if((ai.escalations||0)>1)modifier-=5;
+  if(ai.attendanceDrop)modifier-=5;
+  const tps=sh.touchpoints||[];
+  tps.forEach(tp=>{if(tp.trustImpact==='Increased')modifier+=5;else if(tp.trustImpact==='Decreased')modifier-=5;});
+  modifier=Math.max(-30,Math.min(15,modifier));
+  let score=base+modifier;
+  if(pulseScores&&Object.keys(pulseScores).length>0){
+    const pv=Object.values(pulseScores);
+    const pAvg=Math.round(pv.reduce((a,b)=>a+b,0)/pv.length/5*100);
+    score=Math.round(score*0.7+pAvg*0.3);
+  }
+  return Math.max(0,Math.min(100,score));
+}
+
+// ════════════════════════════════════════════════════════
+// "SO WHAT?" INTERPRETATION ENGINE
+// ════════════════════════════════════════════════════════
+function getSoWhat(metric,value,context){
+  const ctx=context||{};
+  switch(metric){
+    case'adoptionScore':{
+      const v=parseInt(value)||0;
+      if(v>=85)return'Champion — on trajectory to become a reference site. Continue reinforcement focus through go-live.';
+      if(v>=65)return'On Track — maintain current engagement cadence. Monitor stakeholder sentiment as go-live approaches.';
+      if(v>=40){
+        const weak=ctx.weakestComponent||'stakeholder engagement';
+        const gate=ctx.nextGate||'the next gate';
+        return`At Risk — current trajectory suggests readiness thresholds may not be met by ${gate} without intervention in ${weak}.`;
+      }
+      const drivers=ctx.topDrivers||'risk flags and low sentiment scores';
+      return`Critical — recommend go-live reassessment. Primary drivers: ${drivers}.`;
+    }
+    case'sentiment':{
+      const v=parseFloat(value)||0;
+      const recentNoChange=ctx.recentNoChange||0;
+      const trust=ctx.trust||3;
+      const highAnxiety=ctx.highAnxiety||false;
+      if(highAnxiety)return'Multiple anxiety signals active. Targeted FAQ sessions, a leadership Q&A, or a walkthrough of common concerns may help reduce uncertainty.';
+      if(trust<3&&ctx.trustDeclining)return'Trust trending negative. Address the root cause — unclear messaging or unresolved concerns — before adding more communication volume.';
+      if(v<2.5&&recentNoChange>=3)return'Engagement activities are not moving the needle. The last 3 touchpoints showed no improvement in trust. Consider leadership-level intervention or a different engagement approach.';
+      if(v>=4)return'Strong sentiment — this stakeholder group is actively supportive. Leverage them as change champions.';
+      if(v>=3)return'Neutral to positive sentiment. Maintain engagement cadence and watch for early signs of concern.';
+      return'Below-average sentiment. Increase engagement frequency and document what is driving the gap.';
+    }
+    case'kirkpatrickGap':{
+      const l2=parseFloat(ctx.l2)||0,l3=parseFloat(ctx.l3)||0;
+      if(l2>=3.5&&l3<2.5)return`Workers are completing training but not applying skills on the job — a transfer gap, not a knowledge gap. L2 (Learning) scores ${l2.toFixed(1)} but L3 (Behavior) scores ${l3.toFixed(1)}. Consider reinforcement activities, job aids, and supervisory coaching.`;
+      if(l3>=3.5)return'Strong behavioral transfer — training is translating into on-the-job application. Maintain reinforcement schedule.';
+      return'Behavior transfer is developing. Continue monitoring at the defined L3 measurement interval.';
+    }
+    case'gateScore':{
+      const v=parseInt(value)||0;
+      const declined=ctx.declined||false;
+      const gateNum=ctx.gateNum||'';
+      if(declined)return`Trajectory declining — gate score dropped since ${gateNum?'Gate '+gateNum:'the previous gate'}. Review which items moved from green to yellow/red and address root causes.`;
+      if(v<50)return'No-Go threshold — proceeding to go-live without resolving open items is high risk. A structured mitigation plan is required.';
+      if(v<75)return'Conditional Go — partial readiness. Document specific conditions that must be met before proceeding.';
+      return'Go threshold met — readiness is sufficient to proceed. Maintain monitoring through go-live.';
+    }
+    case'lifecycleHealth':{
+      const v=parseInt(value)||0;
+      if(v>=80)return'Lifecycle signals are healthy — no significant resistance or quality indicators detected in the project execution data.';
+      if(v>=60)return'Watch indicators present. Review yellow signals and determine whether they require active intervention.';
+      if(v>=40)return'Multiple concern signals detected in the SDLC data. These patterns are leading indicators of post-go-live adoption difficulty.';
+      return'Critical lifecycle signals present. The SDLC data indicates significant adoption risk. Escalation and targeted intervention recommended before go-live.';
+    }
+    case'frameworkDim':{
+      const v=parseFloat(value)||0;
+      const dim=ctx.dim||'this dimension';
+      if(v<2.5)return`${dim} scores in the bottom quartile. Targeted interventions — such as focused sessions, sponsor messaging, or coaching — are recommended before the next gate.`;
+      if(v>=4)return`Strong ${dim} score. Sustain through continued engagement and visible reinforcement.`;
+      return`Moderate ${dim} score. Monitor for decline and address any emerging gaps proactively.`;
+    }
+    case'complexity':{
+      const v=ctx.rating||'Medium';
+      const effort=ctx.effort||'Standard';
+      if(v==='Critical')return`Critical complexity — ${effort} OCM effort required. Ensure adequate resources are allocated before this project's OCM plan is finalized.`;
+      if(v==='High')return`High complexity — ${effort} OCM support recommended. Monitor this project closely as it approaches key milestones.`;
+      if(v==='Medium')return`Standard complexity — ${effort} OCM approach is appropriate. Confirm resource allocations are in place.`;
+      return`Low complexity — ${effort} OCM approach. Maintain baseline engagement and monitoring.`;
+    }
+    default:return'';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// COMPLEXITY RATING
+// ════════════════════════════════════════════════════════
+function calcComplexity(p){
+  if(!p)return{score:0,rating:'Low',effort:'Light Touch'};
+  let score=0;
+  const groups=(p.impactAssessment?.groups||[]).length;
+  if(groups>5)score+=2;else if(groups>=3)score+=1;
+  const lh=calcLifecycleHealth(p);
+  const badSigs=lh.signals.filter(s=>s.strength==='red'||s.strength==='yellow').length;
+  if(badSigs>3)score+=2;else if(badSigs>=1)score+=1;
+  const adScore=calcCompositeScore(p);
+  if(adScore<50)score+=2;else if(adScore<65)score+=1;
+  const flags=getProjFlagCount(p);
+  if(flags>3)score+=2;else if(flags>=1)score+=1;
+  const deps=Object.values(p.depHM||{}).filter(v=>v&&v!=='n').length;
+  if(deps>2)score+=1;
+  let rating,effort;
+  if(score>=9){rating='Critical';effort='Intensive';}
+  else if(score>=6){rating='High';effort='High Touch';}
+  else if(score>=3){rating='Medium';effort='Standard';}
+  else{rating='Low';effort='Light Touch';}
+  return{score,rating,effort};
+}
+function getProjFlagCount(p){
+  if(!p)return 0;
+  let n=0;GATE_DEFS.forEach(g=>{g.items.forEach((_,i)=>{if(p.gateState[g.id+'_'+i]==='red')n++;});});return n;
+}
+
+// ════════════════════════════════════════════════════════
+// COMPOSITE SCORE (extracted for reuse)
+// ════════════════════════════════════════════════════════
+function calcCompositeScore(p){
+  if(!p)return 0;
+  const shs=p.stakeholders||[];
+  const dims=getActiveDims();
+  const fwScores=dims.map(d=>p.adkarScores?.[d.key]||3);
+  const fwPct=fwScores.length?Math.round(fwScores.reduce((a,b)=>a+b,0)/fwScores.length/5*100):0;
+  const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>{
+    const ps=p.pulseResults?.[sh.id]?.scores||{};
+    return a+sentimentScore(sh,ps);
+  },0)/shs.length):50;
+  const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
+  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const lhData=calcLifecycleHealth(p);
+  const lcPct=lhData.score;
+  const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
+  const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
+  const commsPct=Math.round(commsAvg/5*100);
+  const gs=projGateScore(p);
+  const flagCount=getProjFlagCount(p);
+  const riskPct=Math.max(0,Math.min(100,gs!==null?Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)):50));
+  return Math.round(fwPct*0.25+sentPct*0.20+trainPct*0.20+lcPct*0.10+commsPct*0.10+riskPct*0.15);
+}
+
+// ════════════════════════════════════════════════════════
+// VALUE CASE HELPERS
+// ════════════════════════════════════════════════════════
+function calcValueRealization(vc){
+  if(!vc?.successCriteria?.length)return null;
+  const criteria=vc.successCriteria.filter(c=>c.metStatus);
+  if(!criteria.length)return null;
+  const score=criteria.reduce((a,c)=>{
+    if(c.metStatus==='Yes')return a+1;
+    if(c.metStatus==='Partially')return a+0.5;
+    return a;
+  },0);
+  return Math.round(score/criteria.length*100);
+}
+function isPostGoLive(p){
+  if(!p?.golive)return false;
+  return new Date(p.golive)<=new Date();
+}
+
 function daysTo(d){if(!d)return null;const t=new Date();t.setHours(0,0,0,0);const g=new Date(d);g.setHours(0,0,0,0);return Math.ceil((g-t)/86400000);}
 function fmtDays(d){if(d===null)return'—';if(d<0)return Math.abs(d)+' days overdue';if(d===0)return'Today';return d+' days';}
 function fmtDate(d){if(!d)return'—';const[y,m,dy]=d.split('-');return`${m}/${dy}/${y}`;}
@@ -768,6 +1073,7 @@ function showProjTab(id,btn){
   if(id==='gaps')renderPGaps();
   if(id==='postlaunch')renderPPostLaunch();
   if(id==='pulse')renderPPulse();
+  if(id==='lifecycle')renderPLifecycle();
 }
 
 // ════════════════════════════════════════════════════════
@@ -931,7 +1237,7 @@ function renderPortfolio(){
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('sat-sec').style.display=releases.length>=1?'block':'none';
-  renderSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();
+  renderSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
   if(isReadOnly)applyReadOnlyRestrictions();
 }
 
@@ -1571,7 +1877,9 @@ function addPSH(){
   p.stakeholders.push({id:uid(),name,
     factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},objectives:[],
     kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
-    rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''}});
+    rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''},
+    trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
+    anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}});
   inp.value='';renderPSH();renderPKPIs();touch('proj');schedSave();
 }
 function removePSH(id){const p=getProj();if(!p)return;p.stakeholders=p.stakeholders.filter(s=>s.id!==id);renderPSH();renderPKPIs();touch('proj');schedSave();}
@@ -1645,9 +1953,181 @@ function renderPSH(){
           <div class="ak-r-note"><strong>${fwShort()} Reinforcement Score: ${adkarR}/5 —</strong> ${rNote}</div>
         </div>
       </div>
+      ${renderTrustSection(sh)}
     </div></div>`;
   }).join('');
   renderPAHM();
+}
+
+function renderTrustSection(sh){
+  const trust=sh.trust||3;
+  const trustLabels=['','Active Distrust','Skeptical','Neutral','Cautiously Optimistic','High Trust'];
+  const trustColors={1:'var(--red)',2:'var(--amber)',3:'var(--ink-60)',4:'var(--gold)',5:'var(--green)'};
+  const ai=sh.anxietyIndicators||{};
+  const highAnxiety=(ai.whatDoesThisMeanFreq||0)>5||(ai.extraReviewCycles||0)>2||(ai.escalations||0)>1||ai.attendanceDrop;
+  const tps=sh.touchpoints||[];
+  const increased=tps.filter(t=>t.trustImpact==='Increased').length;
+  const decreased=tps.filter(t=>t.trustImpact==='Decreased').length;
+  const noChange=tps.filter(t=>t.trustImpact==='No Change').length;
+  const prec=sh.preconceptions||[];
+  const ps=sh.id&&window.releases?getProj()?.pulseResults?.[sh.id]?.scores||{}:{};
+  const sentSc=sentimentScore(sh,ps);
+  const sentSW=getSoWhat('sentiment',sentSc,{
+    recentNoChange:tps.slice(-3).filter(t=>t.trustImpact==='No Change').length,
+    trust,
+    trustDeclining:(sh.trustHistory||[]).length>=2&&sh.trustHistory[sh.trustHistory.length-1].value<sh.trustHistory[sh.trustHistory.length-2].value,
+    highAnxiety
+  });
+  return`<div class="exp-sec"><button class="exp-tog" onclick="toggleExp('ptrust-${sh.id}',this)" aria-expanded="false">
+    <div class="exp-tog-l">Emotional Readiness &amp; Trust<span class="exp-badge" style="background:${trustColors[trust]||'var(--ink-60)'};color:#fff">${trustLabels[trust]||'Level '+trust}</span></div>
+    <span class="exp-arr" id="parr-trust-${sh.id}">&#9660;</span></button>
+    <div class="exp-body" id="ptrust-${sh.id}">
+      <div class="trust-section">
+        <div class="trust-score-row">
+          <div class="trust-sent-card">
+            <div class="trust-sent-val" style="color:${sentSc>=60?'var(--green)':sentSc>=40?'var(--gold)':'var(--red)'}">${sentSc}%</div>
+            <div class="trust-sent-lbl">Sentiment Score</div>
+            ${sentSW?`<div class="so-what-line">${esc(sentSW)}</div>`:''}
+          </div>
+          <div class="trust-breakdown">
+            <div class="trust-mod-row"><span>Base (adoption factors)</span><span>${adoptScore(sh.factors)}%</span></div>
+            <div class="trust-mod-row"><span>Trust modifier</span><span style="color:${trust<3?'var(--red)':trust>3?'var(--green)':'var(--ink-60)'}">${trust<3?'−'+(3-trust)*8:trust>3?'+'+(trust-3)*4:'0'}pts</span></div>
+            <div class="trust-mod-row"><span>Anxiety modifier</span><span style="color:${highAnxiety?'var(--red)':'var(--ink-60)'}'">${highAnxiety?'−'+([(ai.whatDoesThisMeanFreq||0)>5,(ai.extraReviewCycles||0)>2,(ai.escalations||0)>1,ai.attendanceDrop].filter(Boolean).length*5):'0'}pts</span></div>
+            <div class="trust-mod-row"><span>Touchpoint modifier</span><span style="color:${increased>decreased?'var(--green)':decreased>increased?'var(--red)':'var(--ink-60)'}">${increased>0||decreased>0?((increased-decreased)*5>0?'+':'')+Math.max(-30,Math.min(15,(increased-decreased)*5)+'pts'):'0pts'}</span></div>
+          </div>
+        </div>
+        <div class="trust-field"><label>Trust Level</label>
+          <div class="trust-selector">${[1,2,3,4,5].map(v=>`<button class="trust-btn ${trust===v?'active':''}" onclick="updateSHTrust(${sh.id},${v})" title="${trustLabels[v]}">${v}<div class="trust-btn-lbl">${trustLabels[v]}</div></button>`).join('')}</div>
+        </div>
+        ${sh.trustHistory?.length>=2?`<div class="trust-history-spark">${renderTrustSparkline(sh.trustHistory)}</div>`:''}
+        <button class="btn-add-sm" onclick="recordTrustUpdate(${sh.id})">+ Record Trust Update</button>
+        <div class="trust-field" style="margin-top:16px"><label>Preconceptions</label>
+          <div class="preconcepts-list">${prec.map((pc,i)=>`<div class="preconcept-item">
+            <span class="preconcept-text">${esc(pc.text)}</span>
+            <select class="pc-status-sel" onchange="updatePreconception(${sh.id},${i},'status',this.value)">
+              <option ${pc.status==='Active'?'selected':''}>Active</option>
+              <option ${pc.status==='Being Addressed'?'selected':''}>Being Addressed</option>
+              <option ${pc.status==='Resolved'?'selected':''}>Resolved</option>
+            </select>
+            <span class="pc-status-badge pc-${(pc.status||'Active').toLowerCase().replace(' ','-')}">${pc.status||'Active'}</span>
+            <button class="btn-rm-sm" onclick="removePreconception(${sh.id},${i})">&times;</button>
+          </div>`).join('')}</div>
+          <button class="btn-add-sm" onclick="addPreconception(${sh.id})">+ Add Preconception</button>
+        </div>
+        <div class="trust-field" style="margin-top:16px"><label>Anxiety Indicators</label>
+          <div class="anxiety-grid">
+            <div class="anxiety-row"><span>"What does this mean?" frequency</span><input class="inp-sm" type="number" min="0" value="${ai.whatDoesThisMeanFreq||0}" oninput="updateSHAnxiety(${sh.id},'whatDoesThisMeanFreq',+this.value)">${(ai.whatDoesThisMeanFreq||0)>5?'<span class="anxiety-warn">⚠ High</span>':''}</div>
+            <div class="anxiety-row"><span>Extra review cycle requests</span><input class="inp-sm" type="number" min="0" value="${ai.extraReviewCycles||0}" oninput="updateSHAnxiety(${sh.id},'extraReviewCycles',+this.value)">${(ai.extraReviewCycles||0)>2?'<span class="anxiety-warn">⚠ High</span>':''}</div>
+            <div class="anxiety-row"><span>Escalations to leadership</span><input class="inp-sm" type="number" min="0" value="${ai.escalations||0}" oninput="updateSHAnxiety(${sh.id},'escalations',+this.value)">${(ai.escalations||0)>1?'<span class="anxiety-warn">⚠ High</span>':''}</div>
+            <div class="anxiety-row"><span>Attendance/participation drop-off</span><label class="toggle-label"><input type="checkbox" ${ai.attendanceDrop?'checked':''} onchange="updateSHAnxiety(${sh.id},'attendanceDrop',this.checked)"><span class="toggle-pill"></span></label>${ai.attendanceDrop?'<span class="anxiety-warn">⚠ Active</span>':''}</div>
+          </div>
+        </div>
+        <div class="trust-field" style="margin-top:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><label>Engagement Touchpoints</label><button class="btn-add-sm" onclick="openAddTouchpoint(${sh.id})">+ Log Touchpoint</button></div>
+          ${tps.length?`<div class="tp-summary"><span class="tp-sum increased">↑ ${increased} Increased</span><span class="tp-sum no-change">→ ${noChange} No Change</span><span class="tp-sum decreased">↓ ${decreased} Decreased</span></div>`:''}
+          <div class="tp-list">${tps.map((tp,i)=>`<div class="tp-item">
+            <span class="tp-impact-icon ${tp.trustImpact==='Increased'?'ti-up':tp.trustImpact==='Decreased'?'ti-down':'ti-neutral'}">${tp.trustImpact==='Increased'?'↑':tp.trustImpact==='Decreased'?'↓':'→'}</span>
+            <div class="tp-detail"><div class="tp-desc">${esc(tp.description)}</div><div class="tp-meta">${tp.type} · ${fmtDate(tp.date)} · <span style="color:${tp.trustImpact==='Increased'?'var(--green)':tp.trustImpact==='Decreased'?'var(--red)':'var(--ink-60)'}">${tp.trustImpact}</span></div></div>
+            <button class="btn-rm-sm" onclick="removeTouchpoint(${sh.id},${i})">&times;</button>
+          </div>`).join('')||'<div class="es-txt" style="font-size:12px;padding:8px 0">No touchpoints logged yet.</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function renderTrustSparkline(history){
+  const pts=history.slice(-6);if(pts.length<2)return'';
+  const vals=pts.map(p=>p.value||3);
+  const max=5,min=1,h=40,w=120;
+  const points=vals.map((v,i)=>{const x=Math.round(i/(vals.length-1)*(w-8))+4;const y=h-Math.round((v-min)/(max-min)*(h-8))-4;return`${x},${y}`;}).join(' ');
+  const lastColor=vals[vals.length-1]>=4?'var(--green)':vals[vals.length-1]>=3?'var(--gold)':'var(--red)';
+  return`<div class="trust-spark-wrap"><div class="trust-spark-lbl">Trust trend (last ${pts.length} entries)</div><svg width="${w}" height="${h}" class="trust-spark"><polyline points="${points}" fill="none" stroke="${lastColor}" stroke-width="2"/></svg></div>`;
+}
+function updateSHTrust(id,val){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
+  sh.trust=val;renderPSH();touch('proj');schedSave();
+}
+function recordTrustUpdate(id){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
+  if(!sh.trustHistory)sh.trustHistory=[];
+  const note=prompt('Optional note for this trust update (press OK to save):','');
+  if(note===null)return;
+  sh.trustHistory.push({date:new Date().toISOString().split('T')[0],value:sh.trust||3,note});
+  touch('proj');schedSave();renderPSH();
+}
+function addPreconception(id){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
+  if(!sh.preconceptions)sh.preconceptions=[];
+  const text=prompt('Describe the preconception this stakeholder group holds:');
+  if(!text)return;
+  sh.preconceptions.push({id:uid(),text,status:'Active'});
+  renderPSH();touch('proj');schedSave();
+}
+function removePreconception(shId,idx){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===shId);if(!sh||!sh.preconceptions)return;
+  sh.preconceptions.splice(idx,1);renderPSH();touch('proj');schedSave();
+}
+function updatePreconception(shId,idx,field,val){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===shId);if(!sh||!sh.preconceptions||!sh.preconceptions[idx])return;
+  sh.preconceptions[idx][field]=val;renderPSH();touch('proj');schedSave();
+}
+function updateSHAnxiety(id,field,val){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
+  if(!sh.anxietyIndicators)sh.anxietyIndicators={whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false};
+  sh.anxietyIndicators[field]=val;renderPSH();touch('proj');schedSave();
+}
+function openAddTouchpoint(shId){
+  let existing=document.getElementById('add-tp-modal');if(existing)existing.remove();
+  const modal=document.createElement('div');modal.id='add-tp-modal';modal.className='modal-ov';
+  modal.innerHTML=`<div class="modal-box" style="max-width:480px">
+    <div class="modal-hd"><div class="modal-title">Log Engagement Touchpoint</div><button class="modal-close" onclick="document.getElementById('add-tp-modal').remove()">&times;</button></div>
+    <div class="modal-bd">
+      <div class="field-group"><label>Date</label><input class="inp-std" id="tp-date" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="field-group"><label>Type</label><select class="inp-std" id="tp-type"><option>Meeting</option><option>Demo</option><option>Q&A Session</option><option>Leadership Lab</option><option>Training Session</option><option>Walkthrough</option><option>Other</option></select></div>
+      <div class="field-group"><label>Description</label><input class="inp-std" id="tp-desc" placeholder="Brief description of the engagement activity"></div>
+      <div class="field-group"><label>Impact on Trust</label>
+        <div class="tp-impact-btns">
+          <button class="tp-impact-btn" id="tpi-inc" onclick="selectTPImpact('Increased')" style="border-color:var(--green)">↑ Increased</button>
+          <button class="tp-impact-btn" id="tpi-nc" onclick="selectTPImpact('No Change')">→ No Change</button>
+          <button class="tp-impact-btn" id="tpi-dec" onclick="selectTPImpact('Decreased')" style="border-color:var(--red)">↓ Decreased</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft"><button class="btn-cancel" onclick="document.getElementById('add-tp-modal').remove()">Cancel</button><button class="btn-gold" onclick="saveTouchpoint(${shId})">Save Touchpoint</button></div>
+  </div>`;
+  document.body.appendChild(modal);requestAnimationFrame(()=>modal.classList.add('open'));
+  modal.addEventListener('click',function(e){if(e.target===this)this.remove();});
+  window._selectedTPImpact='No Change';
+  document.getElementById('tpi-nc').classList.add('active');
+}
+function selectTPImpact(val){
+  window._selectedTPImpact=val;
+  ['inc','nc','dec'].forEach(k=>{document.getElementById('tpi-'+k)?.classList.remove('active');});
+  const key=val==='Increased'?'inc':val==='No Change'?'nc':'dec';
+  document.getElementById('tpi-'+key)?.classList.add('active');
+}
+function saveTouchpoint(shId){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===shId);if(!sh)return;
+  if(!sh.touchpoints)sh.touchpoints=[];
+  const date=document.getElementById('tp-date')?.value||new Date().toISOString().split('T')[0];
+  const type=document.getElementById('tp-type')?.value||'Meeting';
+  const desc=document.getElementById('tp-desc')?.value.trim()||'';
+  sh.touchpoints.push({id:uid(),date,type,description:desc,trustImpact:window._selectedTPImpact||'No Change'});
+  document.getElementById('add-tp-modal')?.remove();
+  renderPSH();touch('proj');schedSave();
+}
+function removeTouchpoint(shId,idx){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===shId);if(!sh||!sh.touchpoints)return;
+  sh.touchpoints.splice(idx,1);renderPSH();touch('proj');schedSave();
 }
 function updatePFac(id,key,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.factors[key]=parseInt(val);const ve=document.getElementById(`pfv-${id}-${key}`);const de=document.getElementById(`pfd-${id}-${key}`);if(ve)ve.textContent=val;if(de)de.textContent=FD[parseInt(val)];renderPSH();renderPKPIs();touch('proj');schedSave();}
 function addPLO(id){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives.push('');renderPSH();const b=document.getElementById('plo-'+id);if(b){b.classList.add('open');const a=document.getElementById('parr-lo-'+id);if(a)a.classList.add('open');}touch('proj');schedSave();}
@@ -1738,15 +2218,18 @@ function openScoreExplainer(){
   const shs=p.stakeholders||[];
   const dims=getActiveDims();
 
-  // Framework Assessment (30%) - average of ADKAR/framework scores
+  // Framework Assessment (25%)
   const fwScores=dims.map(d=>p.adkarScores?.[d.key]||3);
   const fwAvg=fwScores.length?fwScores.reduce((a,b)=>a+b,0)/fwScores.length:3;
   const fwPct=Math.round(fwAvg/5*100);
 
-  // Stakeholder Sentiment (20%) - average adoption score across all groups
-  const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>a+adoptScore(sh.factors),0)/shs.length):0;
+  // Stakeholder Sentiment (20%) — multi-source: trust, anxiety, touchpoints, pulse
+  const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>{
+    const ps=p.pulseResults?.[sh.id]?.scores||{};
+    return a+sentimentScore(sh,ps);
+  },0)/shs.length):50;
 
-  // Training Effectiveness (20%) - based on Kirkpatrick completion
+  // Training Effectiveness (20%)
   const kirkPcts=shs.map(sh=>{
     if(!sh?.kirk)return 0;
     let f=0;const k=sh.kirk;
@@ -1756,18 +2239,25 @@ function openScoreExplainer(){
   });
   const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
 
-  // Communications Completion (15%) - framework scores for awareness/comms dimensions
+  // Lifecycle Health (10%) — SDLC signals
+  const lhData=calcLifecycleHealth(p);
+  const lcPct=lhData.score;
+
+  // Communications Completion (10%)
   const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
   const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
   const commsPct=Math.round(commsAvg/5*100);
 
-  // Risk Adjustment (15%) - inverse of risk flag density
+  // Risk Adjustment (15%)
   const gs=projGateScore(p);
-  const flagCount=getPFlags().length;
+  const flagCount=getProjFlagCount(p);
   const riskPct=Math.max(0,Math.min(100, gs!==null ? Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)) : 50));
 
-  // Weighted total
-  const totalScore=Math.round(fwPct*0.30 + sentPct*0.20 + trainPct*0.20 + commsPct*0.15 + riskPct*0.15);
+  // Weighted total (new weights)
+  const totalScore=Math.round(fwPct*0.25 + sentPct*0.20 + trainPct*0.20 + lcPct*0.10 + commsPct*0.10 + riskPct*0.15);
+
+  // Data confidence
+  const conf=calcDataConfidence(p);
 
   // Determine tier
   let tierKey='critical';
@@ -1776,11 +2266,12 @@ function openScoreExplainer(){
   else if(totalScore>=40)tierKey='atrisk';
 
   const components=[
-    {label:fwName()+' Assessment',weight:'30%',pct:fwPct,color:'var(--navy)'},
-    {label:'Stakeholder Sentiment',weight:'20%',pct:sentPct,color:'var(--gold)'},
-    {label:'Training Effectiveness',weight:'20%',pct:trainPct,color:'var(--green)'},
-    {label:'Comms Completion',weight:'15%',pct:commsPct,color:'#4A6FA5'},
-    {label:'Risk Adjustment',weight:'15%',pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)'}
+    {label:fwName()+' Assessment',weight:'25%',pct:fwPct,color:'var(--navy)',dsType:getDataSourceType('framework',p)},
+    {label:'Stakeholder Sentiment',weight:'20%',pct:sentPct,color:'var(--gold)',dsType:getDataSourceType('sentiment',p)},
+    {label:'Training Effectiveness',weight:'20%',pct:trainPct,color:'var(--green)',dsType:getDataSourceType('training',p)},
+    {label:'Lifecycle Health',weight:'10%',pct:lcPct,color:'#6B5EA8',dsType:getDataSourceType('lifecycle',p)},
+    {label:'Comms Completion',weight:'10%',pct:commsPct,color:'#4A6FA5',dsType:getDataSourceType('comms',p)},
+    {label:'Risk Adjustment',weight:'15%',pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)',dsType:getDataSourceType('risk',p)}
   ];
 
   const modal=document.createElement('div');
@@ -1789,12 +2280,27 @@ function openScoreExplainer(){
   modal.innerHTML=`<div class="score-modal-box">
     <button class="score-modal-close" onclick="document.getElementById('score-explainer-modal').classList.remove('open')" aria-label="Close">&times;</button>
     <h2>How This Score Works</h2>
-    <p style="font-size:13px;color:var(--ink-60);margin:8px 0 20px">The Adoption Score is a weighted composite of five readiness dimensions, calculated from your project data.</p>
+    <p style="font-size:13px;color:var(--ink-60);margin:8px 0 20px">The Adoption Score is a weighted composite of six readiness dimensions, calculated from your project data.</p>
+
+    <h3>Score Confidence</h3>
+    <div class="score-conf-wrap">
+      <div class="score-conf-bar">
+        <div class="dc-seg dc-measured" style="width:${conf.measured}%" title="Measured"></div>
+        <div class="dc-seg dc-observed" style="width:${conf.observed}%" title="Observed"></div>
+        <div class="dc-seg dc-estimated" style="width:${conf.estimated}%" title="Estimated"></div>
+      </div>
+      <div class="score-conf-leg">
+        <span class="dc-leg"><span class="dc-dot dc-measured"></span>Measured ${conf.measured}%</span>
+        <span class="dc-leg"><span class="dc-dot dc-observed"></span>Observed ${conf.observed}%</span>
+        <span class="dc-leg"><span class="dc-dot dc-estimated"></span>Estimated ${conf.estimated}%</span>
+      </div>
+      ${conf.estimated>50?`<div class="score-conf-warn">⚠ More than half of this score relies on estimated inputs. Add lifecycle signals, trust assessments, or pulse surveys to increase confidence.</div>`:''}
+    </div>
 
     <h3>Formula Breakdown</h3>
     <div style="font-size:22px;font-weight:700;color:var(--navy);margin:8px 0 16px;font-family:var(--font-d)">Composite Score: ${totalScore}%</div>
     ${components.map(c=>`<div class="score-bar-row">
-      <div class="score-bar-label">${c.label}</div>
+      <div class="score-bar-label">${c.label} ${dataSourceBadge(c.dsType)}</div>
       <div class="score-bar-track"><div class="score-bar-fill" style="width:${c.pct}%;background:${c.color}"><span class="score-bar-val">${c.pct}%</span></div></div>
       <div class="score-bar-weight">${c.weight}</div>
     </div>`).join('')}
@@ -1815,7 +2321,7 @@ function openScoreExplainer(){
     </div>
 
     <div class="score-method-note">
-      <strong>Methodology Notes:</strong> Stakeholder sentiment scores are influence-weighted based on adoption factors. Training effectiveness gives greater weight to Kirkpatrick L3 (Behavior) and L4 (Results) levels over L1 (Reaction) and L2 (Learning), reflecting actual performance transfer rather than satisfaction alone.
+      <strong>Methodology Notes:</strong> Stakeholder Sentiment is calculated from multiple data sources including engagement touchpoint outcomes, trust level assessments, anxiety indicators, and pulse survey results (when available). No single data source determines the sentiment score. Scores based on <em>Estimated</em> inputs would be strengthened by adding measured data sources (surveys, lifecycle metrics, or documented observations). Training effectiveness gives greater weight to Kirkpatrick L3 (Behavior) and L4 (Results) over L1–L2, reflecting actual performance transfer.
     </div>
   </div>`;
 
@@ -2619,6 +3125,9 @@ function renderPOverview(){
   const p=getProj();if(!p)return;
   renderPKPIs();
   renderTrajectoryCard();
+  renderDataConfidenceBar(p);
+  renderValueCase(p);
+  renderProofPoints(p);
   const fp=document.getElementById('p-ov-flags');const flags=getPFlags().slice(0,4);
   if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div>';}
   else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.sub)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
@@ -2640,6 +3149,350 @@ const CHART_NAVY='rgba(12,31,63,0.85)';const CHART_GOLD='rgba(184,146,42,0.85)';
 const CHART_GREEN='rgba(29,104,64,0.85)';const CHART_AMBER='rgba(138,92,0,0.85)';
 const CHART_RED='rgba(139,26,26,0.85)';const CHART_BLUE='rgba(74,111,165,0.85)';
 const CHART_GRAY='rgba(180,180,180,0.5)';
+
+// ════════════════════════════════════════════════════════
+// DATA CONFIDENCE BAR
+// ════════════════════════════════════════════════════════
+function renderDataConfidenceBar(p){
+  const el=document.getElementById('p-data-confidence-bar');if(!el)return;
+  const conf=calcDataConfidence(p);
+  const totalScore=calcCompositeScore(p);
+  const sw=getSoWhat('adoptionScore',totalScore,{
+    weakestComponent:getWeakestComponent(p),
+    nextGate:getNextGate(p),
+    topDrivers:getTopDrivers(p)
+  });
+  el.innerHTML=`<div class="data-conf-wrap">
+    <div class="data-conf-hdr">
+      <div class="data-conf-title">Score Confidence</div>
+      <div class="data-conf-legend">
+        <span class="dc-leg"><span class="dc-dot dc-measured"></span>Measured ${conf.measured}%</span>
+        <span class="dc-leg"><span class="dc-dot dc-observed"></span>Observed ${conf.observed}%</span>
+        <span class="dc-leg"><span class="dc-dot dc-estimated"></span>Estimated ${conf.estimated}%</span>
+      </div>
+    </div>
+    <div class="data-conf-bar">
+      <div class="dc-seg dc-measured" style="width:${conf.measured}%" title="Measured: driven by system data, surveys, or lifecycle metrics"></div>
+      <div class="dc-seg dc-observed" style="width:${conf.observed}%" title="Observed: practitioner-assessed with documented evidence"></div>
+      <div class="dc-seg dc-estimated" style="width:${conf.estimated}%" title="Estimated: subjective judgment without supporting evidence"></div>
+    </div>
+    ${conf.estimated>50?`<div class="data-conf-note">⚠ More than half of this score relies on estimated inputs. Add lifecycle signals, trust assessments, or pulse surveys to increase confidence.</div>`:''}
+    ${sw?`<div class="so-what-line">${esc(sw)}</div>`:''}
+  </div>`;
+}
+function getWeakestComponent(p){
+  const shs=p.stakeholders||[];
+  const dims=getActiveDims();
+  const fwScores=dims.map(d=>p.adkarScores?.[d.key]||3);
+  const fwPct=fwScores.length?Math.round(fwScores.reduce((a,b)=>a+b,0)/fwScores.length/5*100):0;
+  const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>a+sentimentScore(sh,p.pulseResults?.[sh.id]?.scores||{}),0)/shs.length):50;
+  const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
+  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const lhScore=calcLifecycleHealth(p).score;
+  const scored={[fwName()+' Assessment']:fwPct,'Stakeholder Sentiment':sentPct,'Training Effectiveness':trainPct,'Lifecycle Health':lhScore};
+  const min=Object.entries(scored).sort((a,b)=>a[1]-b[1])[0];
+  return min?min[0]:'stakeholder engagement';
+}
+function getNextGate(p){
+  for(let i=0;i<GATE_DEFS.length;i++){
+    const g=GATE_DEFS[i];
+    const reds=g.items.filter((_,j)=>p.gateState[g.id+'_'+j]==='red').length;
+    if(reds>0)return'Gate '+(i+1);
+  }
+  return'the next gate';
+}
+function getTopDrivers(p){
+  const flags=getProjFlagCount(p);
+  const shs=p.stakeholders||[];
+  const lowTrust=shs.filter(sh=>(sh.trust||3)<3).length;
+  const parts=[];
+  if(flags>0)parts.push(`${flags} active risk flag${flags>1?'s':''}`);
+  if(lowTrust>0)parts.push(`${lowTrust} stakeholder group${lowTrust>1?'s':''} with low trust`);
+  const lh=calcLifecycleHealth(p);
+  const redSigs=lh.signals.filter(s=>s.strength==='red').length;
+  if(redSigs>0)parts.push(`${redSigs} critical lifecycle signal${redSigs>1?'s':''}`);
+  return parts.length?parts.slice(0,2).join(' and '):'risk flags and low sentiment scores';
+}
+
+// ════════════════════════════════════════════════════════
+// VALUE CASE
+// ════════════════════════════════════════════════════════
+function renderValueCase(p){
+  const el=document.getElementById('p-value-case-wrap');if(!el)return;
+  if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};
+  const vc=p.valueCase;
+  const postGL=isPostGoLive(p);
+  const vr=calcValueRealization(vc);
+  const impactLevels=['High','Medium','Low'];
+  const vrColor=vr===null?'var(--ink-60)':vr>=80?'var(--green)':vr>=50?'var(--amber)':'var(--red)';
+  el.innerHTML=`<div class="panel">
+    <div class="ph">
+      <div><div class="pt">Value Case</div><div class="ps-text">Document what this project is supposed to deliver and track whether it delivered.</div></div>
+      ${vr!==null?`<div class="value-score" style="color:${vrColor}">${vr}% Value Realized</div>`:''}
+    </div>
+    <div class="pb">
+      <div class="vc-grid">
+        <div class="vc-col">
+          <div class="vc-section-label">Expected Value</div>
+          <div class="vc-field"><label>Value Statement</label>
+            <textarea class="vc-ta" placeholder="e.g. This functionality reduces manual income calculation from 15 minutes to 2 minutes per case" oninput="updateVC('statement',this.value)">${esc(vc.statement)}</textarea></div>
+          <div class="vc-field"><label>Requestor / Sponsor</label>
+            <input class="inp-std" placeholder="Who requested this and why" value="${esc(vc.requestor)}" oninput="updateVC('requestor',this.value)"></div>
+          <div class="vc-field"><label>Expected Impact Level</label>
+            <div class="impact-pill-row">${impactLevels.map(l=>`<button class="impact-pill ${vc.impactLevel===l?'active':''}" onclick="updateVC('impactLevel','${l}')">${l}</button>`).join('')}</div></div>
+          <div class="vc-field"><label>Success Criteria</label>
+            <div id="vc-criteria-list">${renderVCCriteria(vc,postGL)}</div>
+            <button class="btn-add-sm" onclick="addVCCriterion()">+ Add Criterion</button></div>
+        </div>
+        ${postGL?`<div class="vc-col">
+          <div class="vc-section-label">Actual Outcomes <span class="vc-postgl-badge">Post Go-Live</span></div>
+          <div class="vc-field"><label>Actual vs. Expected Impact</label>
+            <textarea class="vc-ta" placeholder="Did this deliver what was promised? What changed?" oninput="updateVC('actualImpact',this.value)">${esc(vc.actualImpact||'')}</textarea></div>
+          <div class="vc-field"><label>Unintended Consequences</label>
+            <textarea class="vc-ta" placeholder="Positive or negative outcomes that weren't planned..." oninput="updateVC('unintendedConsequences',this.value)">${esc(vc.unintendedConsequences)}</textarea></div>
+          ${vr!==null?`<div class="vc-realization-bar">
+            <div class="vc-real-label">Value Realization Score</div>
+            <div class="vc-real-track"><div class="vc-real-fill" style="width:${vr}%;background:${vrColor}"></div></div>
+            <div class="vc-real-val" style="color:${vrColor}">${vr}%</div>
+          </div>`:''}
+        </div>`:'<div class="vc-col"><div class="vc-pending"><div class="vc-pending-icon">&#128337;</div><div class="vc-pending-txt">Actual Outcomes</div><div class="vc-pending-sub">This section unlocks after the go-live date to capture whether this project delivered its expected value.</div></div></div>'}
+      </div>
+    </div>
+  </div>`;
+}
+function renderVCCriteria(vc,postGL){
+  if(!vc.successCriteria||!vc.successCriteria.length)return'<div class="vc-criteria-empty">No success criteria defined yet.</div>';
+  const statuses=['Yes','Partially','No'];
+  const statusColors={Yes:'var(--green)',Partially:'var(--amber)',No:'var(--red)'};
+  return vc.successCriteria.map((c,i)=>`<div class="vc-criterion-row">
+    <input class="inp-std" style="flex:1" value="${esc(c.criterion)}" placeholder="e.g. Processing time reduced by 80%" oninput="updateVCCriterion(${i},'criterion',this.value)">
+    ${postGL?`<div class="vc-status-pills">${statuses.map(s=>`<button class="vc-status-pill ${c.metStatus===s?'active':''}" style="${c.metStatus===s?'background:'+statusColors[s]+';color:#fff':''}" onclick="updateVCCriterion(${i},'metStatus','${s}')">${s}</button>`).join('')}</div>`:''}
+    <button class="btn-rm-sm" onclick="removeVCCriterion(${i})">&times;</button>
+  </div>`).join('');
+}
+function updateVC(field,val){const p=getProj();if(!p)return;if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};p.valueCase[field]=val;if(field==='impactLevel')renderValueCase(p);touch('proj');schedSave();}
+function addVCCriterion(){const p=getProj();if(!p)return;if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};p.valueCase.successCriteria.push({id:uid(),criterion:'',metStatus:null,actualOutcome:'',notes:''});renderValueCase(p);touch('proj');schedSave();}
+function removeVCCriterion(i){const p=getProj();if(!p||!p.valueCase)return;p.valueCase.successCriteria.splice(i,1);renderValueCase(p);touch('proj');schedSave();}
+function updateVCCriterion(i,field,val){const p=getProj();if(!p||!p.valueCase)return;if(p.valueCase.successCriteria[i])p.valueCase.successCriteria[i][field]=val;renderValueCase(p);touch('proj');schedSave();}
+
+// ════════════════════════════════════════════════════════
+// PROOF POINTS
+// ════════════════════════════════════════════════════════
+const PROOF_SOURCES=['Meeting Notes','System Data','Survey Response','Defect Log','Attendance Record','Facilitation Notes','Other'];
+const PROOF_DIMS=['Framework Assessment','Stakeholder Sentiment','Training Effectiveness','Lifecycle Health','Communications','Risk Flags','Gate Readiness'];
+function renderProofPoints(p){
+  const el=document.getElementById('p-proof-points-wrap');if(!el)return;
+  if(!p.proofPoints)p.proofPoints=[];
+  const pts=p.proofPoints;
+  el.innerHTML=`<div class="panel">
+    <div class="ph">
+      <div><div class="pt">Proof Points</div><div class="ps-text">Hard evidence that connects raw observations to gate decisions — making your readiness assessment defensible to leadership.</div></div>
+      <button class="btn-gold" onclick="openAddProofPoint()">+ Add Proof Point</button>
+    </div>
+    <div class="pb">
+      ${!pts.length?`<div class="es"><div class="es-rule"></div><p class="es-txt">No proof points logged yet. Proof points provide a direct evidence chain from raw observations to gate decisions — making your readiness assessment defensible to leadership.</p></div>`
+      :pts.map((pt,i)=>`<div class="pp-card">
+        <div class="pp-hd">
+          <div class="pp-what">${esc(pt.what)}</div>
+          <div class="pp-meta"><span class="pp-date">${fmtDate(pt.when)}</span><span class="pp-source">Source: ${esc(pt.source)}</span></div>
+          <button class="btn-rm-sm" onclick="removeProofPoint(${i})">&times;</button>
+        </div>
+        <div class="pp-proves"><span class="pp-proves-lbl">Proves:</span> ${esc(pt.proves)}</div>
+        <div class="pp-tags">${(pt.dimensionTags||[]).map(t=>`<span class="pp-tag">${esc(t)}</span>`).join('')}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+function openAddProofPoint(){
+  let existing=document.getElementById('add-pp-modal');if(existing)existing.remove();
+  const modal=document.createElement('div');modal.id='add-pp-modal';modal.className='modal-ov';
+  modal.innerHTML=`<div class="modal-box" style="max-width:540px">
+    <div class="modal-hd"><div class="modal-title">Add Proof Point</div><button class="modal-close" onclick="document.getElementById('add-pp-modal').remove()">&times;</button></div>
+    <div class="modal-bd">
+      <div class="field-group"><label>What happened</label><input class="inp-std" id="pp-what" placeholder="Factual statement of what occurred"></div>
+      <div class="field-group"><label>When</label><input class="inp-std" id="pp-when" type="date"></div>
+      <div class="field-group"><label>What it proves</label><input class="inp-std" id="pp-proves" placeholder="Interpretation — what does this evidence indicate?"></div>
+      <div class="field-group"><label>Source</label><select class="inp-std" id="pp-source">${PROOF_SOURCES.map(s=>`<option>${s}</option>`).join('')}</select></div>
+      <div class="field-group"><label>Dimension Tags</label><div class="pp-tag-checks">${PROOF_DIMS.map(d=>`<label class="pp-tag-check"><input type="checkbox" value="${d}" id="pp-tag-${d.replace(/\s/g,'-')}"> ${d}</label>`).join('')}</div></div>
+    </div>
+    <div class="modal-ft"><button class="btn-cancel" onclick="document.getElementById('add-pp-modal').remove()">Cancel</button><button class="btn-gold" onclick="saveProofPoint()">Save Proof Point</button></div>
+  </div>`;
+  document.body.appendChild(modal);requestAnimationFrame(()=>modal.classList.add('open'));
+  modal.addEventListener('click',function(e){if(e.target===this)this.remove();});
+}
+function saveProofPoint(){
+  const p=getProj();if(!p)return;
+  if(!p.proofPoints)p.proofPoints=[];
+  const what=document.getElementById('pp-what')?.value.trim();
+  const when=document.getElementById('pp-when')?.value;
+  const proves=document.getElementById('pp-proves')?.value.trim();
+  const source=document.getElementById('pp-source')?.value;
+  if(!what)return;
+  const tags=PROOF_DIMS.filter(d=>{const el=document.getElementById('pp-tag-'+d.replace(/\s/g,'-'));return el&&el.checked;});
+  p.proofPoints.push({id:uid(),what,when,proves,source,dimensionTags:tags});
+  document.getElementById('add-pp-modal')?.remove();
+  renderProofPoints(p);touch('proj');schedSave();
+}
+function removeProofPoint(i){const p=getProj();if(!p||!p.proofPoints)return;p.proofPoints.splice(i,1);renderProofPoints(p);touch('proj');schedSave();}
+
+// ════════════════════════════════════════════════════════
+// LIFECYCLE SIGNALS TAB
+// ════════════════════════════════════════════════════════
+function renderPLifecycle(){
+  const p=getProj();if(!p)return;
+  if(!p.lifecycleSignals)p.lifecycleSignals={requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},testing:{qaDefects:0,uatDefects:0,uatParticipationRate:0,testingApproach:''},deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}};
+  const ls=p.lifecycleSignals;
+  const lh=calcLifecycleHealth(p);
+  const lhColor=lh.score>=80?'var(--green)':lh.score>=60?'var(--gold)':lh.score>=40?'var(--amber)':'var(--red)';
+  const lhSW=getSoWhat('lifecycleHealth',lh.score,{});
+  const el=document.getElementById('p-lifecycle-container');if(!el)return;
+  el.innerHTML=`
+  <div class="lh-score-banner">
+    <div class="lh-score-main">
+      <div class="lh-score-val" style="color:${lhColor}">${lh.hasData?lh.score+'%':'—'}</div>
+      <div class="lh-score-lbl">Lifecycle Health Score</div>
+      ${lhSW&&lh.hasData?`<div class="so-what-line">${esc(lhSW)}</div>`:''}
+    </div>
+    ${lh.hasData?`<div class="lh-sig-summary">${['green','yellow','red'].map(s=>{const n=lh.signals.filter(x=>x.strength===s).length;return n?`<span class="sig-badge sig-${s}">${n} ${s==='green'?'Healthy':s==='yellow'?'Watch':'Concern'}</span>`:''}).join('')}</div>`:'<div class="lh-no-data">Enter signal data below to generate a Lifecycle Health score.</div>'}
+  </div>
+
+  <div class="lc-phase-grid">
+    <div class="panel lc-phase">
+      <div class="ph"><div><div class="pt">Requirements Phase</div><div class="ps-text">Signals from the requirements and scoping stage</div></div></div>
+      <div class="pb">
+        <div class="sig-row">
+          <div class="sig-label">Requirements completed on schedule?</div>
+          <div class="sig-controls">
+            <button class="sig-yn ${ls.requirements.onSchedule===true?'active-yes':''}" onclick="updateLS('requirements','onSchedule',true)">Yes</button>
+            <button class="sig-yn ${ls.requirements.onSchedule===false?'active-no':''}" onclick="updateLS('requirements','onSchedule',false)">No</button>
+          </div>
+          ${ls.requirements.onSchedule===false?`<div class="sig-sub-field"><label>Days variance</label><input class="inp-sm" type="number" min="0" value="${ls.requirements.daysVariance||0}" oninput="updateLS('requirements','daysVariance',+this.value)"></div>`:''}
+          ${signalStrengthBadge(ls.requirements.onSchedule===true?'green':ls.requirements.onSchedule===false?(ls.requirements.daysVariance>5?'red':'yellow'):'green')}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Number of review cycles required</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.requirements.reviewCycles||0}" oninput="updateLS('requirements','reviewCycles',+this.value)">
+          ${ls.requirements.reviewCycles>=4?signalStrengthBadge('red'):ls.requirements.reviewCycles>=3?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Unresolved disputes or disagreements?</div>
+          <div class="sig-controls">
+            <button class="sig-yn ${ls.requirements.disputes?'active-no':''}" onclick="updateLS('requirements','disputes',true)">Yes</button>
+            <button class="sig-yn ${!ls.requirements.disputes?'active-yes':''}" onclick="updateLS('requirements','disputes',false)">No</button>
+          </div>
+          ${signalStrengthBadge(ls.requirements.disputes?'red':'green')}
+        </div>
+        ${ls.requirements.disputes?`<div class="sig-row"><div class="sig-label">Dispute notes</div><textarea class="inp-ta-sm" placeholder="Describe the nature of disputes..." oninput="updateLS('requirements','disputeNotes',this.value)">${esc(ls.requirements.disputeNotes)}</textarea></div>`:''}
+        ${ls.requirements.disputes?`<div class="sig-redNote">Unresolved disputes at requirements phase are a leading indicator of resistance and rework.</div>`:''}
+      </div>
+    </div>
+
+    <div class="panel lc-phase">
+      <div class="ph"><div><div class="pt">Design Phase</div><div class="ps-text">Signals from design reviews and stakeholder engagement</div></div></div>
+      <div class="pb">
+        <div class="sig-row">
+          <div class="sig-label">Design reviews delayed?</div>
+          <div class="sig-controls">
+            <button class="sig-yn ${ls.design.reviewsDelayed===true?'active-no':''}" onclick="updateLS('design','reviewsDelayed',true)">Yes</button>
+            <button class="sig-yn ${ls.design.reviewsDelayed===false?'active-yes':''}" onclick="updateLS('design','reviewsDelayed',false)">No</button>
+          </div>
+          ${ls.design.reviewsDelayed?`<div class="sig-sub-field"><label>Days delayed</label><input class="inp-sm" type="number" min="0" value="${ls.design.delayDays||0}" oninput="updateLS('design','delayDays',+this.value)"></div>`:''}
+          ${signalStrengthBadge(ls.design.reviewsDelayed?(ls.design.delayDays>5?'red':'yellow'):'green')}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Scope change requests from stakeholders</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.design.scopeChangeRequests||0}" oninput="updateLS('design','scopeChangeRequests',+this.value)">
+          ${ls.design.scopeChangeRequests>=3?signalStrengthBadge('red'):ls.design.scopeChangeRequests>=1?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Stakeholder workaround requests</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.design.workaroundRequests||0}" oninput="updateLS('design','workaroundRequests',+this.value)">
+          ${ls.design.workaroundRequests>=3?signalStrengthBadge('red'):ls.design.workaroundRequests>=1?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
+        </div>
+        ${ls.design.workaroundRequests>0?`<div class="sig-redNote">Stakeholders requesting workarounds during design is a leading indicator of adoption resistance. Each request represents a stakeholder who does not believe the system will meet their needs. Document the underlying concern for each request.</div>`:''}
+        ${ls.design.workaroundRequests>0?`<div class="sig-row"><div class="sig-label">Workaround notes</div><textarea class="inp-ta-sm" placeholder="Describe each workaround request and the underlying concern..." oninput="updateLS('design','workaroundNotes',this.value)">${esc(ls.design.workaroundNotes)}</textarea></div>`:''}
+      </div>
+    </div>
+
+    <div class="panel lc-phase">
+      <div class="ph"><div><div class="pt">Testing / QA Phase</div><div class="ps-text">Quality and participation signals from testing</div></div></div>
+      <div class="pb">
+        <div class="sig-row">
+          <div class="sig-label">QA defects found</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.testing.qaDefects||0}" oninput="updateLS('testing','qaDefects',+this.value)">
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">UAT defects found</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.testing.uatDefects||0}" oninput="updateLS('testing','uatDefects',+this.value)">
+        </div>
+        ${(ls.testing.qaDefects>0||ls.testing.uatDefects>0)?`<div class="sig-row">
+          <div class="sig-label">QA-to-UAT defect ratio (auto-calculated)</div>
+          <div class="sig-ratio-val">${ls.testing.uatDefects>0?Math.round(ls.testing.qaDefects/ls.testing.uatDefects)+':1':ls.testing.qaDefects>0?'∞ (no UAT defects)':'—'}</div>
+          ${ls.testing.uatDefects>0?signalStrengthBadge(ls.testing.qaDefects/ls.testing.uatDefects>=50?'red':ls.testing.qaDefects/ls.testing.uatDefects>=10?'yellow':'green'):''}
+        </div>
+        ${ls.testing.uatDefects>0&&ls.testing.qaDefects/ls.testing.uatDefects>=50?`<div class="sig-redNote">UAT found ${ls.testing.uatDefects} defect${ls.testing.uatDefects!==1?'s':''} while QA found ${ls.testing.qaDefects}. Users may not be testing thoroughly or are accepting known issues. This is a leading indicator of post-go-live resistance.</div>`:''}
+        ${ls.testing.uatDefects>0&&ls.testing.qaDefects/ls.testing.uatDefects>=10&&ls.testing.qaDefects/ls.testing.uatDefects<50?`<div class="sig-yellowNote">QA-to-UAT ratio is elevated. Verify UAT test coverage is comprehensive and testers are exercising real-world scenarios.</div>`:''}
+        `:''}
+        <div class="sig-row">
+          <div class="sig-label">UAT participation rate (%)</div>
+          <input class="inp-sm" type="number" min="0" max="100" value="${ls.testing.uatParticipationRate||0}" oninput="updateLS('testing','uatParticipationRate',+this.value)">
+          ${ls.testing.uatParticipationRate?signalStrengthBadge(ls.testing.uatParticipationRate<60?'red':ls.testing.uatParticipationRate<80?'yellow':'green'):''}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Testing approach</div>
+          <select class="inp-std" onchange="updateLS('testing','testingApproach',this.value)">
+            <option value="" ${!ls.testing.testingApproach?'selected':''}>Select...</option>
+            <option value="guided" ${ls.testing.testingApproach==='guided'?'selected':''}>Guided (specific scenarios)</option>
+            <option value="exploratory" ${ls.testing.testingApproach==='exploratory'?'selected':''}>Exploratory (open-ended)</option>
+            <option value="mixed" ${ls.testing.testingApproach==='mixed'?'selected':''}>Mixed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel lc-phase">
+      <div class="ph"><div><div class="pt">Deployment / Go-Live</div><div class="ps-text">Post-deployment adoption signals</div></div></div>
+      <div class="pb">
+        <div class="sig-row">
+          <div class="sig-label">Number of go-live date changes</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.goliveDateChanges||0}" oninput="updateLS('deployment','goliveDateChanges',+this.value)">
+          ${signalStrengthBadge(ls.deployment.goliveDateChanges>=2?'red':ls.deployment.goliveDateChanges>=1?'yellow':'green')}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Parallel operations extended?</div>
+          <div class="sig-controls">
+            <button class="sig-yn ${ls.deployment.parallelOpsExtended?'active-no':''}" onclick="updateLS('deployment','parallelOpsExtended',true)">Yes</button>
+            <button class="sig-yn ${!ls.deployment.parallelOpsExtended?'active-yes':''}" onclick="updateLS('deployment','parallelOpsExtended',false)">No</button>
+          </div>
+          ${ls.deployment.parallelOpsExtended?`<div class="sig-sub-field"><label>Additional days</label><input class="inp-sm" type="number" min="0" value="${ls.deployment.parallelOpsDays||0}" oninput="updateLS('deployment','parallelOpsDays',+this.value)"></div>`:''}
+          ${signalStrengthBadge(ls.deployment.parallelOpsExtended?'yellow':'green')}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Support tickets — first week</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.supportTicketsWeek1||0}" oninput="updateLS('deployment','supportTicketsWeek1',+this.value)">
+          ${ls.deployment.supportTicketsWeek1?signalStrengthBadge(ls.deployment.supportTicketsWeek1>50?'red':ls.deployment.supportTicketsWeek1>20?'yellow':'green'):''}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Support tickets — first month</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.supportTicketsMonth1||0}" oninput="updateLS('deployment','supportTicketsMonth1',+this.value)">
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Post-go-live workaround requests</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.workaroundRequestsPostGL||0}" oninput="updateLS('deployment','workaroundRequestsPostGL',+this.value)">
+          ${ls.deployment.workaroundRequestsPostGL?signalStrengthBadge(ls.deployment.workaroundRequestsPostGL>2?'red':ls.deployment.workaroundRequestsPostGL>0?'yellow':'green'):''}
+        </div>
+        ${ls.deployment.workaroundRequestsPostGL>0?`<div class="sig-redNote">${ls.deployment.workaroundRequestsPostGL} post-go-live workaround request${ls.deployment.workaroundRequestsPostGL!==1?'s':''} indicate users are not adopting the intended process. Targeted coaching intervention recommended.</div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+function updateLS(phase,field,val){
+  const p=getProj();if(!p)return;
+  if(!p.lifecycleSignals)p.lifecycleSignals={requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},testing:{qaDefects:0,uatDefects:0,uatParticipationRate:0,testingApproach:''},deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}};
+  if(!p.lifecycleSignals[phase])p.lifecycleSignals[phase]={};
+  p.lifecycleSignals[phase][field]=val;
+  renderPLifecycle();touch('proj');schedSave();
+}
 
 function renderProjCharts(){
   getActiveDims();
@@ -2870,6 +3723,121 @@ function renderExecNarratives(){
   el.innerHTML=insights.map(i=>`<div class="trend-insight ${i.cls}">
     <div class="trend-insight-icon ${i.cls}">${i.icon}</div><div>${i.text}</div>
   </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// "WHAT THE DATA IS TELLING US" — Enhanced Portfolio Section
+// ════════════════════════════════════════════════════════
+function generateWhatDataTells(){
+  const insights=[];
+  const allProjects=[];
+  releases.forEach(r=>r.projects.forEach(p=>{allProjects.push({p,r});}));
+
+  // 1. Score Trajectory Alert — adoption score declining 2+ consecutive snapshots
+  // We infer decline from gate score drops across gates
+  allProjects.forEach(({p,r})=>{
+    const gateScores=GATE_DEFS.map(g=>{
+      const tot=g.items.length,grn=g.items.filter((_,i)=>p.gateState[g.id+'_'+i]==='green').length;
+      return tot?Math.round(grn/tot*100):null;
+    }).filter(s=>s!==null);
+    if(gateScores.length>=3){
+      const last3=gateScores.slice(-3);
+      if(last3[2]<last3[1]&&last3[1]<last3[0]){
+        const drop=last3[0]-last3[2];
+        const trustDrop=p.stakeholders.some(sh=>(sh.trustHistory||[]).length>=2&&sh.trustHistory[sh.trustHistory.length-1].value<sh.trustHistory[sh.trustHistory.length-2].value);
+        const driver=trustDrop?'stakeholder trust is trending negative':'gate completion rate is declining';
+        insights.push({severity:'critical',icon:'📉',text:`${p.name} gate readiness has declined for 3 consecutive phases. Primary driver: ${driver}. Immediate intervention recommended before the next milestone.`,source:'Gate Progression',link:{rel:r.id,proj:p.id,tab:'gates'}});
+      }
+    }
+  });
+
+  // 2. Resource Mismatch — High/Critical complexity but low OCM resources
+  allProjects.forEach(({p,r})=>{
+    const cx=calcComplexity(p);
+    if(cx.rating==='High'||cx.rating==='Critical'){
+      const ocmResources=(p.resources?.ocm_train||[]).filter(e=>e.name).length+(p.resources?.ocm_impl||[]).filter(e=>e.name).length;
+      if(ocmResources===0){
+        insights.push({severity:'critical',icon:'⚠',text:`${p.name} has a ${cx.rating} complexity rating (${cx.score} points) but has no OCM resources assigned. This mismatch significantly increases go-live risk.`,source:'Complexity Rating & Resource Assignments',link:{rel:r.id,proj:p.id,tab:'resources'}});
+      }
+    }
+  });
+
+  // 3. Cross-Portfolio Training Transfer Gap — avg L2 high but avg L3 low
+  let l2Total=0,l3Total=0,l2Count=0,l3Count=0;
+  allProjects.forEach(({p})=>{
+    p.stakeholders.forEach(sh=>{
+      const k=sh.kirk||{};
+      if(k.L2?.assessment&&k.L3?.observable){
+        l2Count++;l3Count++;
+        // Score as 1-5 based on field filled — proxy: field has content
+        l2Total+=k.L2.assessment.length>30?4:k.L2.assessment.length>10?3:2;
+        l3Total+=k.L3.observable.length>30?4:k.L3.observable.length>10?3:2;
+      }
+    });
+  });
+  if(l2Count>=3&&l2Count===l3Count){
+    const l2Avg=(l2Total/l2Count).toFixed(1),l3Avg=(l3Total/l3Count).toFixed(1);
+    if(parseFloat(l2Avg)>=3.5&&parseFloat(l3Avg)<2.5){
+      insights.push({severity:'warn',icon:'📚',text:`Across ${l2Count} stakeholder groups in the portfolio, L2 (Learning) plans average ${l2Avg}/5 while L3 (Behavior) plans average ${l3Avg}/5. Training is being planned but on-the-job transfer strategies are underdeveloped. Consider a portfolio-wide reinforcement review.`,source:'Kirkpatrick L2–L3 Assessment',link:null});
+    }
+  }
+
+  // 4. Workaround Red Flag — design phase workaround requests
+  allProjects.forEach(({p,r})=>{
+    const wr=(p.lifecycleSignals?.design?.workaroundRequests)||0;
+    if(wr>=3){
+      insights.push({severity:'critical',icon:'🚩',text:`${p.name} logged ${wr} stakeholder workaround requests during the design phase. This is a leading indicator of adoption resistance — stakeholders do not believe the system will meet their needs in ${wr} documented cases.`,source:'Lifecycle Signals — Design Phase',link:{rel:r.id,proj:p.id,tab:'lifecycle'}});
+    } else if(wr>=1){
+      insights.push({severity:'warn',icon:'⚑',text:`${p.name} logged ${wr} workaround request${wr>1?'s':''} during design. Monitor closely — this can escalate into adoption resistance.`,source:'Lifecycle Signals — Design Phase',link:{rel:r.id,proj:p.id,tab:'lifecycle'}});
+    }
+  });
+
+  // 5. Saturation Alert — multiple projects with shared go-live windows
+  const goLiveProjects=allProjects.filter(({p})=>p.golive).sort((a,b)=>new Date(a.p.golive)-new Date(b.p.golive));
+  for(let i=1;i<goLiveProjects.length;i++){
+    const diff=Math.abs(new Date(goLiveProjects[i].p.golive)-new Date(goLiveProjects[i-1].p.golive))/86400000;
+    if(diff<=30){
+      insights.push({severity:'warn',icon:'🔄',text:`${goLiveProjects[i-1].p.name} and ${goLiveProjects[i].p.name} go live within ${Math.round(diff)} days of each other. Stakeholders affected by both projects face elevated change saturation. Review sequencing options to reduce simultaneous impact.`,source:'Portfolio Go-Live Timeline',link:null});
+    }
+  }
+
+  // 6. Low Trust Alert
+  allProjects.forEach(({p,r})=>{
+    const lowTrust=p.stakeholders.filter(sh=>(sh.trust||3)<=2);
+    if(lowTrust.length>0){
+      insights.push({severity:'critical',icon:'💔',text:`${p.name} has ${lowTrust.length} stakeholder group${lowTrust.length>1?'s':''} with trust levels at Skeptical or Active Distrust (${lowTrust.map(sh=>sh.name).join(', ')}). Low trust at this stage is a strong predictor of adoption failure.`,source:'Stakeholder Trust Assessments',link:{rel:r.id,proj:p.id,tab:'adoption'}});
+    }
+  });
+
+  // Merge with base narratives as lower-priority items
+  const base=generatePortfolioNarratives().filter(i=>i.cls!=='neutral');
+  base.forEach(i=>insights.push({severity:i.cls==='warn'?'warn':'good',icon:i.icon,text:i.text,source:'Portfolio Analytics',link:null}));
+
+  if(!insights.length)insights.push({severity:'good',icon:'✓',text:'No critical signals detected across the portfolio. Continue monitoring as projects approach key milestones.',source:'Portfolio Analytics',link:null});
+  return insights.slice(0,8);
+}
+function renderWhatDataTells(){
+  const el=document.getElementById('what-data-tells');if(!el)return;
+  const insights=generateWhatDataTells();
+  el.innerHTML=`<div class="wdt-wrap">
+    <div class="wdt-hdr"><div class="wdt-title">What the Data Is Telling Us</div><div class="wdt-sub">Top signals across all active projects — updated when you return to the portfolio view.</div></div>
+    <div class="wdt-list">${insights.map(i=>`<div class="insight-card ${i.severity}">
+      <div class="ic-icon">${i.icon}</div>
+      <div class="ic-body">
+        <div class="ic-text">${esc(i.text)}</div>
+        <div class="ic-source">Source: ${esc(i.source)}${i.link?` — <a href="#" class="ic-link" onclick="openProjectFromPortfolio('${i.link.rel}','${i.link.proj}','${i.link.tab||'overview'}');return false">View Details</a>`:''}</div>
+      </div>
+    </div>`).join('')}
+    </div>
+  </div>`;
+}
+function openProjectFromPortfolio(relId,projId,tab){
+  activeRelId=parseInt(relId)||relId;activeProjId=parseInt(projId)||projId;
+  openProject(activeProjId);
+  setTimeout(()=>{
+    const btn=document.querySelector(`#proj-nav-tabs .nav-btn[onclick*="'${tab}'"]`);
+    if(btn)btn.click();
+  },200);
 }
 
 function renderBenchmarkCard(){
