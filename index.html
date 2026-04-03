@@ -9,6 +9,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>A</text></svg>">
 <link rel="stylesheet" href="css/adoptiq.css">
@@ -603,7 +605,7 @@
       </div>
       <div class="ib-stat">
         <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Gate Readiness</div>
-        <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span>
+        <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="How this score works" aria-label="How scoring works">ⓘ</button>
       </div>
     </div>
   </div>
@@ -652,6 +654,7 @@
           <div><div class="pt">Impacted Groups &amp; Readiness Actions</div>
           <div class="ps-text">Map stakeholder groups to impact levels, change types, and transition states.</div></div>
           <button class="btn-navy" onclick="addImpactGroup()">+ Add Group</button>
+          <button class="btn-outline" onclick="openDocImport('impact')" title="Import from document">&#x1F4C4; Import</button>
         </div>
         <div class="pb" id="p-impact-panel">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Add impacted groups to begin the impact assessment.</p></div>
@@ -694,6 +697,7 @@
           <div class="adopt-tb" style="margin:0">
             <input type="text" id="p-sh-inp" placeholder="Group name..." onkeydown="if(event.key==='Enter')addPSH()">
             <button class="btn-navy" onclick="addPSH()">Add Group</button>
+            <button class="btn-outline" onclick="openDocImport('stakeholders')" title="Import from document">&#x1F4C4; Import</button>
           </div>
         </div>
         <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups to begin scoring adoption likelihood.</p></div></div></div>

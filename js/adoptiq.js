@@ -761,7 +761,7 @@ function showProjTab(id,btn){
   document.querySelectorAll('#v-project .tab-sec').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('#v-project .nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('psec-'+id).classList.add('active');btn.classList.add('active');
-  if(id==='overview')renderProjOverview();
+  if(id==='overview')renderPOverview();
   if(id==='flags')renderPFlags();
   if(id==='adopthm')renderPAHM();
   if(id==='impact')renderPImpact();
@@ -1166,7 +1166,7 @@ function renderPGates(){
     const pct=applicable?Math.round(grn/applicable*100):100;
     const barColor=pct>=80?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
     const div=document.createElement('div');div.className='gate-panel';
-    div.innerHTML=`<div class="gate-hdr"><div class="gate-ttl">${gate.label} — ${gate.sub}</div><div class="gate-tag" id="pgs-${gate.id}">${grn}/${applicable} &nbsp; ${pct}%</div></div>
+    div.innerHTML=`<div class="gate-hdr"><div class="gate-ttl">${gate.label} — ${gate.sub}</div><div class="gate-tag" id="pgs-${gate.id}">${grn}/${applicable} &nbsp; ${pct}%<button class="score-info-btn" onclick="event.stopPropagation();showGateInfoPop(this)" title="Gate thresholds" aria-label="Gate score thresholds" style="color:var(--gold-light);margin-left:6px">ⓘ</button></div></div>
     <div class="gate-bar"><div class="gate-fill" id="pgf-${gate.id}" style="width:${pct}%;background:${barColor}"></div></div>
     <div class="gate-items">${gate.items.map((item,i)=>{const st=p.gateState[gate.id+'_'+i]||null;
       return`<div class="gate-item${st==='na'?' gate-na':''}"><div class="gate-txt">${item.text}</div>
@@ -1446,6 +1446,465 @@ function renderPKPIs(){
   document.getElementById('p-kpi-rg').textContent=hr.name;
   document.getElementById('p-kpi-rg-s').textContent=hr.score!==null?hr.score+'% adoption likelihood':'Stakeholder group';
   updateProjGateScoreBand();
+}
+
+// ════════════════════════════════════════════════════════
+// SCORE EXPLAINER
+// ════════════════════════════════════════════════════════
+function openScoreExplainer(){
+  const p=getProj();if(!p)return;
+  let existing=document.getElementById('score-explainer-modal');
+  if(existing)existing.remove();
+
+  // Calculate component scores
+  const shs=p.stakeholders||[];
+  const dims=getActiveDims();
+
+  // Framework Assessment (30%) - average of ADKAR/framework scores
+  const fwScores=dims.map(d=>p.adkarScores?.[d.key]||3);
+  const fwAvg=fwScores.length?fwScores.reduce((a,b)=>a+b,0)/fwScores.length:3;
+  const fwPct=Math.round(fwAvg/5*100);
+
+  // Stakeholder Sentiment (20%) - average adoption score across all groups
+  const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>a+adoptScore(sh.factors),0)/shs.length):0;
+
+  // Training Effectiveness (20%) - based on Kirkpatrick completion
+  const kirkPcts=shs.map(sh=>{
+    if(!sh?.kirk)return 0;
+    let f=0;const k=sh.kirk;
+    if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;
+    if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
+    return Math.round(f/8*100);
+  });
+  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+
+  // Communications Completion (15%) - framework scores for awareness/comms dimensions
+  const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
+  const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
+  const commsPct=Math.round(commsAvg/5*100);
+
+  // Risk Adjustment (15%) - inverse of risk flag density
+  const gs=projGateScore(p);
+  const flagCount=getPFlags().length;
+  const riskPct=Math.max(0,Math.min(100, gs!==null ? Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)) : 50));
+
+  // Weighted total
+  const totalScore=Math.round(fwPct*0.30 + sentPct*0.20 + trainPct*0.20 + commsPct*0.15 + riskPct*0.15);
+
+  // Determine tier
+  let tierKey='critical';
+  if(totalScore>=85)tierKey='champion';
+  else if(totalScore>=65)tierKey='ontrack';
+  else if(totalScore>=40)tierKey='atrisk';
+
+  const components=[
+    {label:fwName()+' Assessment',weight:'30%',pct:fwPct,color:'var(--navy)'},
+    {label:'Stakeholder Sentiment',weight:'20%',pct:sentPct,color:'var(--gold)'},
+    {label:'Training Effectiveness',weight:'20%',pct:trainPct,color:'var(--green)'},
+    {label:'Comms Completion',weight:'15%',pct:commsPct,color:'#4A6FA5'},
+    {label:'Risk Adjustment',weight:'15%',pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)'}
+  ];
+
+  const modal=document.createElement('div');
+  modal.id='score-explainer-modal';
+  modal.className='score-modal';
+  modal.innerHTML=`<div class="score-modal-box">
+    <button class="score-modal-close" onclick="document.getElementById('score-explainer-modal').classList.remove('open')" aria-label="Close">&times;</button>
+    <h2>How This Score Works</h2>
+    <p style="font-size:13px;color:var(--ink-60);margin:8px 0 20px">The Adoption Score is a weighted composite of five readiness dimensions, calculated from your project data.</p>
+
+    <h3>Formula Breakdown</h3>
+    <div style="font-size:22px;font-weight:700;color:var(--navy);margin:8px 0 16px;font-family:var(--font-d)">Composite Score: ${totalScore}%</div>
+    ${components.map(c=>`<div class="score-bar-row">
+      <div class="score-bar-label">${c.label}</div>
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:${c.pct}%;background:${c.color}"><span class="score-bar-val">${c.pct}%</span></div></div>
+      <div class="score-bar-weight">${c.weight}</div>
+    </div>`).join('')}
+
+    <h3>Tier Classification</h3>
+    <div class="tier-strip">
+      <div class="tier-badge champion ${tierKey==='champion'?'active':''}">Champion<br><span style="font-weight:400;font-size:10px">85–100</span></div>
+      <div class="tier-badge ontrack ${tierKey==='ontrack'?'active':''}">On Track<br><span style="font-weight:400;font-size:10px">65–84</span></div>
+      <div class="tier-badge atrisk ${tierKey==='atrisk'?'active':''}">At Risk<br><span style="font-weight:400;font-size:10px">40–64</span></div>
+      <div class="tier-badge critical ${tierKey==='critical'?'active':''}">Critical<br><span style="font-weight:400;font-size:10px">0–39</span></div>
+    </div>
+
+    <h3>Gate Scoring Thresholds</h3>
+    <div style="margin:8px 0">
+      <div class="gate-thresh"><span class="gate-dot" style="background:var(--green)"></span><strong>Go</strong> — Score ≥ 75%</div>
+      <div class="gate-thresh"><span class="gate-dot" style="background:var(--amber)"></span><strong>Conditional Go</strong> — Score 50–74%</div>
+      <div class="gate-thresh"><span class="gate-dot" style="background:var(--red)"></span><strong>No-Go</strong> — Score < 50%</div>
+    </div>
+
+    <div class="score-method-note">
+      <strong>Methodology Notes:</strong> Stakeholder sentiment scores are influence-weighted based on adoption factors. Training effectiveness gives greater weight to Kirkpatrick L3 (Behavior) and L4 (Results) levels over L1 (Reaction) and L2 (Learning), reflecting actual performance transfer rather than satisfaction alone.
+    </div>
+  </div>`;
+
+  document.body.appendChild(modal);
+  // Click outside to close
+  modal.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  // Open with slight delay for animation
+  requestAnimationFrame(()=>modal.classList.add('open'));
+}
+
+function showGateInfoPop(btn){
+  // Remove any existing popover
+  document.querySelectorAll('.gate-info-pop').forEach(p=>p.remove());
+  const pop=document.createElement('div');
+  pop.className='gate-info-pop';
+  pop.innerHTML=`<div style="font-weight:700;margin-bottom:6px;color:var(--navy)">Gate Score Thresholds</div>
+    <div class="gate-thresh"><span class="gate-dot" style="background:var(--green)"></span> Go — ≥ 75%</div>
+    <div class="gate-thresh"><span class="gate-dot" style="background:var(--amber)"></span> Conditional — 50–74%</div>
+    <div class="gate-thresh"><span class="gate-dot" style="background:var(--red)"></span> No-Go — < 50%</div>`;
+  btn.parentElement.style.position='relative';
+  btn.parentElement.appendChild(pop);
+  // Close on click outside
+  const closer=function(e){if(!pop.contains(e.target)&&e.target!==btn){pop.remove();document.removeEventListener('click',closer);}};
+  setTimeout(()=>document.addEventListener('click',closer),10);
+}
+
+// ════════════════════════════════════════════════════════
+// DOCUMENT INGESTION (Upload → Auto-Populate)
+// ════════════════════════════════════════════════════════
+let _importTarget=null;
+let _importParsed=[];
+
+function openDocImport(target){
+  _importTarget=target;
+  _importParsed=[];
+  let existing=document.getElementById('doc-import-modal');
+  if(existing)existing.remove();
+  const targetLabels={impact:'Impact Assessment',gaps:'Gap Analysis',stakeholders:'Stakeholder Groups'};
+  const modal=document.createElement('div');
+  modal.id='doc-import-modal';
+  modal.className='import-modal';
+  modal.innerHTML=`<div class="import-modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><h2>Import ${targetLabels[target]||target}</h2>
+      <div class="import-sub">Upload a document to auto-populate ${targetLabels[target]||target} data. Supports .xlsx, .csv, .docx, and .txt files.</div></div>
+      <button class="btn-ghost" onclick="document.getElementById('doc-import-modal').classList.remove('open')" style="font-size:22px;padding:0 6px;line-height:1">&times;</button>
+    </div>
+    <div class="import-drop" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
+      <div class="import-drop-icon">📄</div>
+      <div class="import-drop-text">Drag &amp; drop your file here or <strong>browse</strong></div>
+      <div class="import-drop-formats">.xlsx &nbsp; .csv &nbsp; .docx &nbsp; .txt</div>
+    </div>
+    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.docx,.txt" style="display:none" onchange="handleImportFile(this.files[0])">
+    <div id="import-preview-area"></div>
+    <div id="import-status-area"></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  // Drag and drop
+  const dropZone=modal.querySelector('#import-drop-zone');
+  dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');
+    if(e.dataTransfer.files.length)handleImportFile(e.dataTransfer.files[0]);});
+  requestAnimationFrame(()=>modal.classList.add('open'));
+}
+
+async function handleImportFile(file){
+  if(!file)return;
+  const statusArea=document.getElementById('import-status-area');
+  const previewArea=document.getElementById('import-preview-area');
+  statusArea.innerHTML='<div class="import-status" style="background:var(--amber-bg);color:var(--amber)">Parsing '+esc(file.name)+'...</div>';
+  try{
+    const ext=file.name.split('.').pop().toLowerCase();
+    let rows=[];
+    if(ext==='csv'){
+      const text=await file.text();
+      rows=parseCSV(text);
+    }else if(ext==='xlsx'||ext==='xls'){
+      const data=await file.arrayBuffer();
+      rows=parseXLSX(data);
+    }else if(ext==='docx'){
+      const data=await file.arrayBuffer();
+      rows=await parseDOCX(data);
+    }else if(ext==='txt'){
+      const text=await file.text();
+      rows=parseTXT(text);
+    }else{
+      statusArea.innerHTML='<div class="import-status error">Unsupported file format. Please use .xlsx, .csv, .docx, or .txt</div>';
+      return;
+    }
+    if(!rows.length){
+      statusArea.innerHTML='<div class="import-status error">No data found in file. Ensure your document contains a table or structured data.</div>';
+      return;
+    }
+    // Map to target schema
+    _importParsed=mapImportRows(rows,_importTarget);
+    if(!_importParsed.length){
+      statusArea.innerHTML='<div class="import-status error">Could not map document structure to '+_importTarget+' fields. Ensure your file has recognizable column headers.</div>';
+      return;
+    }
+    statusArea.innerHTML='';
+    renderImportPreview(previewArea,_importParsed,_importTarget);
+  }catch(err){
+    console.error('Import parse error:',err);
+    statusArea.innerHTML='<div class="import-status error">Error parsing file: '+esc(err.message)+'</div>';
+  }
+}
+
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2)return[];
+  const headers=splitCSVLine(lines[0]);
+  return lines.slice(1).map(line=>{
+    const vals=splitCSVLine(line);
+    const obj={};
+    headers.forEach((h,i)=>{obj[h.trim()]=vals[i]?.trim()||'';});
+    return obj;
+  }).filter(obj=>Object.values(obj).some(v=>v));
+}
+function splitCSVLine(line){
+  const result=[];let current='';let inQuotes=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQuotes=!inQuotes;}
+    else if(c===','&&!inQuotes){result.push(current);current='';}
+    else{current+=c;}
+  }
+  result.push(current);
+  return result;
+}
+
+function parseXLSX(data){
+  if(!window.XLSX){alert('Excel parser is still loading.');return[];}
+  const wb=XLSX.read(data,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const json=XLSX.utils.sheet_to_json(ws,{defval:''});
+  return json;
+}
+
+async function parseDOCX(data){
+  if(!window.mammoth){alert('Document parser is still loading.');return[];}
+  const result=await mammoth.convertToHtml({arrayBuffer:data});
+  const html=result.value;
+  // Extract tables from HTML
+  const div=document.createElement('div');
+  div.innerHTML=html;
+  const tables=div.querySelectorAll('table');
+  if(tables.length){
+    // Use first table found
+    const tbl=tables[0];
+    const thRow=tbl.querySelector('tr');
+    if(!thRow)return[];
+    const headers=Array.from(thRow.querySelectorAll('th,td')).map(c=>c.textContent.trim());
+    const rows=[];
+    tbl.querySelectorAll('tr').forEach((tr,i)=>{
+      if(i===0)return;// skip header
+      const cells=Array.from(tr.querySelectorAll('td')).map(c=>c.textContent.trim());
+      const obj={};
+      headers.forEach((h,j)=>{obj[h]=cells[j]||'';});
+      if(Object.values(obj).some(v=>v))rows.push(obj);
+    });
+    return rows;
+  }
+  // Fallback: try to parse structured text (bullet lists, etc.)
+  const textLines=div.textContent.split(/\n/).filter(l=>l.trim());
+  return parseTXT(textLines.join('\n'));
+}
+
+function parseTXT(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2)return[];
+  // Try tab-delimited first
+  if(lines[0].includes('\t')){
+    const headers=lines[0].split('\t').map(h=>h.trim());
+    return lines.slice(1).map(line=>{
+      const vals=line.split('\t');
+      const obj={};
+      headers.forEach((h,i)=>{obj[h]=vals[i]?.trim()||'';});
+      return obj;
+    }).filter(obj=>Object.values(obj).some(v=>v));
+  }
+  // Try pipe-delimited
+  if(lines[0].includes('|')){
+    const headers=lines[0].split('|').map(h=>h.trim()).filter(h=>h);
+    return lines.slice(1).filter(l=>!l.match(/^[\s\-|]+$/)).map(line=>{
+      const vals=line.split('|').map(v=>v.trim()).filter(v=>v!==undefined);
+      const obj={};
+      headers.forEach((h,i)=>{obj[h]=vals[i]?.trim()||'';});
+      return obj;
+    }).filter(obj=>Object.values(obj).some(v=>v));
+  }
+  // Try bullet-list format: "- Name: Value" or "• Key: Value"
+  const items=[];let current={};
+  lines.forEach(line=>{
+    const match=line.match(/^[\s•\-*]+(.+?):\s*(.+)/);
+    if(match){
+      current[match[1].trim()]=match[2].trim();
+    }else if(line.match(/^[\s•\-*]+(.+)/)&&Object.keys(current).length===0){
+      current.name=line.replace(/^[\s•\-*]+/,'').trim();
+    }else if(Object.keys(current).length>0&&line.trim()===''){
+      items.push(current);current={};
+    }
+  });
+  if(Object.keys(current).length>0)items.push(current);
+  return items;
+}
+
+// Fuzzy column header matching
+const FIELD_ALIASES={
+  // Impact fields
+  name:['name','group','stakeholder','audience','team','department','population','group name','stakeholder group','stakeholder name'],
+  level:['level','impact','impact level','severity','priority','impact rating'],
+  currentState:['current','current state','as-is','as is','current process','from'],
+  futureState:['future','future state','to-be','to be','target state','to','desired state'],
+  changeTypes:['change type','change types','type','types','impact type','impact area','area'],
+  // Gap fields
+  description:['description','gap','gap description','issue','finding','detail','details','gap detail'],
+  severity:['severity','priority','level','risk','rating','criticality','risk level'],
+  trainingImpact:['training','training impact','impact','adoption impact','recommendation','mitigation','remediation'],
+  status:['status','state','progress','resolution'],
+  // Stakeholder fields (for adoption scoring)
+  role:['role','title','position','job title','function'],
+  influence:['influence','power','authority'],
+  sentiment:['sentiment','attitude','disposition','readiness']
+};
+
+function fuzzyMatch(header,fieldAliases){
+  const h=header.toLowerCase().trim();
+  for(const[field,aliases] of Object.entries(fieldAliases)){
+    if(aliases.some(a=>h===a||h.includes(a)||a.includes(h)))return field;
+  }
+  return null;
+}
+
+function mapImportRows(rows,target){
+  if(!rows.length)return[];
+  // Get headers from first row
+  const headers=Object.keys(rows[0]);
+  const fieldMap={};
+  headers.forEach(h=>{
+    const match=fuzzyMatch(h,FIELD_ALIASES);
+    if(match)fieldMap[h]=match;
+  });
+  // If no name column found, try first column
+  const hasName=Object.values(fieldMap).includes('name');
+  if(!hasName&&headers.length>0)fieldMap[headers[0]]='name';
+
+  return rows.map((row,idx)=>{
+    const mapped={_selected:true,_idx:idx};
+    Object.entries(fieldMap).forEach(([header,field])=>{
+      mapped[field]=row[header]||'';
+    });
+    // Also preserve unmapped columns for display
+    headers.forEach(h=>{
+      if(!fieldMap[h])mapped['_raw_'+h]=row[h]||'';
+    });
+    return mapped;
+  }).filter(m=>m.name);
+}
+
+function renderImportPreview(container,items,target){
+  const cols=getPreviewColumns(target);
+  let html='<div class="import-preview"><h3>Preview — '+items.length+' item'+(items.length!==1?'s':'')+' found</h3>';
+  html+='<div class="import-preview-count">Review the parsed data below. Uncheck any rows you don\'t want to import.</div>';
+  html+='<div class="import-merge-opts"><label><input type="radio" name="import-merge" value="append" checked> Append to existing</label><label><input type="radio" name="import-merge" value="replace"> Replace existing</label></div>';
+  html+='<div style="overflow-x:auto"><table class="import-tbl"><thead><tr><th class="import-check"><input type="checkbox" checked onchange="toggleAllImportRows(this.checked)"></th>';
+  cols.forEach(c=>{html+='<th>'+c.label+'</th>';});
+  html+='</tr></thead><tbody>';
+  items.forEach((item,i)=>{
+    html+='<tr><td class="import-check"><input type="checkbox" '+(item._selected?'checked':'')+' onchange="toggleImportRow('+i+',this.checked)"></td>';
+    cols.forEach(c=>{
+      let val=item[c.key]||'';
+      if(val.length>80)val=val.substring(0,80)+'…';
+      html+='<td>'+esc(val)+'</td>';
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+  html+='<div class="import-acts"><button class="btn-ghost" onclick="document.getElementById(\'doc-import-modal\').classList.remove(\'open\')">Cancel</button>';
+  html+='<button class="btn-gold" onclick="commitImport()">Import '+items.length+' Item'+(items.length!==1?'s':'')+'</button></div></div>';
+  container.innerHTML=html;
+}
+
+function getPreviewColumns(target){
+  if(target==='impact')return[{key:'name',label:'Group Name'},{key:'level',label:'Impact Level'},{key:'currentState',label:'Current State'},{key:'futureState',label:'Future State'}];
+  if(target==='gaps')return[{key:'description',label:'Description'},{key:'severity',label:'Severity'},{key:'trainingImpact',label:'Training Impact'},{key:'status',label:'Status'}];
+  if(target==='stakeholders')return[{key:'name',label:'Group Name'},{key:'role',label:'Role'},{key:'influence',label:'Influence'},{key:'sentiment',label:'Sentiment'}];
+  return[{key:'name',label:'Name'}];
+}
+
+function toggleImportRow(idx,checked){if(_importParsed[idx])_importParsed[idx]._selected=checked;}
+function toggleAllImportRows(checked){_importParsed.forEach(item=>item._selected=checked);}
+
+function commitImport(){
+  const p=getProj();if(!p)return;
+  const selected=_importParsed.filter(item=>item._selected);
+  if(!selected.length){alert('No rows selected for import.');return;}
+  const mergeMode=document.querySelector('input[name="import-merge"]:checked')?.value||'append';
+
+  if(_importTarget==='impact'){
+    if(!p.impactAssessment)p.impactAssessment={groups:[]};
+    if(mergeMode==='replace')p.impactAssessment.groups=[];
+    selected.forEach(item=>{
+      const lvl=normalizeLevel(item.level);
+      const ct=item.changeTypes?item.changeTypes.split(/[,;]/).map(s=>s.trim()).filter(s=>s):[];
+      p.impactAssessment.groups.push({
+        name:item.name||'Imported Group',
+        level:lvl,
+        changeTypes:ct.length?ct:['Process'],
+        currentState:item.currentState||'',
+        futureState:item.futureState||'',
+        actions:[]
+      });
+    });
+    renderPImpact();
+  }else if(_importTarget==='gaps'){
+    if(!p.gapAnalysis)p.gapAnalysis={gaps:[]};
+    if(mergeMode==='replace')p.gapAnalysis.gaps=[];
+    selected.forEach(item=>{
+      p.gapAnalysis.gaps.push({
+        id:uid(),
+        description:item.description||item.name||'',
+        severity:normalizeSeverity(item.severity),
+        trainingImpact:item.trainingImpact||'',
+        status:item.status||''
+      });
+    });
+    renderPGaps();
+  }else if(_importTarget==='stakeholders'){
+    if(mergeMode==='replace')p.stakeholders=[];
+    selected.forEach(item=>{
+      p.stakeholders.push({
+        id:uid(),
+        name:item.name||'Imported Group',
+        factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},
+        objectives:[],
+        kirk:{L1:{},L2:{},L3:{},L4:{}},
+        rein:{owner:'',activities:'',intervals:[],escalation:''}
+      });
+    });
+    renderPSH();renderPKPIs();
+  }
+
+  touch('proj');schedSave();
+  const statusArea=document.getElementById('import-status-area');
+  if(statusArea)statusArea.innerHTML='<div class="import-status success">Successfully imported '+selected.length+' item'+(selected.length!==1?'s':'')+'!</div>';
+  setTimeout(()=>{
+    const modal=document.getElementById('doc-import-modal');
+    if(modal)modal.classList.remove('open');
+  },1200);
+}
+
+function normalizeLevel(val){
+  if(!val)return'Medium';
+  const v=val.toLowerCase().trim();
+  if(v.includes('high')||v.includes('3')||v.includes('major'))return'High';
+  if(v.includes('low')||v.includes('1')||v.includes('minor'))return'Low';
+  return'Medium';
+}
+function normalizeSeverity(val){
+  if(!val)return'Medium';
+  const v=val.toLowerCase().trim();
+  if(v.includes('critical')||v.includes('4')||v.includes('blocker'))return'Critical';
+  if(v.includes('high')||v.includes('3')||v.includes('major'))return'High';
+  if(v.includes('low')||v.includes('1')||v.includes('minor'))return'Low';
+  return'Medium';
 }
 
 function renderPOverview(){
@@ -1891,8 +2350,9 @@ function renderPGaps(){
   h+='<div class="gap-stat"><span class="gap-stat-val sev-crit">'+s.critical+'</span><span class="gap-stat-lbl">Critical</span></div>';
   h+='<div class="gap-stat"><span class="gap-stat-val sev-high">'+s.high+'</span><span class="gap-stat-lbl">High</span></div>';
   h+='</div>';
-  h+='<div style="margin-bottom:12px"><button class="btn-gold" onclick="addGap()">+ Add Gap</button>';
-  h+='<span style="margin-left:12px;font-size:10px;color:var(--ink-60);font-style:italic">Gaps received from implementation team — focus on training/adoption impact</span></div>';
+  h+='<div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn-gold" onclick="addGap()">+ Add Gap</button>';
+  h+='<button class="btn-outline" onclick="openDocImport(\'gaps\')" title="Import from document">&#x1F4C4; Import</button>';
+  h+='<span style="font-size:10px;color:var(--ink-60);font-style:italic">Gaps received from implementation team — focus on training/adoption impact</span></div>';
   if(gaps.length===0){
     h+='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No gaps recorded yet. Click "+ Add Gap" to log gaps from the implementation team\'s analysis.</div>';
   }else{
@@ -2844,82 +3304,244 @@ function pdfCover(doc,w,h,title,subtitle,p,r,brand){
   doc.setFontSize(8);doc.setTextColor(100,100,100);doc.text('Powered by AdoptIQ',w/2,h-15,{align:'center'});
 }
 
+function _shCoalitionRole(sc){return sc>=80?'Change Champion':sc>=60?'Supporter':sc>=40?'Fence-Sitter':'Resistant';}
+function _shEngagement(sh){
+  const f=sh.factors||{};const sorted=AF.map(a=>({key:a.key,label:a.label,val:f[a.key]||3})).sort((a,b)=>a.val-b.val);
+  if(!sorted.length)return'General Engagement';
+  const low=sorted[0];
+  if(low.key==='resistance')return'Active Resistance Management';
+  if(low.key==='leadership')return'Sponsor Activation & Leadership Alignment';
+  if(low.key==='saturation')return'Change Fatigue Mitigation';
+  if(low.key==='complexity')return'Role Transition Support & Simplification';
+  if(low.key==='env')return'Technical Readiness & Environment Stabilization';
+  if(low.key==='window')return'Accelerated Enablement';
+  return'Targeted Factor Remediation';
+}
+function _shPrimaryConcern(sh){
+  const f=sh.factors||{};const sorted=AF.map(a=>({key:a.key,label:a.label,val:f[a.key]||3})).sort((a,b)=>a.val-b.val);
+  if(!sorted.length)return'No data available';
+  const low=sorted[0];return low.label+' ('+low.val+'/5): '+FD[low.val];
+}
+function _resistRootCause(key){
+  const map={resistance:'Active Opposition',env:'Technical Readiness Gap',window:'Time Pressure',
+    complexity:'Role Change Anxiety',saturation:'Change Fatigue',leadership:'Sponsor Gap'};
+  return map[key]||'Organizational Barrier';
+}
+function _resistDetailedIntervention(key){
+  const map={
+    resistance:['Conduct confidential 1:1 listening sessions to surface underlying concerns','Deploy executive sponsor to deliver face-to-face vision messaging to affected groups','Establish a stakeholder advisory council to give resistors a voice in the solution design','Create a visible quick-wins campaign demonstrating early benefits of the change'],
+    env:['Conduct a full technical readiness audit of training and production environments','Establish a dedicated environment support team with clear SLAs for issue resolution','Schedule end-to-end system rehearsals prior to training delivery','Create environment contingency plans including offline training alternatives'],
+    window:['Redesign training into micro-learning modules (15-20 min) that fit into existing workflows','Implement a staggered rollout to reduce per-wave training load','Negotiate protected training time blocks with operational leadership','Deploy just-in-time performance support tools to supplement formal training'],
+    complexity:['Develop role-specific transition guides mapping current tasks to future-state processes','Establish a super-user network for peer-to-peer support during transition','Create sandbox environments for safe practice before go-live','Implement graduated complexity rollout, starting with core functions'],
+    saturation:['Conduct a change portfolio review to identify opportunities for initiative consolidation','Negotiate timeline spacing with other change initiatives','Implement a single change calendar visible to all stakeholder groups','Appoint a change fatigue liaison to monitor cumulative impact on affected groups'],
+    leadership:['Deploy a structured sponsor coaching program with biweekly check-ins','Create cascaded messaging toolkits with pre-built talking points for each management level','Establish leadership alignment workshops to resolve conflicting priorities','Implement visible sponsorship actions calendar with accountability tracking']
+  };
+  return map[key]||['Conduct targeted assessment to identify specific barriers','Develop customized intervention plan based on root cause analysis','Assign dedicated change agent to monitor and support affected groups'];
+}
+function _trainingModality(sh){
+  const f=sh.factors||{};
+  if((f.complexity||3)<=2)return'Hands-on workshop + sandbox environment';
+  if((f.window||3)<=2)return'Micro-learning modules (15-20 min segments)';
+  if((f.saturation||3)<=2)return'Self-paced eLearning with optional coaching';
+  if((f.env||3)<=2)return'Instructor-led with offline backup materials';
+  return'Instructor-led training (ILT/vILT)';
+}
+
 function genStakeholderAnalysis(){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
-  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];const mg=14;
   const brand=getBrand();
   pdfCover(doc,w,h,'Stakeholder Analysis','Adoption Risk Assessment & Engagement Strategy',p,r,brand);
-  // Page 2: Inventory
-  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  y=pdfSection(doc,y,'Stakeholder Group Inventory',w);
+
   const shs=p.stakeholders||[];const igs=(p.impactAssessment?.groups)||[];
-  if(shs.length===0){doc.setFontSize(10);doc.setTextColor(100,100,100);doc.text('No stakeholder groups have been added to this project.',14,y+6);y+=14;}
+  // Compute coalition counts
+  const coalition={champion:0,supporter:0,fence:0,resistant:0};
+  shs.forEach(sh=>{const sc=adoptScore(sh.factors);if(sc>=80)coalition.champion++;else if(sc>=60)coalition.supporter++;else if(sc>=40)coalition.fence++;else coalition.resistant++;});
+  const avgAdopt=shs.length?Math.round(shs.reduce((s,sh)=>s+adoptScore(sh.factors),0)/shs.length):0;
+  const highRiskGroup=shs.length?shs.reduce((worst,sh)=>adoptScore(sh.factors)<adoptScore(worst.factors)?sh:worst,shs[0]):null;
+  const overallPosture=coalition.resistant>0||coalition.fence>coalition.supporter?'elevated risk':'manageable';
+
+  // ── Page 2: Executive Summary ──
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  y=pdfSection(doc,y,'1. Executive Summary',w);
+  doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
+  let execText='This analysis covers '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+' across the '+p.name+' initiative. ';
+  if(highRiskGroup)execText+='The highest-risk group is '+highRiskGroup.name+' at '+adoptScore(highRiskGroup.factors)+'% adoption likelihood. ';
+  execText+='The average adoption likelihood across all groups is '+avgAdopt+'%, placing the overall engagement posture at '+overallPosture+'. ';
+  if(coalition.resistant>0)execText+=coalition.resistant+' group'+(coalition.resistant!==1?'s show':' shows')+' active resistance indicators requiring immediate intervention. ';
+  if(coalition.champion>0)execText+=coalition.champion+' group'+(coalition.champion!==1?'s qualify':' qualifies')+' as potential Change Champion'+(coalition.champion!==1?'s':'')+' and should be leveraged for peer advocacy.';
+  const execLines=doc.splitTextToSize(execText,w-28);
+  doc.text(execLines,mg,y+3);y+=3+execLines.length*4+6;
+
+  // ── Stakeholder Influence/Impact Matrix (2x2 Grid) ──
+  y=pdfCheckPage(doc,y,w,h,pg,90);
+  y=pdfSection(doc,y,'2. Stakeholder Influence / Impact Matrix',w);
+  doc.setFontSize(7);doc.setTextColor(100,100,100);doc.setFont('helvetica','italic');
+  const matrixNote=doc.splitTextToSize('Impact is derived from the change impact assessment. Influence is approximated from leadership factor and adoption score. Groups are plotted to inform engagement prioritization.',w-28);
+  doc.text(matrixNote,mg,y+2);y+=2+matrixNote.length*4+4;
+  doc.setFont('helvetica','normal');
+  // Draw 2x2 grid
+  const gx=35,gy=y,gw=130,ghalf=gw/2,gh=60,ghh=gh/2;
+  doc.setDrawColor(12,31,63);doc.setLineWidth(0.3);
+  doc.rect(gx,gy,gw,gh);doc.line(gx+ghalf,gy,gx+ghalf,gy+gh);doc.line(gx,gy+ghh,gx+gw,gy+ghh);
+  // Axis labels
+  doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+  doc.text('HIGH IMPACT',gx+ghalf/2,gy-2,{align:'center'});doc.text('HIGH IMPACT',gx+ghalf+ghalf/2,gy-2,{align:'center'});
+  doc.text('Low Influence',gx+ghalf/2,gy+gh+4,{align:'center'});doc.text('High Influence',gx+ghalf+ghalf/2,gy+gh+4,{align:'center'});
+  // Quadrant labels
+  doc.setFontSize(6);doc.setFont('helvetica','italic');doc.setTextColor(150,150,150);
+  doc.text('Keep Informed',gx+2,gy+5);doc.text('Manage Closely',gx+ghalf+2,gy+5);
+  doc.text('Monitor',gx+2,gy+ghh+5);doc.text('Keep Satisfied',gx+ghalf+2,gy+ghh+5);
+  // Plot stakeholders
+  doc.setFontSize(6);doc.setFont('helvetica','bold');
+  shs.forEach((sh,idx)=>{
+    const sc=adoptScore(sh.factors);const leadership=sh.factors?.leadership||3;
+    const ig=igs.find(g=>g.name===sh.name);
+    const impactHigh=ig?(ig.level==='High'||ig.level==='Critical'):sc<60;
+    const influenceHigh=leadership>=4||sc>=70;
+    const qx=influenceHigh?gx+ghalf+5:gx+5;
+    const qy=impactHigh?gy+8:gy+ghh+8;
+    const offsetX=(idx*17)%50;const offsetY=(idx*11)%18;
+    const col=sc>=80?[29,104,64]:sc>=60?[184,146,42]:[184,50,50];
+    doc.setTextColor(col[0],col[1],col[2]);
+    const label=sh.name.length>18?sh.name.substring(0,16)+'..':sh.name;
+    doc.text(label,qx+offsetX,qy+offsetY);
+  });
+  y=gy+gh+12;
+
+  // ── Stakeholder Inventory Table ──
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'3. Stakeholder Inventory',w);
+  if(shs.length===0){doc.setFontSize(9);doc.setTextColor(100,100,100);doc.text('No stakeholder groups have been added to this project.',mg,y+6);y+=14;}
   else{
     const rows=shs.map(sh=>{const sc=adoptScore(sh.factors);const t=adoptTier(sc);
       const ig=igs.find(g=>g.name===sh.name);
-      return[sh.name,ig?.level||'—',sc+'%',t.tier,sh.objectives?.length||0];});
-    doc.autoTable({startY:y,head:[['Group','Impact','Adoption %','Risk Tier','Objectives']],body:rows,
-      margin:{left:14,right:14},styles:{fontSize:8,cellPadding:2.5},
+      return[sh.name,ig?.level||'--',sc+'%',t.tier,_shEngagement(sh),_shPrimaryConcern(sh)];});
+    doc.autoTable({startY:y,head:[['Group','Impact','Adoption %','Risk Tier','Engagement Strategy','Primary Concern']],body:rows,
+      margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2.5},
+      columnStyles:{4:{cellWidth:35},5:{cellWidth:40}},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
-  // Per-group details
+
+  // ── Per-Group Deep Dive ──
   shs.forEach(sh=>{
     y=pdfCheckPage(doc,y,w,h,pg,100);
-    y=pdfSection(doc,y,sh.name,w);
+    y=pdfSection(doc,y,'4. Deep Dive: '+sh.name,w);
     const sc=adoptScore(sh.factors);const t=adoptTier(sc);
     const ig=igs.find(g=>g.name===sh.name);
+    const coalRole=_shCoalitionRole(sc);
+    const engage=_shEngagement(sh);
+
+    // Coalition role + engagement approach
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text('Coalition Role: '+coalRole,mg,y+4);
+    const roleCol=sc>=80?[29,104,64]:sc>=60?[184,146,42]:sc>=40?[180,130,30]:[184,50,50];
+    doc.setFillColor(roleCol[0],roleCol[1],roleCol[2]);doc.roundedRect(mg+60,y,35,6,2,2,'F');
+    doc.setFontSize(7);doc.setTextColor(255,255,255);doc.text(coalRole,mg+62,y+4.5);
+    y+=10;
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+    doc.text('Engagement Approach: '+engage,mg,y+3);y+=8;
+
     // Impact & current/future state
     if(ig){
       doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
-      doc.text('Impact Level: '+ig.level,14,y+4);y+=8;
+      doc.text('Impact Level: '+ig.level,mg,y+4);y+=8;
       doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
-      if(ig.currentState){doc.setFont('helvetica','bold');doc.text('Current State:',14,y+4);doc.setFont('helvetica','normal');
-        const csLines=doc.splitTextToSize(ig.currentState,w-32);doc.text(csLines,14,y+9);y+=9+csLines.length*4;}
-      if(ig.futureState){doc.setFont('helvetica','bold');doc.text('Future State:',14,y+4);doc.setFont('helvetica','normal');
-        const fsLines=doc.splitTextToSize(ig.futureState,w-32);doc.text(fsLines,14,y+9);y+=9+fsLines.length*4;}
+      if(ig.currentState){doc.setFont('helvetica','bold');doc.text('Current State:',mg,y+4);doc.setFont('helvetica','normal');
+        const csLines=doc.splitTextToSize(ig.currentState,w-32);doc.text(csLines,mg,y+9);y+=9+csLines.length*4;}
+      if(ig.futureState){doc.setFont('helvetica','bold');doc.text('Future State:',mg,y+4);doc.setFont('helvetica','normal');
+        const fsLines=doc.splitTextToSize(ig.futureState,w-32);doc.text(fsLines,mg,y+9);y+=9+fsLines.length*4;}
       y+=4;
     }
-    // Adoption risk
+    // Adoption factor bars
     doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
-    doc.text('Adoption Likelihood: '+sc+'% ('+t.tier+')',14,y+4);y+=10;
+    doc.text('Adoption Likelihood: '+sc+'% ('+t.tier+')',mg,y+4);y+=10;
     AF.forEach(f=>{
       const val=sh.factors?.[f.key]||3;
       doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
-      doc.text(f.label+': '+val+'/5',14,y+3);
+      doc.text(f.label+': '+val+'/5',mg,y+3);
       const barCol=val>=4?[29,104,64]:val>=3?[184,146,42]:[184,50,50];
       pdfBar(doc,70,y,80,val/5*100,barCol[0],barCol[1],barCol[2]);y+=7;
     });
     y+=4;
+
+    // Engagement approach narrative
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Engagement Approach Detail',mg,y+3);y+=8;
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+    const sorted=AF.map(a=>({key:a.key,label:a.label,val:sh.factors?.[a.key]||3})).sort((a,b)=>a.val-b.val);
+    const lowF=sorted[0];
+    let engNarr='';
+    if(lowF&&lowF.val<=2)engNarr='The primary area of concern for this group is '+lowF.label.toLowerCase()+' (rated '+lowF.val+'/5). This requires immediate, targeted intervention using the '+engage.toLowerCase()+' approach. ';
+    else if(lowF)engNarr='No critical-risk factors detected. The lowest factor is '+lowF.label.toLowerCase()+' at '+lowF.val+'/5, which warrants monitoring but does not require urgent intervention. ';
+    if(sc>=80)engNarr+='This group should be recruited as Change Champions to advocate for adoption among peer groups and provide testimonials.';
+    else if(sc>=60)engNarr+='This group is generally supportive but requires sustained communication and support to prevent backsliding. Consider assigning a dedicated change agent.';
+    else if(sc>=40)engNarr+='This group is on the fence and could tip either direction. Prioritize direct manager engagement, address specific concerns through facilitated dialogue, and demonstrate early wins.';
+    else engNarr+='This group exhibits significant resistance indicators. Escalate to executive sponsor for direct engagement. Deploy intensive 1:1 coaching and create a structured concern-resolution process.';
+    const engLines=doc.splitTextToSize(engNarr,w-28);doc.text(engLines,mg,y+2);y+=2+engLines.length*4+4;
+
     // Kirkpatrick
     if(sh.kirk){
-      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Kirkpatrick Evaluation Plan',14,y+3);y+=8;
+      y=pdfCheckPage(doc,y,w,h,pg,30);
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Kirkpatrick Evaluation Plan',mg,y+3);y+=8;
       const kRows=[];
       if(sh.kirk.L1?.method)kRows.push(['L1: Reaction',sh.kirk.L1.method,sh.kirk.L1.timing||'']);
       if(sh.kirk.L2?.method)kRows.push(['L2: Learning',sh.kirk.L2.method,sh.kirk.L2.assessment||'']);
       if(sh.kirk.L3?.observable)kRows.push(['L3: Behavior',sh.kirk.L3.observable,sh.kirk.L3.interval?sh.kirk.L3.interval+' days post go-live':'']);
       if(sh.kirk.L4?.outcome)kRows.push(['L4: Results',sh.kirk.L4.outcome,sh.kirk.L4.metric||'']);
       if(kRows.length){doc.autoTable({startY:y,head:[['Level','Method/Indicator','Standard/Timing']],body:kRows,
-        margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+        margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2},
         headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
         alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
         y=doc.lastAutoTable.finalY+8;}
     }
     // Reinforcement
     if(sh.rein?.owner){
-      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Reinforcement Plan',14,y+3);y+=8;
+      y=pdfCheckPage(doc,y,w,h,pg,30);
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Reinforcement Plan',mg,y+3);y+=8;
       doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
-      doc.text('Owner: '+(sh.rein.owner||'TBD'),14,y+3);y+=5;
-      if(sh.rein.activities){const aLines=doc.splitTextToSize('Activities: '+sh.rein.activities,w-28);doc.text(aLines,14,y+3);y+=3+aLines.length*4;}
-      if(sh.rein.intervals?.length){doc.text('Intervals: '+sh.rein.intervals.join(', '),14,y+3);y+=5;}
-      if(sh.rein.escalation){const eLines=doc.splitTextToSize('Escalation: '+sh.rein.escalation,w-28);doc.text(eLines,14,y+3);y+=3+eLines.length*4;}
+      doc.text('Owner: '+(sh.rein.owner||'TBD'),mg,y+3);y+=5;
+      if(sh.rein.activities){const aLines=doc.splitTextToSize('Activities: '+sh.rein.activities,w-28);doc.text(aLines,mg,y+3);y+=3+aLines.length*4;}
+      if(sh.rein.intervals?.length){doc.text('Intervals: '+sh.rein.intervals.join(', '),mg,y+3);y+=5;}
+      if(sh.rein.escalation){const eLines=doc.splitTextToSize('Escalation: '+sh.rein.escalation,w-28);doc.text(eLines,mg,y+3);y+=3+eLines.length*4;}
       y+=6;
     }
   });
+
+  // ── Coalition Map Summary ──
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,'5. Coalition Map Summary',w);
+  doc.setFontSize(8);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
+  const coalNarr='The coalition composition below reflects the distribution of stakeholder groups by their adoption likelihood. A healthy change coalition requires a critical mass of Champions and Supporters. '+
+    (coalition.resistant+coalition.fence>coalition.champion+coalition.supporter?
+    'Currently, the balance tips toward resistance and ambivalence, indicating that sponsor engagement and targeted interventions must be prioritized before go-live.':
+    'The current balance favors adoption, though continued engagement is essential to prevent backsliding among Supporters and Fence-Sitters.');
+  const coalLines=doc.splitTextToSize(coalNarr,w-28);doc.text(coalLines,mg,y+2);y+=2+coalLines.length*4+4;
+  const coalRows=[
+    ['Change Champions (80%+)',coalition.champion+'','Leverage for peer advocacy, testimonials, and super-user roles'],
+    ['Supporters (60-79%)',coalition.supporter+'','Sustain engagement through regular updates and recognition'],
+    ['Fence-Sitters (40-59%)',coalition.fence+'','Target with manager coaching, demonstrate quick wins, address specific concerns'],
+    ['Resistant (<40%)',coalition.resistant+'','Escalate to sponsor, deploy 1:1 interventions, create structured concern resolution']
+  ];
+  doc.autoTable({startY:y,head:[['Coalition Role','Count','Recommended Action']],body:coalRows,
+    margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2.5},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},
+    didDrawCell:(data)=>{
+      if(data.section==='body'&&data.column.index===0){
+        const colors=[[29,104,64],[184,146,42],[180,130,30],[184,50,50]];
+        doc.setFillColor(colors[data.row.index][0],colors[data.row.index][1],colors[data.row.index][2]);
+        doc.roundedRect(data.cell.x+1,data.cell.y+1,3,3,1,1,'F');
+      }
+    },
+    didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
@@ -2931,67 +3553,214 @@ function genTrainingPlan(){
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
-  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];const mg=14;
   const brand=getBrand();
-  pdfCover(doc,w,h,'Training Plan','Kirkpatrick-Aligned Training Strategy',p,r,brand);
-  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  // Training scope
-  y=pdfSection(doc,y,'Training Scope',w);
+  pdfCover(doc,w,h,'Training Plan','CPTM/Kirkpatrick-Aligned Training Strategy',p,r,brand);
   const shs=p.stakeholders||[];
+  const kirkPct=shs.length?Math.round(shs.filter(sh=>kirkReady(sh)==='ready').length/shs.length*100):0;
+
+  // ── 1. Executive Summary ──
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
-  doc.text('Total stakeholder groups: '+shs.length,14,y+5);
-  doc.text('Estimated end users: '+(p.estimatedUsers||'TBD'),14,y+11);
-  doc.text('Training required: '+(p.trainingRequired?'Yes':'No'),14,y+17);y+=24;
-  // Per-group requirements
+  let trainExec='This training plan addresses '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+' for the '+p.name+' initiative. ';
+  trainExec+='Training is '+(p.trainingRequired?'required':'not currently flagged as required')+' with an estimated '+(p.estimatedUsers||'TBD')+' end users. ';
+  trainExec+='Kirkpatrick evaluation design is '+kirkPct+'% complete across all groups. ';
+  const adkarK=(p.adkarScores||{}).K||3;const adkarAb=(p.adkarScores||{}).Ab||3;
+  if(adkarK<3||adkarAb<3)trainExec+='Knowledge ('+adkarK+'/5) and Ability ('+adkarAb+'/5) scores indicate significant learning gaps that must be addressed through targeted training interventions. ';
+  else trainExec+='Knowledge and Ability scores are at acceptable levels, suggesting the training approach should focus on reinforcement and proficiency building. ';
+  const gaps=(p.gapAnalysis?.gaps||[]).filter(g=>g.trainingImpact);
+  if(gaps.length)trainExec+=gaps.length+' implementation gap'+(gaps.length!==1?'s have':' has')+' direct training implications that are addressed in the risk register below.';
+  const trainExecLines=doc.splitTextToSize(trainExec,w-28);doc.text(trainExecLines,mg,y+3);y+=3+trainExecLines.length*4+6;
+
+  // ── 2. Training Governance ──
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'2. Training Governance',w);
+  const trainLead=(p.resources?.ocm_train||[]).filter(r2=>r2.name);
+  const smeList=(p.resources?.smes||[]).filter(r2=>r2.name);
+  doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+  doc.text('Training Lead'+(trainLead.length!==1?'s':'')+':', mg, y+4);
+  doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  doc.text(trainLead.length?trainLead.map(r2=>r2.name+(r2.contact?' ('+r2.contact+')':'')).join(', '):'TBD - Assignment required',mg+35,y+4);y+=7;
+  doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+  doc.text('Subject Matter Experts:',mg,y+4);
+  doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  doc.text(smeList.length?smeList.map(r2=>r2.name).join(', '):'TBD - Assignment required',mg+43,y+4);y+=7;
+  doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+  doc.text('Approval Process:',mg,y+4);
+  doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  const apprvl='Training materials are reviewed by designated SMEs, validated against learning objectives, and approved by the OCM Lead prior to delivery. All curriculum changes require re-approval.';
+  const apprvlLines=doc.splitTextToSize(apprvl,w-28);doc.text(apprvlLines,mg,y+9);y+=9+apprvlLines.length*4+6;
+
+  // ── 3. Needs Analysis Matrix ──
   if(shs.length){
-    y=pdfSection(doc,y,'Training Requirements by Group',w);
-    const rows=shs.map(sh=>[sh.name,sh.objectives?.join('; ')||'None defined',
-      sh.kirk?.L1?.method||'TBD',sh.kirk?.L1?.timing||'TBD',
-      sh.kirk?.L2?.method||'TBD',sh.kirk?.L2?.assessment||'TBD',kirkReady(sh).toUpperCase()]);
-    doc.autoTable({startY:y,head:[['Group','Learning Objectives','Delivery Method','Timing','Assessment','Standard','Kirk Status']],body:rows,
-      margin:{left:14,right:14},styles:{fontSize:6.5,cellPadding:2},columnStyles:{1:{cellWidth:45}},
+    y=pdfCheckPage(doc,y,w,h,pg,40);
+    y=pdfSection(doc,y,'3. Needs Analysis Matrix',w);
+    doc.setFontSize(7);doc.setFont('helvetica','italic');doc.setTextColor(100,100,100);
+    doc.text('Learning gaps are derived from the lowest '+fwShort()+' dimension and adoption factors per group. Modality is auto-recommended based on environmental constraints.',mg,y+2);y+=8;
+    const naRows=shs.map(sh=>{
+      const dims=getActiveDims();const scores=p.adkarScores||{};
+      const lowestDim=dims.reduce((min,d)=>(scores[d.key]||3)<(scores[min.key]||3)?d:min,dims[0]);
+      const sc=adoptScore(sh.factors);
+      const profCurr=sc>=80?'Proficient':sc>=60?'Developing':sc>=40?'Foundational':'Novice';
+      return[sh.name,lowestDim.word+' ('+((scores[lowestDim.key])||3)+'/5)',profCurr,'Proficient (80%+)',_trainingModality(sh)];
+    });
+    doc.autoTable({startY:y,head:[['Group','Learning Gap','Current Proficiency','Target Proficiency','Recommended Modality']],body:naRows,
+      margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2.5},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
-  // Post-training observation (L3/L4)
+
+  // ── 4. Learning Path Design (per group) ──
+  shs.forEach(sh=>{
+    y=pdfCheckPage(doc,y,w,h,pg,80);
+    y=pdfSection(doc,y,'4. Learning Path: '+sh.name,w);
+    const objs=sh.objectives||[];const kr=sh.kirk||{};const rn=sh.rein||{};
+
+    // Pre-training
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text('Phase 1: Pre-Training',mg,y+3);y+=7;
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+    doc.text('- Distribute awareness communications explaining why training is required and what will change',mg+4,y+2);y+=5;
+    doc.text('- Conduct readiness assessment to baseline current proficiency levels',mg+4,y+2);y+=5;
+    doc.text('- Share pre-work materials and system access instructions',mg+4,y+2);y+=7;
+
+    // Core training
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text('Phase 2: Core Training',mg,y+3);y+=7;
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+    if(objs.length){
+      doc.text('Learning objectives:',mg+4,y+2);y+=5;
+      objs.forEach(obj=>{const oLines=doc.splitTextToSize('- '+obj,w-36);doc.text(oLines,mg+8,y+2);y+=2+oLines.length*4;});
+    }else{doc.text('- Learning objectives to be defined with SME input',mg+4,y+2);y+=5;}
+    doc.text('Delivery method: '+(kr.L1?.method||_trainingModality(sh)),mg+4,y+2);y+=5;
+    doc.text('Timing: '+(kr.L1?.timing||'To be scheduled based on go-live date'),mg+4,y+2);y+=7;
+
+    // Post-training
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text('Phase 3: Post-Training Reinforcement',mg,y+3);y+=7;
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+    if(rn.activities){const rLines=doc.splitTextToSize('- Reinforcement activities: '+rn.activities,w-36);doc.text(rLines,mg+4,y+2);y+=2+rLines.length*4;}
+    else{doc.text('- Scheduled follow-up sessions, job aids distribution, super-user office hours',mg+4,y+2);y+=5;}
+    if(rn.intervals?.length){doc.text('- Check-in intervals: '+rn.intervals.join(', '),mg+4,y+2);y+=5;}
+    else{doc.text('- Recommended check-ins at 7, 14, 30, and 60 days post go-live',mg+4,y+2);y+=5;}
+    y+=3;
+
+    // Evaluation
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text('Phase 4: Evaluation (Kirkpatrick Model)',mg,y+3);y+=7;
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+    doc.text('- L1 Reaction: '+(kr.L1?.method||'Post-session satisfaction survey'),mg+4,y+2);y+=5;
+    doc.text('- L2 Learning: '+(kr.L2?.method||'Knowledge check / assessment'),mg+4,y+2);y+=5;
+    doc.text('- L3 Behavior: '+(kr.L3?.observable||'On-the-job observation of target behaviors'),mg+4,y+2);y+=5;
+    doc.text('- L4 Results: '+(kr.L4?.outcome||'Business outcome measurement against success metrics'),mg+4,y+2);y+=8;
+  });
+
+  // ── 5. Kirkpatrick Evaluation Design ──
+  y=pdfCheckPage(doc,y,w,h,pg,60);
+  y=pdfSection(doc,y,'5. Kirkpatrick Evaluation Design',w);
+  doc.setFontSize(7);doc.setFont('helvetica','italic');doc.setTextColor(100,100,100);
+  doc.text('The Kirkpatrick Model provides a four-level framework for evaluating training effectiveness, from learner reaction through business results.',mg,y+2);y+=8;
+  // Consolidated L1-L4 table
+  const kirkRows=shs.map(sh=>{const kr=sh.kirk||{};return[sh.name,
+    kr.L1?.method||'TBD',kr.L1?.timing||'TBD',
+    kr.L2?.method||'TBD',kr.L2?.assessment||'TBD',
+    kirkReady(sh).toUpperCase()];});
+  if(kirkRows.length){
+    doc.autoTable({startY:y,head:[['Group','L1 Method','L1 Timing','L2 Method','L2 Standard','Status']],body:kirkRows,
+      margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+  // L3/L4 table
   const l34=shs.filter(sh=>sh.kirk?.L3?.observable||sh.kirk?.L4?.outcome);
   if(l34.length){
-    y=pdfCheckPage(doc,y,w,h,pg,40);
-    y=pdfSection(doc,y,'Post-Training Measurement (L3/L4)',w);
-    const rows34=l34.map(sh=>[sh.name,sh.kirk?.L3?.observable||'—',
-      sh.kirk?.L3?.interval?(sh.kirk.L3.interval+' days post go-live'):'—',
-      sh.kirk?.L4?.outcome||'—',sh.kirk?.L4?.metric||'—']);
-    doc.autoTable({startY:y,head:[['Group','Observable Behavior (L3)','Observation Interval','Business Outcome (L4)','Success Metric']],body:rows34,
-      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
-      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
-      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
-    y=doc.lastAutoTable.finalY+10;
-  }
-  // Gap analysis training impacts
-  const gaps=(p.gapAnalysis?.gaps||[]).filter(g=>g.trainingImpact);
-  if(gaps.length){
     y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,'Training Adjustments from Gap Analysis',w);
-    const gRows=gaps.map(g=>[g.severity,g.description?.substring(0,80)||'',g.trainingImpact,g.status]);
-    doc.autoTable({startY:y,head:[['Severity','Gap','Training Impact','Status']],body:gRows,
-      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Post-Training Measurement (L3/L4)',mg,y+3);y+=8;
+    const rows34=l34.map(sh=>[sh.name,sh.kirk?.L3?.observable||'--',
+      sh.kirk?.L3?.interval?(sh.kirk.L3.interval+' days post go-live'):'--',
+      sh.kirk?.L4?.outcome||'--',sh.kirk?.L4?.metric||'--']);
+    doc.autoTable({startY:y,head:[['Group','Observable Behavior (L3)','Observation Window','Business Outcome (L4)','Success Metric']],body:rows34,
+      margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
-    y=doc.lastAutoTable.finalY+10;
+    y=doc.lastAutoTable.finalY+8;
   }
-  // Training team
+  // Evaluation success criteria & remediation triggers
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Success Criteria & Remediation Triggers',mg,y+3);y+=8;
+  const evalRows=[
+    ['L1: Reaction','Day of training','Satisfaction >= 4.0/5.0','If satisfaction < 3.5, conduct immediate debrief with facilitator and revise delivery approach for next session'],
+    ['L2: Learning','End of training','Assessment score >= 80%','If score < 70%, schedule remediation session within 5 business days. Provide additional study materials.'],
+    ['L3: Behavior','30 days post go-live','>=60% adoption of target behaviors','If observation shows <60% behavior adoption at 30 days, trigger additional coaching and super-user support'],
+    ['L4: Results','60-90 days post go-live','Business KPIs trending toward target','If KPIs plateau or decline, conduct root-cause analysis and deploy targeted refresher training']
+  ];
+  doc.autoTable({startY:y,head:[['Level','Evaluation Timeline','Success Criteria','Remediation Trigger']],body:evalRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2.5},columnStyles:{3:{cellWidth:55}},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 6. Reinforcement & Sustainment Schedule ──
+  const reinShs=shs.filter(sh=>sh.rein?.owner||sh.rein?.activities);
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'6. Reinforcement & Sustainment Schedule',w);
+  if(reinShs.length){
+    const rRows=reinShs.map(sh=>[sh.name,sh.rein?.owner||'TBD',sh.rein?.activities||'TBD',
+      sh.rein?.intervals?.join(', ')||'7, 14, 30, 60 days',sh.rein?.escalation||'Manager notification, then sponsor escalation']);
+    doc.autoTable({startY:y,head:[['Group','Owner','Activities','Check-in Intervals','Escalation Path']],body:rRows,
+      margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2},
+      headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+8;
+  }else{
+    doc.setFontSize(8);doc.setTextColor(100,100,100);doc.setFont('helvetica','italic');
+    doc.text('No reinforcement plans have been configured. It is strongly recommended to establish reinforcement activities for each stakeholder group.',mg,y+3);y+=10;
+  }
+  // Sustainment narrative
+  doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  const sustNarr='Reinforcement is a critical component of sustainable adoption. Without structured follow-up, research indicates that 70% of organizational changes fail to achieve intended outcomes. Each group should have a designated reinforcement owner, defined check-in cadence, and clear escalation criteria for non-adoption.';
+  const sustLines=doc.splitTextToSize(sustNarr,w-28);doc.text(sustLines,mg,y+2);y+=2+sustLines.length*4+6;
+
+  // ── 7. Training Risk Register ──
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'7. Training Risk Register',w);
+  const trainRisks=[];
+  if(gaps.length){gaps.forEach(g=>{trainRisks.push([g.severity||'Medium',g.description?.substring(0,60)||'Implementation gap','Training Impact: '+(g.trainingImpact||'Potential delay'),g.status||'Open']);});}
+  shs.forEach(sh=>{
+    const f=sh.factors||{};
+    if((f.env||3)<=2)trainRisks.push(['High','Training environment instability for '+sh.name,'May require offline alternatives or environment remediation sprint','Open']);
+    if((f.window||3)<=2)trainRisks.push(['High','Insufficient training window for '+sh.name,'Consider micro-learning or staggered rollout to compress delivery timeline','Open']);
+    if(kirkReady(sh)==='needed')trainRisks.push(['Medium','Kirkpatrick evaluation not designed for '+sh.name,'Training effectiveness cannot be measured; remediation triggers undefined','Open']);
+  });
+  if(adkarK<3)trainRisks.push(['High','Knowledge gap across project ('+adkarK+'/5)','Curriculum may need significant expansion or redesign','Open']);
+  if(adkarAb<3)trainRisks.push(['High','Ability gap across project ('+adkarAb+'/5)','Additional hands-on practice environments required','Open']);
+  if(trainRisks.length){
+    doc.autoTable({startY:y,head:[['Severity','Risk Description','Training Impact','Status']],body:trainRisks,
+      margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2},
+      headStyles:{fillColor:[184,50,50],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+    y=doc.lastAutoTable.finalY+8;
+  }else{
+    doc.setFontSize(8);doc.setTextColor(29,104,64);doc.setFont('helvetica','normal');
+    doc.text('No training-specific risks identified at this time. Continue monitoring adoption factors and evaluation results.',mg,y+3);y+=10;
+  }
+
+  // ── 8. Training Team & Resources ──
   const trainRes=RES_ROLES.filter(ro=>['ocm_train','smes'].includes(ro.key))
-    .flatMap(ro=>(p.resources?.[ro.key]||[]).filter(r=>r.name).map(r=>([ro.label,r.name,r.contact||''])));
+    .flatMap(ro=>(p.resources?.[ro.key]||[]).filter(r2=>r2.name).map(r2=>([ro.label,r2.name,r2.contact||''])));
   if(trainRes.length){
-    y=pdfCheckPage(doc,y,w,h,pg,25);
-    y=pdfSection(doc,y,'Training Team',w);
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'8. Training Team & Resources',w);
     doc.autoTable({startY:y,head:[['Role','Name','Contact']],body:trainRes,
-      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+      margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
       didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
+
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
@@ -3003,61 +3772,177 @@ function genCommsPlan(){
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
-  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];const mg=14;
   const brand=getBrand();
   pdfCover(doc,w,h,'Communications Plan',fwName()+'-Aligned Messaging Strategy',p,r,brand);
+
+  const scores=p.adkarScores||{};const shs=p.stakeholders||[];const igs=(p.impactAssessment?.groups)||[];
+  const dims=getActiveDims();
+  const gapDims=dims.filter(d=>(scores[d.key]||3)<3);
+  const goLive=r.golive||p.golive||null;
+
+  // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  // ADKAR gap-driven objectives
-  y=pdfSection(doc,y,'Communications Objectives',w);
-  const scores=p.adkarScores||{A1:3,D:3,K:3,Ab:3,R:3};
-  const gapDims=ADKAR_DIMS.filter(d=>(scores[d.key]||3)<3);
+  y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
-  if(gapDims.length===0){doc.text('All '+fwShort()+' dimensions are at acceptable levels (3+/5). Communications should focus on sustaining momentum.',14,y+5);y+=12;}
-  else{
-    doc.text('The following '+fwShort()+' gaps require targeted communications:',14,y+5);y+=10;
-    gapDims.forEach(d=>{
-      const mf=ADKAR_MSG_FOCUS[d.key]||{focus:'General awareness building',channel:'Multiple channels'};
-      doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);
-      doc.text(d.word+' ('+scores[d.key]+'/5)',14,y+4);
-      doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
-      doc.text('Message focus: '+mf.focus,24,y+10);
-      doc.text('Recommended channels: '+mf.channel,24,y+15);y+=22;
-    });
+  const posture=gapDims.length>=3?'proactive and intensive':gapDims.length>=1?'targeted':'sustainment-focused';
+  let commsExec='The communications strategy for '+p.name+' is '+posture+', addressing '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+'. ';
+  if(gapDims.length>0){
+    commsExec+='Key '+fwShort()+' gaps requiring communication attention: '+gapDims.map(d=>d.word+' ('+((scores[d.key])||3)+'/5)').join(', ')+'. ';
+    commsExec+='Communications must prioritize closing these gaps through targeted messaging before the change can proceed successfully.';
+  }else{
+    commsExec+='All '+fwShort()+' dimensions are at acceptable levels (3+/5). The communication approach should focus on sustaining momentum, reinforcing key messages, and celebrating early wins.';
   }
-  // Audience matrix
-  const shs=p.stakeholders||[];
+  const commsExecLines=doc.splitTextToSize(commsExec,w-28);doc.text(commsExecLines,mg,y+3);y+=3+commsExecLines.length*4+6;
+
+  // Key themes
+  doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);doc.text('Key Communication Themes:',mg,y+3);y+=7;
+  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+  const themes=['Why: The business case for change and consequences of inaction',
+    'What: Specific impacts by role, process changes, and timeline',
+    'How: Training availability, support resources, and transition path',
+    'When: Key milestones, preparation activities, and go-live logistics',
+    'Who: Points of contact, escalation paths, and support channels'];
+  themes.forEach(t=>{doc.text('- '+t,mg+4,y+2);y+=5;});
+  y+=4;
+
+  // ── 2. Key Message Framework ──
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,'2. Key Message Framework',w);
+  doc.setFontSize(7);doc.setFont('helvetica','italic');doc.setTextColor(100,100,100);
+  doc.text('Messages are aligned to the '+fwName()+' model. Each dimension addresses a distinct communication need in the adoption journey.',mg,y+2);y+=8;
+
+  const msgFramework=dims.map(d=>{
+    const mf=ADKAR_MSG_FOCUS[d.key]||{focus:'General messaging',channel:'Multiple channels'};
+    const val=scores[d.key]||3;
+    const timing=d.key==='A1'||d.key==='d1'||d.key==='d6'?'8-12 weeks before go-live':
+                 d.key==='D'||d.key==='d2'||d.key==='d7'?'6-8 weeks before go-live':
+                 d.key==='K'||d.key==='d3'||d.key==='d8'?'4-6 weeks before go-live':
+                 d.key==='Ab'||d.key==='d4'?'2-4 weeks before go-live':
+                 'Go-live through 90 days post';
+    const measure=d.key==='A1'||d.key==='d1'||d.key==='d6'?'Survey: 80%+ can articulate reason for change':
+                  d.key==='D'||d.key==='d2'||d.key==='d7'?'Manager feedback: 70%+ express willingness':
+                  d.key==='K'||d.key==='d3'||d.key==='d8'?'Pre-assessment: 80%+ know where to access training':
+                  d.key==='Ab'||d.key==='d4'?'Training completion >= 90%':
+                  'Pulse survey: reinforcement score >= 3.5/5';
+    const audiences=val<3?'All groups (priority: at-risk groups)':'All groups';
+    return[d.word+' ('+val+'/5)',mf.focus,audiences,mf.channel,timing,measure];
+  });
+  doc.autoTable({startY:y,head:[['Dimension','Core Message','Target Audience','Channel','Timing','Success Measure']],body:msgFramework,
+    margin:{left:mg,right:mg},styles:{fontSize:6,cellPadding:2},columnStyles:{1:{cellWidth:30},5:{cellWidth:30}},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},
+    didDrawCell:(data)=>{
+      if(data.section==='body'&&data.column.index===0){
+        const val=scores[dims[data.row.index]?.key]||3;
+        const c=val>=4?[29,104,64]:val>=3?[184,146,42]:[184,50,50];
+        doc.setTextColor(c[0],c[1],c[2]);
+      }
+    },
+    didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 3. Audience Segmentation Matrix ──
   if(shs.length){
-    y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,'Audience Matrix',w);
-    const igs=(p.impactAssessment?.groups)||[];
-    const rows=shs.map(sh=>{
+    y=pdfCheckPage(doc,y,w,h,pg,40);
+    y=pdfSection(doc,y,'3. Audience Segmentation Matrix',w);
+    const audRows=shs.map(sh=>{
       const sc=adoptScore(sh.factors);const t=adoptTier(sc);
       const ig=igs.find(g=>g.name===sh.name);
       const lowestFactor=AF.length?AF.reduce((min,f)=>(sh.factors?.[f.key]||3)<(sh.factors?.[min.key]||3)?f:min,AF[0]):null;
-      const msgKey=lowestFactor?(lowestFactor.key==='resistance'?'A1':lowestFactor.key==='leadership'?'R':
-        lowestFactor.key==='complexity'?'K':lowestFactor.key==='env'?'Ab':'D'):'A1';
-      const mfEntry=ADKAR_MSG_FOCUS[msgKey]||{focus:'General awareness',channel:'Multiple channels'};
-      return[sh.name,ig?.level||'—',mfEntry.focus,mfEntry.channel,t.tier];
+      const prefChannel=sc<40?'1:1 meetings, small group sessions':sc<60?'Town halls, team meetings':'Email, intranet, all-hands';
+      const freq=sc<40?'Weekly':'Bi-weekly';
+      const concern=lowestFactor?lowestFactor.label:'General readiness';
+      const resistRisk=sc<40?'High':sc<60?'Medium':'Low';
+      return[sh.name,ig?.level||'--',prefChannel,freq,concern,resistRisk,t.tier];
     });
-    doc.autoTable({startY:y,head:[['Audience','Impact','Key Message Focus','Channel','Risk Tier']],body:rows,
-      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2.5},
+    doc.autoTable({startY:y,head:[['Audience','Impact','Preferred Channel','Frequency','Key Concern','Resistance Risk','Risk Tier']],body:audRows,
+      margin:{left:mg,right:mg},styles:{fontSize:6,cellPadding:2},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
-  // ADKAR scores summary
+
+  // ── 4. Communication Calendar ──
+  y=pdfCheckPage(doc,y,w,h,pg,70);
+  y=pdfSection(doc,y,'4. Communication Calendar',w);
+  doc.setFontSize(7);doc.setFont('helvetica','italic');doc.setTextColor(100,100,100);
+  const calNote=goLive?'Timeline is anchored to the go-live date of '+goLive+'. Adjust as needed if the date shifts.':'Go-live date is TBD. Timeline below uses relative weeks. Set a go-live date to generate specific dates.';
+  doc.text(calNote,mg,y+2);y+=8;
+  const calRows=[
+    ['12+ weeks','Executive sponsor announcement; vision cascade to senior leadership; change network mobilization','Executive Sponsor','Email, town hall'],
+    ['8-10 weeks','Department-level town halls; FAQ distribution; impact briefings by group; manager toolkit delivery','OCM Lead, Managers','Town halls, email, intranet'],
+    ['6 weeks','Training awareness campaign; schedule publication; pre-work distribution; role-specific impact summaries','Training Lead','Email, LMS, intranet'],
+    ['4 weeks','Detailed role-specific change impacts; system access instructions; support channel announcement','OCM Lead','Team meetings, email'],
+    ['2 weeks','Final readiness check communications; go-live logistics guide; hypercare support plan overview','Project Manager','Email, Teams/Slack'],
+    ['Go-Live','Day-of support contacts; war room location/hours; known issues log; quick reference cards','Support Team','All channels'],
+    ['Week 1-2 Post','Immediate feedback collection; issue resolution updates; early adopter recognition','OCM Lead','Pulse survey, email'],
+    ['30 days Post','Success stories; adoption metrics dashboard; lessons learned; reinforcement reminders','OCM Lead, Sponsor','Newsletter, town hall'],
+    ['60-90 days Post','Sustainment review; process optimization feedback; long-term support model announcement','OCM Lead','Town hall, intranet']
+  ];
+  doc.autoTable({startY:y,head:[['Timing','Activities','Owner','Channels']],body:calRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2.5},columnStyles:{1:{cellWidth:70}},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 5. Channel Matrix ──
   y=pdfCheckPage(doc,y,w,h,pg,50);
-  y=pdfSection(doc,y,fwName()+' Assessment Summary',w);
-  ADKAR_DIMS.forEach(d=>{
+  y=pdfSection(doc,y,'5. Channel Matrix',w);
+  const chanRows=[
+    ['Email','All stakeholders','Weekly during ramp, bi-weekly post go-live','Updates, FAQs, action items','OCM Lead'],
+    ['Town Hall / All-Hands','All stakeholders','Monthly; ad hoc for milestones','Vision, progress, Q&A','Executive Sponsor'],
+    ['Team Meetings','Individual teams','Weekly','Role-specific impacts, concerns','Direct Managers'],
+    ['Intranet / SharePoint','All stakeholders','Updated continuously','Reference docs, FAQs, job aids','OCM Lead'],
+    ['1:1 Meetings','High-risk / resistant groups','As needed','Concern resolution, coaching','Managers, OCM Lead'],
+    ['Teams / Slack Channel','Support network, super-users','Daily during go-live period','Real-time Q&A, issue reporting','Support Team'],
+    ['Newsletter / Digest','All stakeholders','Bi-weekly','Progress highlights, success stories','OCM Lead']
+  ];
+  doc.autoTable({startY:y,head:[['Channel','Audience','Frequency','Content Type','Owner']],body:chanRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 6. Feedback Loop Design ──
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,'6. Feedback Loop Design',w);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  const feedNarr='Effective communication requires structured feedback mechanisms to ensure messages are received, understood, and acted upon. The following feedback loops are designed to continuously improve the communication approach and surface emerging concerns before they escalate.';
+  const feedLines=doc.splitTextToSize(feedNarr,w-28);doc.text(feedLines,mg,y+2);y+=2+feedLines.length*4+4;
+  const feedRows=[
+    ['Pulse Surveys','Bi-weekly','All groups','Quantitative sentiment and '+fwShort()+' dimension tracking','If any dimension drops below 3.0, trigger targeted messaging within 48 hours'],
+    ['Manager Check-ins','Weekly','Direct managers','Qualitative feedback on team readiness and concerns','Escalate recurring themes to OCM Lead within 24 hours'],
+    ['Feedback Inbox / Form','Continuous','All stakeholders','Open-ended questions, concerns, suggestions','Triage within 24 hours; publish FAQ updates weekly'],
+    ['Town Hall Q&A','Monthly','All stakeholders','Live questions during sessions; written follow-up','Document all questions; publish responses within 5 business days'],
+    ['Super-User Network','Weekly','Change champions','Frontline adoption observations and user struggles','Feed insights into training adjustments and communication updates']
+  ];
+  doc.autoTable({startY:y,head:[['Mechanism','Frequency','Audience','Data Collected','Action Protocol']],body:feedRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6,cellPadding:2},columnStyles:{4:{cellWidth:40}},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 7. ADKAR Assessment Summary ──
+  y=pdfCheckPage(doc,y,w,h,pg,60);
+  y=pdfSection(doc,y,'7. '+fwName()+' Assessment Summary',w);
+  dims.forEach(d=>{
     const val=scores[d.key]||3;const note=(p.adkarNotes||{})[d.key]||'';
     doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
-    doc.text(d.word+': '+val+'/5',14,y+4);
+    doc.text(d.word+': '+val+'/5',mg,y+4);
     const barCol=val>=4?[29,104,64]:val>=3?[184,146,42]:[184,50,50];
     pdfBar(doc,60,y+1,80,val/5*100,barCol[0],barCol[1],barCol[2]);y+=8;
     if(note){doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(100,100,100);
-      const nLines=doc.splitTextToSize(note,w-28);doc.text(nLines,16,y+2);y+=2+nLines.length*4;}
+      const nLines=doc.splitTextToSize(note,w-28);doc.text(nLines,mg+2,y+2);y+=2+nLines.length*4;}
+    // Add communication recommendation per dimension
+    if(val<3){
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(184,50,50);
+      const mf=ADKAR_MSG_FOCUS[d.key]||{focus:'General awareness',channel:'Multiple channels'};
+      doc.text('Action Required: Intensify messaging focused on "'+mf.focus+'" via '+mf.channel,mg+2,y+2);y+=6;
+    }
     y+=2;
   });
+
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
@@ -3069,90 +3954,242 @@ function genResistancePlan(){
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
-  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];const mg=14;
   const brand=getBrand();
-  pdfCover(doc,w,h,'Resistance Management Plan','Risk Mitigation & Adoption Sustainment',p,r,brand);
-  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  // Risk summary
-  y=pdfSection(doc,y,'Risk Summary',w);
+  pdfCover(doc,w,h,'Resistance Management Plan','Risk Mitigation & Adoption Sustainment Strategy',p,r,brand);
+
   const flags=getProjFlags(p);const shs=p.stakeholders||[];
   const critSH=shs.filter(sh=>adoptScore(sh.factors)<60);
   const adkar=parseFloat(projAdkarAvg(p));
   const gaps=(p.gapAnalysis?.gaps||[]).filter(g=>g.description);
   const critGaps=gaps.filter(g=>g.severity==='Critical');
+  const adkarGaps=getActiveDims().filter(d=>(p.adkarScores?.[d.key]||3)<3);
+
+  // ── 1. Executive Summary ──
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
-  doc.text('Active risk flags: '+flags.length,14,y+5);
-  doc.text('Critical/high-risk stakeholder groups: '+critSH.length,14,y+11);
-  doc.text(fwShort()+' average: '+adkar+'/5'+(adkar<3?' (below threshold)':''),14,y+17);
-  doc.text('Open implementation gaps: '+gaps.length+' ('+critGaps.length+' critical)',14,y+23);y+=32;
-  // Active risk flags
+  const resistPosture=critSH.length>=3||critGaps.length>0?'critical':critSH.length>=1?'elevated':'manageable';
+  let resistExec='The resistance posture for '+p.name+' is currently assessed as '+resistPosture+'. ';
+  resistExec+='Of '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+', '+critSH.length+' exhibit adoption likelihood below 60%, indicating active or emerging resistance. ';
+  if(flags.length)resistExec+=flags.length+' active risk flag'+(flags.length!==1?'s require':' requires')+' attention. ';
+  if(critGaps.length)resistExec+=critGaps.length+' critical implementation gap'+(critGaps.length!==1?'s compound':' compounds')+' the resistance risk. ';
+  resistExec+=fwShort()+' average is '+adkar+'/5'+(adkar<3?', which is below the minimum threshold for proceeding and signals systemic readiness gaps':'')+'. ';
+  // Priority actions
+  const priorities=[];
+  if(critSH.length)priorities.push('Deploy targeted interventions for '+critSH.length+' at-risk group'+(critSH.length!==1?'s':''));
+  if(flags.length)priorities.push('Resolve '+flags.length+' active risk flag'+(flags.length!==1?'s':''));
+  if(adkar<3)priorities.push('Address '+fwShort()+' gaps through intensive stakeholder engagement');
+  if(priorities.length)resistExec+='Recommended priority actions: '+priorities.join('; ')+'.';
+  const resistExecLines=doc.splitTextToSize(resistExec,w-28);doc.text(resistExecLines,mg,y+3);y+=3+resistExecLines.length*4+6;
+
+  // ── 2. Resistance Root Cause Analysis ──
+  if(critSH.length){
+    y=pdfCheckPage(doc,y,w,h,pg,40);
+    y=pdfSection(doc,y,'2. Resistance Root Cause Analysis',w);
+    doc.setFontSize(7);doc.setFont('helvetica','italic');doc.setTextColor(100,100,100);
+    doc.text('Root causes are derived from the lowest adoption factor per group. Interventions are prioritized by severity.',mg,y+2);y+=8;
+    critSH.forEach(sh=>{
+      y=pdfCheckPage(doc,y,w,h,pg,60);
+      const sc=adoptScore(sh.factors);
+      const sorted=AF.map(a=>({key:a.key,label:a.label,val:sh.factors?.[a.key]||3})).sort((a,b)=>a.val-b.val);
+      const rootKey=sorted[0]?.key||'resistance';
+      const rootCause=_resistRootCause(rootKey);
+      const severity=sc<40?'Critical':'High';
+
+      doc.setFontSize(9);doc.setFont('helvetica','bold');
+      doc.setTextColor(sc<40?184:180,sc<40?50:130,sc<40?50:30);
+      doc.text(sh.name+' -- '+sc+'% Adoption Likelihood',mg,y+4);y+=9;
+
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+      doc.text('Root Cause: '+rootCause,mg+4,y+3);y+=6;
+      doc.text('Severity: '+severity,mg+4,y+3);y+=6;
+      doc.text('Primary Barrier: '+sorted[0].label+' ('+sorted[0].val+'/5)',mg+4,y+3);y+=8;
+
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
+      doc.text('Recommended Interventions:',mg+4,y+2);y+=5;
+      const interventions=_resistDetailedIntervention(rootKey);
+      interventions.forEach(iv=>{const ivLines=doc.splitTextToSize('- '+iv,w-36);doc.text(ivLines,mg+8,y+2);y+=2+ivLines.length*4;});
+      y+=6;
+    });
+  }
+
+  // ── 3. Intervention Strategy Matrix ──
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,'3. Intervention Strategy Matrix',w);
+  const intRows=[];
+  const resistTypes={resistance:'Active Opposition',env:'Technical Barriers',window:'Time Constraints',complexity:'Role Anxiety',saturation:'Change Fatigue',leadership:'Sponsor Gap'};
+  const resistIndicators={resistance:'Vocal objections, non-participation, workarounds',env:'System errors, access issues, environment complaints',
+    window:'Schedule conflicts, training no-shows, overtime concerns',complexity:'Confusion about new processes, error rates, help desk volume',
+    saturation:'Disengagement, apathy, "another change" sentiment',leadership:'Lack of visible support, conflicting priorities, mixed messages'};
+  const resistTimelines={resistance:'Immediate (within 1 week)',env:'2-4 weeks (environment sprint)',window:'1-2 weeks (schedule adjustment)',
+    complexity:'2-3 weeks (support deployment)',saturation:'Ongoing (change sequencing)',leadership:'1-2 weeks (sponsor activation)'};
+  const resistOwners={resistance:'OCM Lead + Executive Sponsor',env:'Technical Lead + Training Lead',window:'Project Manager + OCM Lead',
+    complexity:'Training Lead + Super-Users',saturation:'OCM Lead + Project Manager',leadership:'Executive Sponsor + OCM Lead'};
+  const resistMeasures={resistance:'Reduction in escalations; participation rates increase to 80%+',env:'Environment uptime >= 99%; zero training disruptions',
+    window:'100% of training sessions delivered as scheduled',complexity:'Help desk volume decreases 50% within 30 days post go-live',
+    saturation:'Engagement scores stabilize or improve in pulse surveys',leadership:'Sponsor visibility actions completed per schedule'};
+  Object.keys(resistTypes).forEach(key=>{
+    const affectedGroups=shs.filter(sh=>{const sorted=AF.map(a=>({k:a.key,v:sh.factors?.[a.key]||3})).sort((a,b)=>a.v-b.v);return sorted[0]?.k===key&&sorted[0]?.v<=2;});
+    if(affectedGroups.length||critSH.some(sh=>(sh.factors?.[key]||3)<=2)){
+      intRows.push([resistTypes[key],resistIndicators[key],RESIST_INTERVENTIONS[key]||'Targeted intervention',resistOwners[key],resistTimelines[key],resistMeasures[key]]);
+    }
+  });
+  if(intRows.length===0){
+    // Add generic rows if no specific resistance detected
+    intRows.push(['General Resistance','Low engagement signals','Proactive stakeholder engagement and communication','OCM Lead','Ongoing','Pulse survey scores >= 3.5/5']);
+  }
+  doc.autoTable({startY:y,head:[['Resistance Type','Indicators','Intervention','Owner','Timeline','Success Measure']],body:intRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6,cellPadding:2},columnStyles:{1:{cellWidth:28},2:{cellWidth:30}},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 4. Coaching Conversation Guide ──
+  y=pdfCheckPage(doc,y,w,h,pg,70);
+  y=pdfSection(doc,y,'4. Coaching Conversation Guide',w);
+  doc.setFontSize(7);doc.setFont('helvetica','italic');doc.setTextColor(100,100,100);
+  doc.text('Use these guides for structured 1:1 conversations with resistant stakeholders. Adapt language to the specific context and relationship.',mg,y+2);y+=8;
+
+  const topResistAreas=AF.map(a=>{
+    const avgVal=shs.length?shs.reduce((s,sh)=>s+(sh.factors?.[a.key]||3),0)/shs.length:3;
+    return{key:a.key,label:a.label,avg:avgVal};
+  }).sort((a,b)=>a.avg-b.avg).slice(0,3);
+
+  const coachGuides={
+    resistance:{open:'What concerns do you have about this change that we haven\'t addressed yet?',
+      points:['Acknowledge that their concerns are valid and important','Share specific benefits relevant to their daily work','Provide examples of how similar changes succeeded in other organizations','Offer a direct line to leadership for unresolved concerns'],
+      empathy:'I understand this feels like a lot to take on, especially given everything else on your plate.',
+      commit:'Can we agree to try the new approach for two weeks and then check in on how it\'s going?'},
+    env:{open:'What has your experience been with the system or tools so far?',
+      points:['Document specific technical issues they\'ve encountered','Commit to concrete resolution timelines','Offer alternative methods if the primary system is unreliable','Connect them with technical support resources'],
+      empathy:'It\'s frustrating when the tools don\'t work as expected. That\'s on us to fix.',
+      commit:'I\'ll have the technical team address these issues by [date]. Can we reconnect then to verify?'},
+    window:{open:'How is the timeline feeling for your team? Where are the pressure points?',
+      points:['Explore which specific time constraints are most impactful','Discuss options for schedule flexibility or phased adoption','Identify which training elements are most critical for Day 1','Offer micro-learning alternatives that fit into existing schedules'],
+      empathy:'I hear you -- the timeline is tight, and I don\'t want your team to feel set up to fail.',
+      commit:'Let\'s identify the three most critical skills for go-live and focus there first. Sound fair?'},
+    complexity:{open:'On a scale of 1-10, how confident does your team feel about the new processes?',
+      points:['Break down the change into smaller, manageable components','Identify which aspects of the change feel most overwhelming','Offer simplified job aids and quick-reference guides','Connect them with super-users who can provide peer support'],
+      empathy:'Change of this magnitude is genuinely challenging. Your concern about your team\'s ability to adapt shows strong leadership.',
+      commit:'I\'ll arrange a dedicated practice session for your team. Can you identify 2-3 people who could become your team\'s go-to experts?'},
+    saturation:{open:'How many changes is your team managing right now? Let\'s map them out.',
+      points:['Create a visible change portfolio showing all concurrent initiatives','Identify which changes can be sequenced or consolidated','Advocate for their team in change prioritization discussions','Provide a single point of coordination across initiatives'],
+      empathy:'I can see your team is carrying a heavy load. We need to be thoughtful about how we layer this on.',
+      commit:'Let me work with the PMO to see if we can stagger some of these initiatives. I\'ll report back by [date].'},
+    leadership:{open:'How are you communicating the change to your team? What support would help?',
+      points:['Provide pre-built talking points and presentation materials','Offer to co-facilitate team sessions with the manager','Connect them directly with the executive sponsor for alignment','Share data and success stories that build confidence in the change'],
+      empathy:'Leading through change is one of the hardest parts of management. We\'re here to support you, not add to your burden.',
+      commit:'Let\'s schedule a 30-minute prep session before your next team meeting so you feel fully equipped.'}
+  };
+
+  topResistAreas.forEach(area=>{
+    y=pdfCheckPage(doc,y,w,h,pg,50);
+    const guide=coachGuides[area.key]||coachGuides.resistance;
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+    doc.text('Coaching Guide: '+area.label+' (avg '+area.avg.toFixed(1)+'/5)',mg,y+3);y+=8;
+
+    doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(60,60,60);
+    doc.text('Opening Question:',mg+4,y+2);y+=5;
+    doc.setFont('helvetica','normal');const oLines=doc.splitTextToSize('"'+guide.open+'"',w-36);doc.text(oLines,mg+8,y+2);y+=2+oLines.length*4+2;
+
+    doc.setFont('helvetica','bold');doc.text('Key Talking Points:',mg+4,y+2);y+=5;
+    doc.setFont('helvetica','normal');
+    guide.points.forEach(pt=>{doc.text('- '+pt,mg+8,y+2);y+=5;});y+=2;
+
+    doc.setFont('helvetica','bold');doc.text('Empathy Statement:',mg+4,y+2);y+=5;
+    doc.setFont('helvetica','normal');doc.setFont('helvetica','italic');
+    const eLines=doc.splitTextToSize('"'+guide.empathy+'"',w-36);doc.text(eLines,mg+8,y+2);y+=2+eLines.length*4+2;
+    doc.setFont('helvetica','normal');
+
+    doc.setFont('helvetica','bold');doc.text('Commitment Ask:',mg+4,y+2);y+=5;
+    doc.setFont('helvetica','normal');const cLines=doc.splitTextToSize('"'+guide.commit+'"',w-36);doc.text(cLines,mg+8,y+2);y+=2+cLines.length*4+6;
+  });
+
+  // ── 5. Escalation Framework ──
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,'5. Escalation Framework',w);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  const escNarr='Not all resistance can be resolved at the peer level. The following escalation framework provides a structured approach to addressing resistance that persists beyond initial interventions.';
+  const escLines=doc.splitTextToSize(escNarr,w-28);doc.text(escLines,mg,y+2);y+=2+escLines.length*4+4;
+  const escRows=[
+    ['Level 1','Peer Support / Super-User Network','Individual expresses confusion or minor frustration','Within 24 hours','Super-user provides hands-on support, shares job aids, answers questions','Issue resolved; user demonstrates competency'],
+    ['Level 2','Manager 1:1 Coaching','Resistance persists after peer support; pattern of non-adoption','Within 48 hours','Manager conducts coaching conversation using guide above; documents concerns','Agreed action plan; commitment to try for defined period'],
+    ['Level 3','Sponsor Intervention','Manager unable to resolve; group-level resistance; vocal opposition','Within 1 week','Sponsor meets with group; addresses systemic concerns; removes barriers','Visible reduction in resistance behaviors; participation resumes'],
+    ['Level 4','Executive Escalation','Resistance threatens project timeline or success; cross-group impact','Immediate','Executive leadership addresses organizational barriers; may adjust scope/timeline','Strategic decision on path forward; formal remediation plan']
+  ];
+  doc.autoTable({startY:y,head:[['Level','Mechanism','Trigger Criteria','Response Time','Actions','Success Indicator']],body:escRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6,cellPadding:2},columnStyles:{4:{cellWidth:35}},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 6. Progress Indicators ──
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'6. Progress Indicators',w);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  const progNarr='Resistance reduction should be measured continuously using both quantitative and qualitative indicators. The following metrics should be tracked weekly during the transition period and bi-weekly during sustainment.';
+  const progLines=doc.splitTextToSize(progNarr,w-28);doc.text(progLines,mg,y+2);y+=2+progLines.length*4+4;
+  const progRows=[
+    ['Adoption Factor Scores','Per group','Weekly','Upward trend in lowest factors; all factors >= 3/5','AdoptIQ dashboard'],
+    ['Pulse Survey Sentiment','All groups','Bi-weekly','Average score >= 3.5/5 across all dimensions','Pulse survey tool'],
+    ['Training Participation','Per group','Per session','>=90% attendance; <=5% no-show rate','LMS / attendance records'],
+    ['Help Desk Volume','All groups','Weekly','Decreasing trend after Week 2 post go-live','Ticketing system'],
+    ['Escalation Count','All groups','Weekly','Decreasing trend; zero Level 4 escalations','Escalation log'],
+    ['Manager Feedback','Per group','Weekly','Qualitative improvement in team readiness reports','Manager check-in notes']
+  ];
+  doc.autoTable({startY:y,head:[['Indicator','Scope','Frequency','Target','Data Source']],body:progRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2},
+    headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 7. Active Risk Flags ──
   if(flags.length){
-    y=pdfSection(doc,y,'Active Risk Flags',w);
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'7. Active Risk Flags',w);
     const fRows=flags.map(f=>[f.gate||'',f.item||'',f.consequence||'',f.defOwner||'Unassigned']);
     doc.autoTable({startY:y,head:[['Gate','Gap Item','Consequence','Owner']],body:fRows,
-      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+      margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2},
       headStyles:{fillColor:[184,50,50],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
-  // Implementation gaps
-  if(gaps.length){
-    y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,'Implementation Gaps Affecting Adoption',w);
-    const gRows=gaps.map(g=>[g.severity,g.description?.substring(0,80)||'',g.trainingImpact||'—']);
-    doc.autoTable({startY:y,head:[['Severity','Gap Description','Training / Adoption Impact']],body:gRows,
-      margin:{left:14,right:14},styles:{fontSize:6.5,cellPadding:2},
-      headStyles:{fillColor:[184,146,42],textColor:[255,255,255],fontStyle:'bold'},
-      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
-    y=doc.lastAutoTable.finalY+10;
-  }
-  // Resistance indicators by group
-  if(critSH.length){
-    y=pdfCheckPage(doc,y,w,h,pg,40);
-    y=pdfSection(doc,y,'Resistance Indicators by Group',w);
-    critSH.forEach(sh=>{
-      y=pdfCheckPage(doc,y,w,h,pg,35);
-      const sc=adoptScore(sh.factors);
-      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);
-      doc.text(sh.name+' — '+sc+'% adoption likelihood',14,y+4);y+=9;
-      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(60,60,60);
-      const lowFactors=AF.filter(f=>(sh.factors?.[f.key]||3)<=2).sort((a,b)=>(sh.factors?.[a.key]||3)-(sh.factors?.[b.key]||3));
-      lowFactors.forEach(f=>{
-        doc.text('• '+f.label+' ('+(sh.factors?.[f.key]||3)+'/5): '+(RESIST_INTERVENTIONS[f.key]||'Targeted intervention required'),16,y+3);y+=6;
-      });
-      if(lowFactors.length===0&&AF.length){
-        const allF=AF.map(f=>({...f,val:sh.factors?.[f.key]||3})).sort((a,b)=>a.val-b.val);
-        if(allF[0])doc.text('• Lowest factor: '+allF[0].label+' ('+allF[0].val+'/5): '+(RESIST_INTERVENTIONS[allF[0].key]||'Targeted intervention required'),16,y+3);y+=6;
-      }
-      y+=4;
-    });
-  }
-  // ADKAR barrier analysis
-  const adkarGaps=ADKAR_DIMS.filter(d=>(p.adkarScores?.[d.key]||3)<3);
+
+  // ── 8. ADKAR Barrier Analysis ──
   if(adkarGaps.length){
-    y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,fwShort()+' Barrier Analysis',w);
+    y=pdfCheckPage(doc,y,w,h,pg,40);
+    y=pdfSection(doc,y,'8. '+fwShort()+' Barrier Analysis',w);
     adkarGaps.forEach(d=>{
+      y=pdfCheckPage(doc,y,w,h,pg,25);
       const val=p.adkarScores[d.key];const note=(p.adkarNotes||{})[d.key]||'';
       doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);
-      doc.text(d.word+': '+val+'/5',14,y+4);y+=7;
+      doc.text(d.word+': '+val+'/5',mg,y+4);
+      const barCol=[184,50,50];pdfBar(doc,55,y+1,90,val/5*100,barCol[0],barCol[1],barCol[2]);y+=8;
       if(note){doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(80,80,80);
-        const nLines=doc.splitTextToSize(note,w-28);doc.text(nLines,16,y+2);y+=2+nLines.length*4+2;}
+        const nLines=doc.splitTextToSize('Context: '+note,w-28);doc.text(nLines,mg+2,y+2);y+=2+nLines.length*4+2;}
+      // Add recommended action
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(12,31,63);
+      const mf=ADKAR_MSG_FOCUS[d.key]||{focus:'General remediation',channel:'Multiple channels'};
+      const actionText='Recommended Action: Intensify '+mf.focus.toLowerCase()+' messaging via '+mf.channel.toLowerCase()+'. Target score improvement to 3/5 minimum before go-live.';
+      const actLines=doc.splitTextToSize(actionText,w-28);doc.text(actLines,mg+2,y+2);y+=2+actLines.length*4+4;
     });
   }
-  // Reinforcement plans
+
+  // ── 9. Reinforcement Plans ──
   const reinShs=shs.filter(sh=>sh.rein?.owner);
   if(reinShs.length){
     y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,'Reinforcement Plans',w);
+    y=pdfSection(doc,y,'9. Reinforcement Plans',w);
     const rRows=reinShs.map(sh=>[sh.name,sh.rein.owner,sh.rein.activities||'',
       sh.rein.intervals?.join(', ')||'',sh.rein.escalation||'']);
     doc.autoTable({startY:y,head:[['Group','Owner','Activities','Intervals','Escalation']],body:rRows,
-      margin:{left:14,right:14},styles:{fontSize:6.5,cellPadding:2},
+      margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
+
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
@@ -3164,64 +4201,232 @@ function genReadinessRec(){
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
-  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];
+  const w=doc.internal.pageSize.getWidth();const h=doc.internal.pageSize.getHeight();const pg=[1];const mg=14;
   const brand=getBrand();const rec=calcReadinessRec(p);
   pdfCover(doc,w,h,'Adoption Readiness Recommendation','Gate Review Assessment',p,r,brand);
-  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  // Recommendation status
-  y=pdfSection(doc,y,'Recommendation',w);
-  doc.setFillColor(rec.color[0],rec.color[1],rec.color[2]);
-  doc.roundedRect(14,y+2,w-28,16,3,3,'F');
-  doc.setFontSize(14);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
-  doc.text(rec.label.toUpperCase(),w/2,y+12,{align:'center'});y+=26;
-  // Evidence dashboard
-  y=pdfSection(doc,y,'Evidence Dashboard',w);
+
   const gate=projGateScore(p);const adkar=parseFloat(projAdkarAvg(p));
   const flags=getProjFlags(p);const shs=p.stakeholders||[];
   const gaps=(p.gapAnalysis?.gaps||[]).filter(g=>g.description);
-  const metrics=[['Gate Readiness',(gate||0)+'%',gate>=80?'Pass':gate>=50?'Marginal':'Fail'],
+  const critGaps=gaps.filter(g=>g.severity==='Critical');
+  const goLive=r.golive||p.golive||null;
+  const dims=getActiveDims();
+  const kirkPct=shs.length?Math.round(shs.filter(sh=>kirkReady(sh)==='ready').length/shs.length*100):0;
+  const reinPct=shs.length?Math.round(shs.filter(sh=>reinReady(sh)==='ready').length/shs.length*100):0;
+  const pulseData=p.pulseResults;
+  const avgAdopt=shs.length?Math.round(shs.reduce((s,sh)=>s+adoptScore(sh.factors),0)/shs.length):0;
+
+  // ── 1. Executive Summary ──
+  doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
+  y=pdfSection(doc,y,'1. Executive Summary',w);
+  doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
+  let recExec='Based on a comprehensive analysis of gate readiness ('+(gate||0)+'%), '+fwShort()+' assessment ('+adkar+'/5), '+
+    shs.length+' stakeholder group'+(shs.length!==1?'s':'')+', '+flags.length+' active risk flag'+(flags.length!==1?'s':'')+', and '+
+    gaps.length+' implementation gap'+(gaps.length!==1?'s':'')+', ';
+  if(rec.status==='READY')recExec+='the recommendation is to PROCEED with the '+p.name+' go-live as planned. All readiness criteria are met, and the organization demonstrates sufficient preparedness for a successful transition. Continued monitoring through pulse surveys and 30/60/90 day reviews is recommended.';
+  else if(rec.status==='NOT_READY')recExec+='the recommendation is to DELAY the '+p.name+' go-live. Critical readiness gaps exist that, if unaddressed, present substantial risk of adoption failure. A structured remediation plan with defined milestones is required before reassessment.';
+  else recExec+='the recommendation is to PROCEED WITH CONDITIONS for '+p.name+'. The organization shows partial readiness but specific gaps must be addressed prior to or immediately following go-live to mitigate adoption risk. Conditions are detailed below.';
+  const recExecLines=doc.splitTextToSize(recExec,w-28);doc.text(recExecLines,mg,y+3);y+=3+recExecLines.length*4+6;
+
+  // ── 2. Recommendation Status ──
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'2. Recommendation',w);
+  doc.setFillColor(rec.color[0],rec.color[1],rec.color[2]);
+  doc.roundedRect(mg,y+2,w-28,22,3,3,'F');
+  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
+  doc.text(rec.label.toUpperCase(),w/2,y+12,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');
+  const statusSub=rec.status==='READY'?'All readiness gates passed. Organization is prepared for transition.':
+    rec.status==='NOT_READY'?'Critical gaps identified. Remediation required before proceeding.':
+    'Partial readiness achieved. Specific conditions must be met.';
+  doc.text(statusSub,w/2,y+19,{align:'center'});
+  y+=32;
+
+  // ── 3. Evidence Dashboard ──
+  y=pdfCheckPage(doc,y,w,h,pg,50);
+  y=pdfSection(doc,y,'3. Evidence Dashboard',w);
+  const metrics=[
+    ['Gate Readiness',(gate||0)+'%',gate>=80?'Pass':gate>=50?'Marginal':'Fail'],
     [fwShort()+' Average',adkar+'/5',adkar>=3.5?'Pass':adkar>=2.5?'Marginal':'Fail'],
     ['Active Risk Flags',flags.length+'',flags.length===0?'Pass':flags.length<=2?'Marginal':'Fail'],
-    ['Open Gaps',gaps.length+'',gaps.filter(g=>g.severity==='Critical').length===0?'Pass':'Fail'],
-    ['Stakeholder Groups',shs.length+'','—']];
+    ['Open Gaps',gaps.length+' ('+critGaps.length+' critical)',critGaps.length===0?'Pass':'Fail'],
+    ['Stakeholder Groups',shs.length+' (avg '+avgAdopt+'% adoption)',avgAdopt>=60?'Pass':avgAdopt>=40?'Marginal':'Fail'],
+    ['Training Readiness',kirkPct+'% Kirk. complete',kirkPct>=75?'Pass':kirkPct>=40?'Marginal':'Fail'],
+    ['Reinforcement Coverage',reinPct+'% of groups covered',reinPct>=75?'Pass':reinPct>=40?'Marginal':'Fail']
+  ];
+  if(pulseData?.length){
+    const latestPulse=pulseData[pulseData.length-1];
+    const pulseDims=Object.values(latestPulse.scores||{});
+    const pulseAvg=pulseDims.length?Math.round(pulseDims.reduce((a,b)=>a+b,0)/pulseDims.length*10)/10:0;
+    metrics.push(['Pulse Survey Response',pulseAvg+'/5 (latest)',pulseAvg>=3.5?'Pass':pulseAvg>=2.5?'Marginal':'Fail']);
+  }
   doc.autoTable({startY:y,head:[['Metric','Value','Assessment']],body:metrics,
-    margin:{left:14,right:14},styles:{fontSize:9,cellPadding:3},
+    margin:{left:mg,right:mg},styles:{fontSize:8,cellPadding:3},
     headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,247,244]},
+    didDrawCell:(data)=>{
+      if(data.section==='body'&&data.column.index===2){
+        const val=data.cell.raw;
+        if(val==='Pass')doc.setTextColor(29,104,64);
+        else if(val==='Marginal')doc.setTextColor(184,146,42);
+        else if(val==='Fail')doc.setTextColor(184,50,50);
+      }
+    },
+    didDrawPage:()=>{pg[0]++;}});
+  y=doc.lastAutoTable.finalY+10;
+
+  // ── 4. Conditions for Proceeding ──
+  if(rec.status==='CONDITIONAL'){
+    y=pdfCheckPage(doc,y,w,h,pg,50);
+    y=pdfSection(doc,y,'4. Conditions for Proceeding',w);
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+    const condNarr='The following conditions must be resolved prior to or immediately following go-live. Each condition represents a gap that, if unaddressed, increases the probability of adoption failure.';
+    const condLines=doc.splitTextToSize(condNarr,w-28);doc.text(condLines,mg,y+2);y+=2+condLines.length*4+4;
+    const conditions=[];
+    if(flags.length)conditions.push(['Resolve Risk Flags','Resolve '+flags.length+' active risk flag'+(flags.length!==1?'s':'')+' identified in the gate review','Before go-live','Project team']);
+    if(adkar<3.5){
+      const lowDims=dims.filter(d=>(p.adkarScores?.[d.key]||3)<3);
+      if(lowDims.length)conditions.push(['Improve '+fwShort()+' Scores','Raise '+lowDims.map(d=>d.word).join(', ')+' score'+(lowDims.length!==1?'s':'')+' to minimum 3/5','Before go-live','OCM Lead']);
+    }
+    if(gate<80)conditions.push(['Complete Gate Items','Advance gate readiness from '+(gate||0)+'% to minimum 80%','Before go-live','Project Manager']);
+    const atRisk=shs.filter(sh=>adoptScore(sh.factors)<60);
+    if(atRisk.length)conditions.push(['Address At-Risk Groups','Deploy targeted interventions for '+atRisk.map(sh=>sh.name).join(', '),'Before go-live','OCM Lead']);
+    if(kirkPct<75)conditions.push(['Complete Evaluation Design','Advance Kirkpatrick evaluation design from '+kirkPct+'% to 75%+ completion','Before go-live','Training Lead']);
+    if(reinPct<50)conditions.push(['Establish Reinforcement Plans','Configure reinforcement plans for '+Math.round((1-reinPct/100)*shs.length)+' remaining group'+(Math.round((1-reinPct/100)*shs.length)!==1?'s':''),'Before go-live','OCM Lead']);
+    if(conditions.length){
+      doc.autoTable({startY:y,head:[['Condition','Requirement','Deadline','Owner']],body:conditions,
+        margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2.5},columnStyles:{1:{cellWidth:60}},
+        headStyles:{fillColor:[184,146,42],textColor:[255,255,255],fontStyle:'bold'},
+        alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+      y=doc.lastAutoTable.finalY+10;
+    }
+  }
+
+  // ── 5. Risk-Adjusted Timeline ──
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'5. Risk-Adjusted Timeline Assessment',w);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  if(goLive){
+    const daysLeft=Math.ceil((new Date(goLive)-new Date())/86400000);
+    let timeNarr='The go-live date is set for '+goLive+' ('+daysLeft+' days from today). ';
+    if(rec.status==='READY')timeNarr+='Based on current readiness scores, the timeline is achievable. No adjustments recommended.';
+    else if(rec.status==='NOT_READY'){
+      const remedWeeks=Math.max(4,Math.ceil((flags.length*5+critGaps.length*10)/5));
+      timeNarr+='Based on the volume of unresolved gaps and risk flags, a minimum of '+remedWeeks+' additional weeks is recommended for remediation before re-assessment. ';
+      timeNarr+='A revised go-live target of approximately '+(remedWeeks)+' weeks from today would allow adequate time to address critical barriers.';
+    }else{
+      timeNarr+='The timeline is tight given the conditions that must be met. ';
+      if(daysLeft<14)timeNarr+='With only '+daysLeft+' days remaining, achieving all conditions is at high risk. Consider a 2-4 week extension.';
+      else if(daysLeft<30)timeNarr+='The remaining '+daysLeft+' days should be sufficient if remediation begins immediately and is tracked daily.';
+      else timeNarr+='There is adequate time to address the conditions if action begins within the next 5 business days.';
+    }
+    const timeLines=doc.splitTextToSize(timeNarr,w-28);doc.text(timeLines,mg,y+2);y+=2+timeLines.length*4+6;
+  }else{
+    doc.text('Go-live date has not been set. Set a go-live date to enable risk-adjusted timeline analysis.',mg,y+3);y+=10;
+  }
+
+  // ── 6. Contingency Triggers ──
+  y=pdfCheckPage(doc,y,w,h,pg,40);
+  y=pdfSection(doc,y,'6. Contingency Triggers',w);
+  doc.setFontSize(7);doc.setFont('helvetica','italic');doc.setTextColor(100,100,100);
+  doc.text('These triggers should be monitored continuously. If any condition is met, the corresponding action should be initiated immediately.',mg,y+2);y+=8;
+  const trigRows=[
+    ['Any group adoption score drops below 40%','2 weeks before go-live','Recommend delayed rollout for affected group; deploy intensive 1:1 coaching','OCM Lead + Sponsor'],
+    ['Training completion below 80%','1 week before go-live','Extend training window; schedule mandatory catch-up sessions; deploy self-paced alternatives','Training Lead'],
+    [fwShort()+' average drops below 2.5/5','Any time','Initiate emergency stakeholder engagement; consider scope reduction or phased rollout','OCM Lead + PM'],
+    ['3+ new critical gaps identified','Any time','Convene emergency steering committee; reassess go-live viability','Project Manager'],
+    ['Sponsor engagement drops or conflicting messages detected','Any time','Escalate to executive leadership; realign sponsorship coalition','OCM Lead'],
+    ['Help desk volume exceeds capacity post go-live','Week 1 post go-live','Deploy additional support resources; extend hypercare period; communicate revised support hours','Support Lead']
+  ];
+  doc.autoTable({startY:y,head:[['Trigger Condition','Monitoring Window','Response Action','Owner']],body:trigRows,
+    margin:{left:mg,right:mg},styles:{fontSize:6.5,cellPadding:2},columnStyles:{2:{cellWidth:50}},
+    headStyles:{fillColor:[184,50,50],textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
   y=doc.lastAutoTable.finalY+10;
-  // ADKAR breakdown
-  y=pdfCheckPage(doc,y,w,h,pg,50);
-  y=pdfSection(doc,y,fwShort()+' Readiness',w);
-  ADKAR_DIMS.forEach(d=>{
+
+  // ── 7. Post-Decision Action Plan ──
+  y=pdfCheckPage(doc,y,w,h,pg,60);
+  y=pdfSection(doc,y,'7. Post-Decision Action Plan',w);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  if(rec.status==='READY'){
+    doc.setFont('helvetica','bold');doc.setTextColor(29,104,64);doc.text('Status: READY TO PROCEED',mg,y+3);y+=8;
+    doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+    const readyActions=['Proceed to go-live as scheduled','Activate hypercare support plan and war room for go-live week',
+      'Monitor adoption via pulse surveys at Day 7, 14, 30','Schedule 30-day post go-live adoption review with stakeholders',
+      'Schedule 60-day sustainment review with executive sponsor','Schedule 90-day value realization assessment against business KPIs',
+      'Transition from project-mode to steady-state support model at 90 days','Document lessons learned and update organizational change playbook'];
+    readyActions.forEach(a=>{doc.text('- '+a,mg+4,y+2);y+=5;});
+  }else if(rec.status==='NOT_READY'){
+    doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);doc.text('Status: NOT READY -- DELAY RECOMMENDED',mg,y+3);y+=8;
+    doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+    const nrActions=[];
+    if(critGaps.length)nrActions.push('Resolve '+critGaps.length+' critical implementation gap'+(critGaps.length!==1?'s':'')+' -- these are blocking adoption readiness');
+    if(flags.length)nrActions.push('Address '+flags.length+' active risk flag'+(flags.length!==1?'s':'')+' through targeted remediation sprints');
+    if(adkar<2.5)nrActions.push('Conduct intensive stakeholder engagement to raise '+fwShort()+' scores above 2.5/5 minimum threshold');
+    const atRisk=shs.filter(sh=>adoptScore(sh.factors)<40);
+    if(atRisk.length)nrActions.push('Deploy resistance management interventions for critical-risk groups: '+atRisk.map(sh=>sh.name).join(', '));
+    nrActions.push('Establish weekly remediation check-ins with project steering committee');
+    nrActions.push('Set a reassessment date for readiness re-evaluation (recommended: 4-6 weeks)');
+    nrActions.push('Communicate delay decision to stakeholders with revised timeline and rationale');
+    doc.setFont('helvetica','bold');doc.text('Remediation Priorities (in order):',mg+4,y+2);y+=6;
+    doc.setFont('helvetica','normal');
+    nrActions.forEach((a,i)=>{const aLines=doc.splitTextToSize((i+1)+'. '+a,w-36);doc.text(aLines,mg+8,y+2);y+=2+aLines.length*4;});
+  }else{
+    doc.setFont('helvetica','bold');doc.setTextColor(184,146,42);doc.text('Status: PROCEED WITH CONDITIONS',mg,y+3);y+=8;
+    doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+    doc.text('The following actions must be completed to satisfy the conditions identified above:',mg+4,y+2);y+=6;
+    const condActions=['Assign clear owners and deadlines for each condition listed in Section 4',
+      'Establish daily stand-up to track condition resolution progress','Prepare contingency plan in case conditions are not met by go-live',
+      'Communicate conditional status to stakeholders with transparency about remaining work',
+      'Schedule mid-point check-in to assess condition resolution progress',
+      'If conditions are not met by 1 week before go-live, reconvene for go/no-go decision'];
+    condActions.forEach(a=>{doc.text('- '+a,mg+8,y+2);y+=5;});
+  }
+  y+=6;
+
+  // ── 8. ADKAR Readiness ──
+  y=pdfCheckPage(doc,y,w,h,pg,60);
+  y=pdfSection(doc,y,'8. '+fwShort()+' Readiness',w);
+  dims.forEach(d=>{
     const val=p.adkarScores?.[d.key]||3;
     doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
-    doc.text(d.word,14,y+4);
+    doc.text(d.word,mg,y+4);
     const c=val>=4?[29,104,64]:val>=3?[184,146,42]:[184,50,50];
     pdfBar(doc,55,y+1,90,val/5*100,c[0],c[1],c[2]);
-    doc.text(val+'/5',150,y+4);y+=8;
+    doc.setTextColor(c[0],c[1],c[2]);doc.text(val+'/5',150,y+4);y+=8;
   });y+=6;
-  // Stakeholder readiness
+
+  // ── 9. Stakeholder Readiness ──
   if(shs.length){
     y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,'Stakeholder Readiness Summary',w);
-    const sRows=shs.map(sh=>{const sc=adoptScore(sh.factors);return[sh.name,sc+'%',adoptTier(sc).tier,kirkReady(sh).toUpperCase(),reinReady(sh).toUpperCase()];});
-    doc.autoTable({startY:y,head:[['Group','Adoption %','Risk Tier','Kirkpatrick','Reinforcement']],body:sRows,
-      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2.5},
+    y=pdfSection(doc,y,'9. Stakeholder Readiness Summary',w);
+    const sRows=shs.map(sh=>{const sc=adoptScore(sh.factors);return[sh.name,sc+'%',adoptTier(sc).tier,_shCoalitionRole(sc),kirkReady(sh).toUpperCase(),reinReady(sh).toUpperCase()];});
+    doc.autoTable({startY:y,head:[['Group','Adoption %','Risk Tier','Coalition Role','Kirkpatrick','Reinforcement']],body:sRows,
+      margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2.5},
       headStyles:{fillColor:[12,31,63],textColor:[255,255,255],fontStyle:'bold'},
-      alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
+      alternateRowStyles:{fillColor:[248,247,244]},
+      didDrawCell:(data)=>{
+        if(data.section==='body'&&data.column.index===1){
+          const pct=parseInt(data.cell.raw);
+          if(pct>=80)doc.setTextColor(29,104,64);else if(pct>=60)doc.setTextColor(184,146,42);else doc.setTextColor(184,50,50);
+        }
+      },
+      didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
-  // Risk flags
+
+  // ── 10. Risk Flags ──
   if(flags.length){
-    y=pdfCheckPage(doc,y,w,h,pg,25);
-    y=pdfSection(doc,y,'Risk Flags Requiring Resolution',w);
-    const fRows=flags.map(f=>[f.gate||'',f.item||'',f.consequence||'']);
-    doc.autoTable({startY:y,head:[['Gate','Gap','Consequence']],body:fRows,
-      margin:{left:14,right:14},styles:{fontSize:7,cellPadding:2},
+    y=pdfCheckPage(doc,y,w,h,pg,30);
+    y=pdfSection(doc,y,'10. Risk Flags Requiring Resolution',w);
+    const fRows=flags.map(f=>[f.gate||'',f.item||'',f.consequence||'',f.defOwner||'Unassigned']);
+    doc.autoTable({startY:y,head:[['Gate','Gap','Consequence','Owner']],body:fRows,
+      margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2},
       headStyles:{fillColor:[184,50,50],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[248,247,244]},didDrawPage:()=>{pg[0]++;}});
     y=doc.lastAutoTable.finalY+10;
   }
+
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
@@ -3231,9 +4436,6 @@ function genReadinessRec(){
 function genFullPackage(){
   if(!window.jspdf){alert('PDF library is still loading.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
-  // Generate all 5 individually (each opens in new tab)
-  // For a combined PDF, we'd need to merge — for now, generate the most comprehensive one: Readiness Recommendation
-  // which contains evidence from all areas
   alert('Generating all 5 deliverables. Each will open in a separate tab.');
   toggleGenMenu();
   setTimeout(()=>genStakeholderAnalysis(),100);
