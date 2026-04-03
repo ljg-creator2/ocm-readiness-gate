@@ -706,9 +706,9 @@ function showView(id){
     document.getElementById(v).classList.toggle('active',v===id);
   });
 }
-function goPortfolio(){activeRelId=null;activeProjId=null;showView('v-portfolio');renderPortfolio();announceToSR('Portfolio view loaded');}
+function goPortfolio(){activeRelId=null;activeProjId=null;showView('v-portfolio');renderPortfolio();announceToSR('Portfolio view loaded');const fab=document.getElementById('smart-fab');if(fab)fab.style.display='none';}
 function openRelease(id){
-  activeRelId=id;activeProjId=null;
+  activeRelId=id;activeProjId=null;const fab=document.getElementById('smart-fab');if(fab)fab.style.display='none';
   const r=getRel();if(!r)return;
   document.getElementById('bc-rel').textContent=r.name||'Release';
   document.getElementById('r-name').value=r.name||'';
@@ -2659,6 +2659,250 @@ function renderRecommendations(){
     <div class="rec-txt"><div class="rec-gate">${esc(r.gate)}: ${esc(r.item)}</div>
     <div class="rec-action"><strong>Action:</strong> ${esc(r.action)}</div></div>
   </div>`).join('')+(recs.length>6?`<div style="text-align:center;padding:8px;font-size:11px;color:var(--ink-60)">+${recs.length-6} more — view all in the Gates tab</div>`:'');
+  // Also render AI smart recs
+  renderSmartRecs();
+}
+
+// ════════════════════════════════════════════════════════
+// SMART RECOMMENDATIONS ENGINE (AI-Powered)
+// ════════════════════════════════════════════════════════
+const SMART_RECS_URL='https://yufehucjvviwanbulcok.supabase.co/functions/v1/smart-recommendations';
+let _smartRecsCache={};
+let _smartRecsDismissed=new Set();
+
+function getSmartRecsCacheKey(p){
+  const parts=[
+    JSON.stringify(p.gateState),
+    JSON.stringify(p.adkarScores),
+    p.stakeholders.map(s=>JSON.stringify(s.factors)).join(','),
+    p.stakeholders.length,
+    (p.gapAnalysis?.gaps||[]).length,
+    (p.impactAssessment?.groups||[]).length,
+    Object.values(p.gateState).filter(v=>v==='red').length
+  ].join('|');
+  let hash=0;
+  for(let i=0;i<parts.length;i++){hash=((hash<<5)-hash)+parts.charCodeAt(i);hash|=0;}
+  return p.id+'_sr_'+hash;
+}
+
+function collectSmartRecsData(p){
+  const dims=getActiveDims();
+  const shs=p.stakeholders||[];
+
+  // Framework scores
+  const fwScores={};
+  dims.forEach(d=>{fwScores[d.word]=p.adkarScores?.[d.key]||3;});
+  const fwAvg=dims.length?dims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/dims.length:3;
+  const fwPct=Math.round(fwAvg/5*100);
+
+  // Stakeholder sentiment breakdown
+  const stakeholderBreakdown=shs.map(s=>{
+    const score=adoptScore(s.factors);
+    const tier=adoptTier(score);
+    return{name:s.name,adoptionScore:score,tier:tier.tier,
+      factors:Object.fromEntries(AF.map(f=>([f.label,s.factors?.[f.key]||3]))),
+      kirkpatrickReady:kirkReady(s),reinforcementReady:reinReady(s)};
+  });
+  const supporters=stakeholderBreakdown.filter(s=>s.adoptionScore>=70).length;
+  const neutral=stakeholderBreakdown.filter(s=>s.adoptionScore>=40&&s.adoptionScore<70).length;
+  const resistant=stakeholderBreakdown.filter(s=>s.adoptionScore<40).length;
+  const sentPct=shs.length?Math.round(shs.reduce((a,s)=>a+adoptScore(s.factors),0)/shs.length):0;
+
+  // Training completion
+  const kirkPcts=shs.map(sh=>{
+    if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;
+    if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;
+    if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
+    return Math.round(f/8*100);
+  });
+  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+
+  // Comms completion
+  const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
+  const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
+  const commsPct=Math.round(commsAvg/5*100);
+
+  // Risk flags
+  const flags=getPFlags();
+
+  // Gate history
+  const gateHistory=GATE_DEFS.map(gate=>{
+    const tot=gate.items.length;
+    const naCount=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='na').length;
+    const applicable=tot-naCount;
+    const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
+    const ylw=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='yellow').length;
+    const red=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='red').length;
+    const pct=applicable?Math.round(grn/applicable*100):null;
+    const status=pct===null?'not_started':pct>=75?'pass':pct>=50?'conditional':'fail';
+    return{gate:gate.label,sub:gate.sub,score:pct,status,greenItems:grn,yellowItems:ylw,redItems:red,applicable};
+  });
+
+  // Risk adjustment
+  const gs=projGateScore(p);
+  const riskPct=Math.max(0,Math.min(100,gs!==null?Math.round(gs*(flags.length===0?1:flags.length<=2?0.8:0.5)):50));
+
+  // Composite adoption score
+  const currentAdoptionScore=Math.round(fwPct*0.30+sentPct*0.20+trainPct*0.20+commsPct*0.15+riskPct*0.15);
+  let tier='Critical';
+  if(currentAdoptionScore>=85)tier='Champion';
+  else if(currentAdoptionScore>=65)tier='On Track';
+  else if(currentAdoptionScore>=40)tier='At Risk';
+
+  // Gaps
+  const gaps=(p.gapAnalysis?.gaps||[]).map(g=>({description:g.description||'',severity:g.severity||'Medium',status:g.status||'Open'}));
+
+  return{
+    projectName:p.name,
+    frameworkName:fwName(),
+    goLiveDate:p.golive||null,
+    currentAdoptionScore,tier,
+    scoringComponents:{
+      frameworkAssessment:{score:fwPct,weight:'30%',scores:fwScores},
+      stakeholderSentiment:{score:sentPct,weight:'20%',supporters,neutral,resistant,total:shs.length},
+      trainingEffectiveness:{score:trainPct,weight:'20%',kirkpatrickDetails:stakeholderBreakdown.map(s=>({name:s.name,kirkReady:s.kirkpatrickReady,reinReady:s.reinforcementReady}))},
+      commsCompletion:{score:commsPct,weight:'15%'},
+      riskAdjustment:{score:riskPct,weight:'15%',activeFlags:flags.length}
+    },
+    stakeholders:stakeholderBreakdown,
+    gateHistory,
+    riskFlags:flags.map(f=>({gate:f.gate,sub:f.sub,item:f.item,consequence:f.consequence})),
+    gaps,
+    acknowledgedRecs:p.acknowledgedRecs||[]
+  };
+}
+
+async function callSmartRecommendations(data){
+  const response=await fetch(SMART_RECS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
+    body:JSON.stringify(data)
+  });
+  if(!response.ok){
+    const err=await response.json().catch(()=>({}));
+    throw new Error(err.error||'Recommendations service unavailable');
+  }
+  return await response.json();
+}
+
+function renderSmartRecs(){
+  const p=getProj();if(!p)return;
+  const panel=document.getElementById('smart-recs-panel');
+  const fab=document.getElementById('smart-fab');
+  if(!panel)return;
+
+  panel.style.display='block';
+  if(fab)fab.style.display='flex';
+
+  // Check cache
+  const cacheKey=getSmartRecsCacheKey(p);
+  if(_smartRecsCache[cacheKey]){
+    renderSmartRecsFromData(_smartRecsCache[cacheKey],p);
+    return;
+  }
+
+  // Show loading
+  const list=document.getElementById('smart-recs-list');
+  if(list)list.innerHTML='<div class="smart-recs-loading">Analyzing project data for recommendations…</div>';
+  document.getElementById('smart-recs-ts').textContent='';
+
+  fetchSmartRecs();
+}
+
+async function fetchSmartRecs(){
+  const p=getProj();if(!p)return;
+  const btn=document.getElementById('smart-recs-refresh');
+  if(btn){btn.classList.add('loading');btn.textContent='⟳ Analyzing…';}
+
+  try{
+    const data=collectSmartRecsData(p);
+    const result=await callSmartRecommendations(data);
+    const cacheKey=getSmartRecsCacheKey(p);
+    _smartRecsCache[cacheKey]={result,timestamp:Date.now()};
+    renderSmartRecsFromData(_smartRecsCache[cacheKey],p);
+  }catch(err){
+    const list=document.getElementById('smart-recs-list');
+    if(list)list.innerHTML=`<div class="smart-recs-error">Unable to generate recommendations: ${esc(err.message)}</div>`;
+  }finally{
+    if(btn){btn.classList.remove('loading');btn.innerHTML='&#x21BB; Re-analyze';}
+  }
+}
+
+function refreshSmartRecs(){
+  const p=getProj();if(!p)return;
+  _smartRecsDismissed.clear();
+  Object.keys(_smartRecsCache).forEach(k=>{if(k.includes('_sr_'))delete _smartRecsCache[k];});
+  fetchSmartRecs();
+}
+
+function renderSmartRecsFromData(cached,p){
+  const{result,timestamp}=cached;
+  const recs=result.recommendations||[];
+  const list=document.getElementById('smart-recs-list');
+  const tsEl=document.getElementById('smart-recs-ts');
+
+  if(tsEl&&timestamp){
+    const d=new Date(timestamp);
+    tsEl.textContent='Last analyzed: '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }
+
+  if(!recs.length){
+    list.innerHTML='<div class="smart-recs-loading" style="color:var(--green)">✓ No urgent recommendations at this time.</div>';
+    return;
+  }
+
+  const acked=p.acknowledgedRecs||[];
+
+  list.innerHTML=recs.map((r,i)=>{
+    const prCls=(r.priority||'medium').toLowerCase();
+    const isAcked=acked.includes('sr_'+i);
+    const isDismissed=_smartRecsDismissed.has(i);
+    return`<div class="smart-rec-card${isAcked?' acknowledged':''}${isDismissed?' dismissed':''}" id="smart-rec-${i}">
+      <div class="smart-rec-top">
+        <div class="smart-rec-priority ${prCls}"><span class="smart-rec-dot ${prCls}"></span>${esc(r.priority||'Medium')}</div>
+        <div class="smart-rec-btns">
+          <button class="smart-rec-btn ack" onclick="ackSmartRec(${i})" title="Acknowledge"${isAcked?' disabled':''}>✓${isAcked?' Acknowledged':''}</button>
+          <button class="smart-rec-btn dismiss" onclick="dismissSmartRec(${i})" title="Dismiss">✕</button>
+        </div>
+      </div>
+      <div class="smart-rec-action">${esc(r.action)}</div>
+      <div class="smart-rec-meta">
+        <div class="smart-rec-trigger"><strong>Data trigger:</strong> ${esc(r.data_trigger)}</div>
+        <div class="smart-rec-impact">▲ ${esc(r.estimated_impact)}</div>
+        <div class="smart-rec-dimension">${esc(r.target_dimension)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function ackSmartRec(idx){
+  const p=getProj();if(!p)return;
+  if(!p.acknowledgedRecs)p.acknowledgedRecs=[];
+  const key='sr_'+idx;
+  if(!p.acknowledgedRecs.includes(key))p.acknowledgedRecs.push(key);
+  touch('proj');save();
+  const card=document.getElementById('smart-rec-'+idx);
+  if(card){
+    card.classList.add('acknowledged');
+    const btn=card.querySelector('.smart-rec-btn.ack');
+    if(btn){btn.disabled=true;btn.textContent='✓ Acknowledged';}
+  }
+}
+
+function dismissSmartRec(idx){
+  _smartRecsDismissed.add(idx);
+  const card=document.getElementById('smart-rec-'+idx);
+  if(card)card.classList.add('dismissed');
+}
+
+function scrollToSmartRecs(){
+  const panel=document.getElementById('smart-recs-panel');
+  if(panel){
+    // Make sure we're on the overview tab
+    const overviewTab=document.querySelector('[onclick*="psec-overview"]');
+    if(overviewTab)overviewTab.click();
+    setTimeout(()=>{panel.scrollIntoView({behavior:'smooth',block:'start'});},100);
+  }
 }
 
 // ════════════════════════════════════════════════════════
