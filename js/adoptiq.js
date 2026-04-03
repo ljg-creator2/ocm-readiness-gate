@@ -570,6 +570,7 @@ function newProject(name,agencies,users){
       requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},
       design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},
       testing:{qaDefects:0,uatDefects:0,uatParticipationRate:0,testingApproach:''},
+      training:{startDateChanges:0,startDateReasons:[],envDefects:0,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:0},
       deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
     },
     valueCase:{statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''},
@@ -725,7 +726,7 @@ function calcLifecycleHealth(p){
     signals.push({key,label,strength,score,value:val,redNote:strength==='red'?redNote:''});
     total+=score;count++;
   }
-  const req=ls.requirements||{},des=ls.design||{},tst=ls.testing||{},dep=ls.deployment||{};
+  const req=ls.requirements||{},des=ls.design||{},tst=ls.testing||{},trn=ls.training||{},dep=ls.deployment||{};
   // Requirements
   if(req.onSchedule===false){signals.push({key:'req_schedule',label:'Requirements on schedule',strength:req.daysVariance>5?'red':'yellow',score:req.daysVariance>5?0.2:0.6,value:req.daysVariance,redNote:req.daysVariance>5?'Requirements completed more than 5 days late. This delay may compress downstream phases.':''});total+=req.daysVariance>5?0.2:0.6;count++;}
   else if(req.onSchedule===true){signals.push({key:'req_schedule',label:'Requirements on schedule',strength:'green',score:1.0,value:true,redNote:''});total+=1.0;count++;}
@@ -751,6 +752,12 @@ function calcLifecycleHealth(p){
     signals.push({key:'tst_participation',label:'UAT participation rate',strength:rStr,score:rScr,value:rate+'%',redNote:rStr==='red'?`Only ${rate}% of invited users participated in UAT. Low participation means the system has not been adequately validated by real users.`:''});
     total+=rScr;count++;
   }
+  // Deployment
+  // Training Schedule
+  if(trn.startDateChanges){sig('trn_date',trn.startDateChanges,0,1,99,'Training start date changes','3+ training start date changes signals chronic schedule instability — often caused by UAT delays, training environment issues, or insufficient time scoped for end-user preparation.');}
+  if(trn.envDefects){sig('trn_env',trn.envDefects,0,3,99,'Training environment defects','High defect counts in the training environment delay readiness and reduce learner confidence in the system.');}
+  if(trn.scopeUnderestimated===true){signals.push({key:'trn_scope',label:'Training scope underestimated',strength:'yellow',score:0.6,value:true,redNote:'Training scope was underestimated. This often results in compressed timelines, reduced reinforcement planning, and lower L3/L4 measurement quality.'});total+=0.6;count++;}
+  if(trn.materialReworkCycles){sig('trn_rework',trn.materialReworkCycles,1,2,99,'Training material rework cycles','3+ material rework cycles suggests unstable system design or late-breaking requirements changes impacting training quality.');}
   // Deployment
   if(dep.goliveDateChanges){sig('dep_changes',dep.goliveDateChanges,0,1,99,'Go-live date changes','2+ go-live date changes erode stakeholder confidence and may indicate the project is not ready.');}
   if(dep.supportTicketsWeek1){sig('dep_tickets',dep.supportTicketsWeek1,20,50,99,'Post-go-live support tickets (week 1)',`${dep.supportTicketsWeek1} support tickets in the first week suggests significant user difficulties. Consider extended hyper-care support.`);}
@@ -3218,16 +3225,25 @@ function getTopDrivers(p){
 // VALUE CASE
 // ════════════════════════════════════════════════════════
 function renderValueCase(p){
-  const el=document.getElementById('p-value-case-wrap');if(!el)return;
+  const el=document.getElementById('p-value-case-wrap');if(!el||el.dataset.dismissed==='1')return;
   if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};
   const vc=p.valueCase;
   const postGL=isPostGoLive(p);
   const vr=calcValueRealization(vc);
   const impactLevels=['High','Medium','Low'];
   const vrColor=vr===null?'var(--ink-60)':vr>=80?'var(--green)':vr>=50?'var(--amber)':'var(--red)';
-  el.innerHTML=`<div class="panel">
-    <div class="ph">
-      <div><div class="pt">Value Case</div><div class="ps-text">Document what this project is supposed to deliver and track whether it delivered.</div></div>
+  el.innerHTML=`<div class="exp-sec panel" style="margin-bottom:20px">
+    <button class="exp-tog" onclick="toggleExp('vc-body',this)" aria-expanded="false" style="width:100%;padding:16px 20px;background:transparent;border:none;cursor:pointer;text-align:left">
+      <div class="exp-tog-l" style="flex:1">
+        <span style="font-weight:700;font-size:14px;color:var(--navy)">Value Case</span>
+        <span class="exp-badge" style="font-weight:400;font-size:11px;color:var(--ink-60);margin-left:8px">What this project is supposed to deliver — and whether it did</span>
+        ${vr!==null?`<span class="exp-badge" style="background:${vrColor};color:#fff">${vr}% Realized</span>`:''}
+      </div>
+      <span class="exp-arr">&#9660;</span>
+    </button>
+    <div class="exp-body" id="vc-body" style="padding:0 20px 20px">
+    <div class="ph" style="padding:0;margin-bottom:16px">
+      <div></div>
       ${vr!==null?`<div class="value-score" style="color:${vrColor}">${vr}% Value Realized</div>`:''}
     </div>
     <div class="pb">
@@ -3258,6 +3274,7 @@ function renderValueCase(p){
         </div>`:'<div class="vc-col"><div class="vc-pending"><div class="vc-pending-icon">&#128337;</div><div class="vc-pending-txt">Actual Outcomes</div><div class="vc-pending-sub">This section unlocks after the go-live date to capture whether this project delivered its expected value.</div></div></div>'}
       </div>
     </div>
+    </div>
   </div>`;
 }
 function renderVCCriteria(vc,postGL){
@@ -3284,13 +3301,21 @@ function renderProofPoints(p){
   const el=document.getElementById('p-proof-points-wrap');if(!el)return;
   if(!p.proofPoints)p.proofPoints=[];
   const pts=p.proofPoints;
-  el.innerHTML=`<div class="panel">
-    <div class="ph">
-      <div><div class="pt">Proof Points</div><div class="ps-text">Hard evidence that connects raw observations to gate decisions — making your readiness assessment defensible to leadership.</div></div>
-      <button class="btn-gold" onclick="openAddProofPoint()">+ Add Proof Point</button>
+  el.innerHTML=`<div class="exp-sec panel" style="margin-bottom:20px">
+    <button class="exp-tog" onclick="toggleExp('pp-body',this)" aria-expanded="false" style="width:100%;padding:16px 20px;background:transparent;border:none;cursor:pointer;text-align:left">
+      <div class="exp-tog-l" style="flex:1">
+        <span style="font-weight:700;font-size:14px;color:var(--navy)">Proof Points</span>
+        ${pts.length?`<span class="exp-badge ready">${pts.length} logged</span>`:'<span class="exp-badge needed">None yet</span>'}
+      </div>
+      <span class="exp-arr">&#9660;</span>
+    </button>
+    <div class="exp-body" id="pp-body" style="padding:0 20px 20px">
+    <div class="ph" style="padding:0;margin-bottom:16px">
+      <div class="ps-text">Hard evidence that connects raw observations to gate decisions — making your readiness assessment defensible to leadership.</div>
+      <button class="btn-gold" onclick="openAddProofPoint()">+ Add</button>
     </div>
-    <div class="pb">
-      ${!pts.length?`<div class="es"><div class="es-rule"></div><p class="es-txt">No proof points logged yet. Proof points provide a direct evidence chain from raw observations to gate decisions — making your readiness assessment defensible to leadership.</p></div>`
+    <div>
+      ${!pts.length?`<div class="es"><div class="es-rule"></div><p class="es-txt">No proof points logged yet. Add evidence from meetings, testing, or engagement sessions to build a defensible readiness record.</p></div>`
       :pts.map((pt,i)=>`<div class="pp-card">
         <div class="pp-hd">
           <div class="pp-what">${esc(pt.what)}</div>
@@ -3300,6 +3325,7 @@ function renderProofPoints(p){
         <div class="pp-proves"><span class="pp-proves-lbl">Proves:</span> ${esc(pt.proves)}</div>
         <div class="pp-tags">${(pt.dimensionTags||[]).map(t=>`<span class="pp-tag">${esc(t)}</span>`).join('')}</div>
       </div>`).join('')}
+    </div>
     </div>
   </div>`;
 }
@@ -3451,6 +3477,45 @@ function renderPLifecycle(){
     </div>
 
     <div class="panel lc-phase">
+      <div class="ph"><div><div class="pt">Training Schedule</div><div class="ps-text">Schedule stability and readiness signals for end-user training</div></div></div>
+      <div class="pb">
+        <div class="sig-row">
+          <div class="sig-label">Training start date changes</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.training?.startDateChanges||0}" oninput="updateLS('training','startDateChanges',+this.value)">
+          ${(ls.training?.startDateChanges||0)>=3?signalStrengthBadge('red'):(ls.training?.startDateChanges||0)>=1?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
+        </div>
+        ${(ls.training?.startDateChanges||0)>0?`<div class="sig-row" style="flex-direction:column;align-items:flex-start">
+          <div class="sig-label" style="margin-bottom:8px">Reasons for date changes <span style="font-size:10px;color:var(--ink-60)">(select all that apply)</span></div>
+          <div class="sig-reason-checks">
+            ${['UAT delays','Training environment defects','Insufficient time scoped','System scope changes','Resource unavailability','Other'].map(r=>`<label class="sig-reason-cb"><input type="checkbox" ${(ls.training?.startDateReasons||[]).includes(r)?'checked':''} onchange="updateLSReasons('training','startDateReasons','${r}',this.checked)"> ${r}</label>`).join('')}
+          </div>
+        </div>
+        ${(ls.training?.startDateReasons||[]).includes('Training environment defects')||(ls.training?.startDateReasons||[]).includes('UAT delays')?`<div class="sig-redNote">Training schedule instability from ${(ls.training?.startDateReasons||[]).slice(0,2).join(' and ').toLowerCase()} is a leading indicator of insufficient preparation time for end users — a well-documented predictor of post-go-live resistance.</div>`:''}
+        `:''}
+        <div class="sig-row">
+          <div class="sig-label">Training environment defects</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.training?.envDefects||0}" oninput="updateLS('training','envDefects',+this.value)">
+          ${(ls.training?.envDefects||0)>0?signalStrengthBadge((ls.training?.envDefects||0)>3?'red':'yellow'):''}
+        </div>
+        <div class="sig-row">
+          <div class="sig-label">Training scope was underestimated?</div>
+          <div class="sig-controls">
+            <button class="sig-yn ${ls.training?.scopeUnderestimated?'active-no':''}" onclick="updateLS('training','scopeUnderestimated',true)">Yes</button>
+            <button class="sig-yn ${!ls.training?.scopeUnderestimated?'active-yes':''}" onclick="updateLS('training','scopeUnderestimated',false)">No</button>
+          </div>
+          ${ls.training?.scopeUnderestimated?signalStrengthBadge('yellow'):''}
+        </div>
+        ${ls.training?.scopeUnderestimated?`<div class="sig-yellowNote">Underestimated training scope leads to compressed timelines, reduced reinforcement planning, and lower confidence in L3/L4 behavior transfer outcomes.</div>`:''}
+        ${ls.training?.scopeUnderestimated?`<div class="sig-row"><div class="sig-label">Scope notes</div><textarea class="inp-ta-sm" placeholder="What was underestimated? (e.g. not enough time for end-user practice, UAT participation overlapped with training window)" oninput="updateLS('training','scopeNotes',this.value)">${esc(ls.training?.scopeNotes||'')}</textarea></div>`:''}
+        <div class="sig-row">
+          <div class="sig-label">Training material rework cycles</div>
+          <input class="inp-sm" type="number" min="0" value="${ls.training?.materialReworkCycles||0}" oninput="updateLS('training','materialReworkCycles',+this.value)">
+          ${(ls.training?.materialReworkCycles||0)>=3?signalStrengthBadge('red'):(ls.training?.materialReworkCycles||0)>=2?signalStrengthBadge('yellow'):''}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel lc-phase">
       <div class="ph"><div><div class="pt">Deployment / Go-Live</div><div class="ps-text">Post-deployment adoption signals</div></div></div>
       <div class="pb">
         <div class="sig-row">
@@ -3488,9 +3553,18 @@ function renderPLifecycle(){
 }
 function updateLS(phase,field,val){
   const p=getProj();if(!p)return;
-  if(!p.lifecycleSignals)p.lifecycleSignals={requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},testing:{qaDefects:0,uatDefects:0,uatParticipationRate:0,testingApproach:''},deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}};
+  if(!p.lifecycleSignals)p.lifecycleSignals={requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},testing:{qaDefects:0,uatDefects:0,uatParticipationRate:0,testingApproach:''},training:{startDateChanges:0,startDateReasons:[],envDefects:0,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:0},deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}};
   if(!p.lifecycleSignals[phase])p.lifecycleSignals[phase]={};
   p.lifecycleSignals[phase][field]=val;
+  renderPLifecycle();touch('proj');schedSave();
+}
+function updateLSReasons(phase,field,reason,checked){
+  const p=getProj();if(!p)return;
+  if(!p.lifecycleSignals)p.lifecycleSignals={};
+  if(!p.lifecycleSignals[phase])p.lifecycleSignals[phase]={};
+  if(!Array.isArray(p.lifecycleSignals[phase][field]))p.lifecycleSignals[phase][field]=[];
+  if(checked){if(!p.lifecycleSignals[phase][field].includes(reason))p.lifecycleSignals[phase][field].push(reason);}
+  else{p.lifecycleSignals[phase][field]=p.lifecycleSignals[phase][field].filter(r=>r!==reason);}
   renderPLifecycle();touch('proj');schedSave();
 }
 
@@ -3816,20 +3890,45 @@ function generateWhatDataTells(){
   if(!insights.length)insights.push({severity:'good',icon:'✓',text:'No critical signals detected across the portfolio. Continue monitoring as projects approach key milestones.',source:'Portfolio Analytics',link:null});
   return insights.slice(0,8);
 }
+let _wdtCollapsed=false;
 function renderWhatDataTells(){
   const el=document.getElementById('what-data-tells');if(!el)return;
+  if(sessionStorage.getItem('wdt_dismissed')==='1'){el.innerHTML='';return;}
   const insights=generateWhatDataTells();
   el.innerHTML=`<div class="wdt-wrap">
-    <div class="wdt-hdr"><div class="wdt-title">What the Data Is Telling Us</div><div class="wdt-sub">Top signals across all active projects — updated when you return to the portfolio view.</div></div>
-    <div class="wdt-list">${insights.map(i=>`<div class="insight-card ${i.severity}">
-      <div class="ic-icon">${i.icon}</div>
-      <div class="ic-body">
-        <div class="ic-text">${esc(i.text)}</div>
-        <div class="ic-source">Source: ${esc(i.source)}${i.link?` — <a href="#" class="ic-link" onclick="openProjectFromPortfolio('${i.link.rel}','${i.link.proj}','${i.link.tab||'overview'}');return false">View Details</a>`:''}</div>
+    <div class="wdt-hdr">
+      <div class="wdt-hdr-left">
+        <div class="wdt-title">What the Data Is Telling Us</div>
+        <div class="wdt-sub">Top signals across all active projects</div>
       </div>
-    </div>`).join('')}
+      <div class="wdt-hdr-actions">
+        <button class="wdt-toggle-btn" onclick="toggleWDT()" id="wdt-toggle">${_wdtCollapsed?'Show ▾':'Hide ▴'}</button>
+        <button class="wdt-dismiss-btn" onclick="dismissWDT()" title="Dismiss until next visit">&times;</button>
+      </div>
+    </div>
+    <div class="wdt-body${_wdtCollapsed?' collapsed':''}" id="wdt-body" style="max-height:${_wdtCollapsed?'0':'2000px'}">
+      <div class="wdt-list">${insights.map(i=>`<div class="insight-card ${i.severity}">
+        <div class="ic-icon">${i.icon}</div>
+        <div class="ic-body">
+          <div class="ic-text">${esc(i.text)}</div>
+          <div class="ic-source">Source: ${esc(i.source)}${i.link?` — <a href="#" class="ic-link" onclick="openProjectFromPortfolio('${i.link.rel}','${i.link.proj}','${i.link.tab||'overview'}');return false">View Details</a>`:''}</div>
+        </div>
+      </div>`).join('')}
+      </div>
     </div>
   </div>`;
+}
+function toggleWDT(){
+  _wdtCollapsed=!_wdtCollapsed;
+  const body=document.getElementById('wdt-body');
+  const btn=document.getElementById('wdt-toggle');
+  if(body){body.classList.toggle('collapsed',_wdtCollapsed);body.style.maxHeight=_wdtCollapsed?'0':'2000px';}
+  if(btn)btn.textContent=_wdtCollapsed?'Show ▾':'Hide ▴';
+}
+function dismissWDT(){
+  sessionStorage.setItem('wdt_dismissed','1');
+  const el=document.getElementById('what-data-tells');
+  if(el)el.innerHTML='';
 }
 function openProjectFromPortfolio(relId,projId,tab){
   activeRelId=parseInt(relId)||relId;activeProjId=parseInt(projId)||projId;
