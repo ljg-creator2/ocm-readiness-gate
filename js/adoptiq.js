@@ -2788,6 +2788,81 @@ function renderTrajectoryChart(prediction,data){
 // ════════════════════════════════════════════════════════
 // DOCUMENT INGESTION (Upload → Auto-Populate)
 // ════════════════════════════════════════════════════════
+// BEHAVIORAL DATA UPLOAD ARCHITECTURE (FUTURE — Phase 2)
+// ════════════════════════════════════════════════════════
+// Extends the import system to support uploading tangible
+// behavioral data from external systems via CSV/XLSX:
+//
+// IMPORT TARGETS:
+//   'lms'        → Training completion data (per learner/group)
+//   'helpdesk'   → Support ticket data post-go-live
+//   'sysusage'   → System usage/login data post-go-live
+//
+// LMS FIELD MAPPINGS (target: 'lms'):
+//   learner/group  → stakeholder group name (fuzzy match)
+//   course/module  → training module identifier
+//   completionDate → date of completion
+//   score/grade    → assessment score (maps to Kirkpatrick L2)
+//   timeOnTask     → minutes spent (engagement indicator)
+//   status         → complete/incomplete/in-progress
+//   attempts       → number of attempts (struggle indicator)
+//
+// HELPDESK FIELD MAPPINGS (target: 'helpdesk'):
+//   ticketId       → unique identifier
+//   createdDate    → ticket creation date
+//   category       → ticket category (maps to impact area)
+//   priority       → severity level
+//   resolvedDate   → resolution date
+//   group/team     → affected stakeholder group (fuzzy match)
+//   description    → ticket description (for theme analysis)
+//
+// SYSTEM USAGE FIELD MAPPINGS (target: 'sysusage'):
+//   user/group     → stakeholder group name (fuzzy match)
+//   loginDate      → date of login
+//   feature/module → feature used
+//   duration       → session duration (minutes)
+//   errorsEncountered → count of errors in session
+//   workaroundUsed → boolean indicator
+//
+// DATA FLOW:
+//   Upload CSV/XLSX → parse → fuzzy match to stakeholder groups
+//   → aggregate per group → store in p.behavioralData.{lms|helpdesk|sysusage}
+//   → feed into sentimentScore() as Measured inputs
+//   → feed into Lifecycle Health (deployment phase)
+//   → feed into journey timeline (when journey view is built)
+//
+// STORAGE MODEL (future p.behavioralData):
+//   {
+//     lms: {
+//       imported: ISO timestamp,
+//       records: [{group,module,completionDate,score,timeOnTask,status,attempts}],
+//       summary: {totalLearners,completionRate,avgScore,avgTimeOnTask}
+//     },
+//     helpdesk: {
+//       imported: ISO timestamp,
+//       records: [{ticketId,createdDate,category,priority,resolvedDate,group,description}],
+//       summary: {totalTickets,avgResolutionDays,topCategories[],ticketsByWeek[]}
+//     },
+//     sysusage: {
+//       imported: ISO timestamp,
+//       records: [{group,loginDate,feature,duration,errorsEncountered,workaroundUsed}],
+//       summary: {uniqueUsers,avgSessionDuration,loginFrequency,topFeatures[],errorRate}
+//     }
+//   }
+//
+// SCORING IMPACT:
+//   - LMS data → Training Effectiveness moves from Observed to Measured
+//   - Helpdesk data → feeds deployment.supportTickets* as Measured
+//   - System usage → new "Adoption Behavior" metric (login frequency, feature usage)
+//   - All three feed Data Confidence from Estimated → Measured
+//
+// PREREQUISITES:
+//   - Extend FIELD_ALIASES with lms/helpdesk/sysusage field synonyms
+//   - Add 'lms','helpdesk','sysusage' to openDocImport() target options
+//   - Add p.behavioralData to newProject() default
+//   - Add summary cards to project Overview tab
+//   - Update getDataSourceType() to check behavioralData
+// ════════════════════════════════════════════════════════
 let _importTarget=null;
 let _importParsed=[];
 
@@ -3661,7 +3736,7 @@ function renderPortfolioCharts(){
   }
 
   // Attention Required + Enhanced Exec Dashboard
-  renderExecAttention();renderExecRAGSummary();renderExecGoLiveStrip();renderExecTopRisks();renderExecAgencyHM();renderExecNarratives();
+  renderExecAttention();renderExecRAGSummary();renderExecGoLiveStrip();renderExecTopRisks();renderExecAgencyHM();renderExecNarratives();renderComplexityHeatmap();renderValueRealization();
 }
 
 function renderExecAttention(){
@@ -3937,6 +4012,72 @@ function openProjectFromPortfolio(relId,projId,tab){
     const btn=document.querySelector(`#proj-nav-tabs .nav-btn[onclick*="'${tab}'"]`);
     if(btn)btn.click();
   },200);
+}
+
+// ════════════════════════════════════════════════════════
+// PORTFOLIO COMPLEXITY HEATMAP
+// ════════════════════════════════════════════════════════
+function renderComplexityHeatmap(){
+  const el=document.getElementById('exec-complexity-hm');if(!el)return;
+  const allProjects=[];
+  releases.forEach(r=>r.projects.forEach(p=>allProjects.push({p,r})));
+  if(!allProjects.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add projects to see complexity analysis.</p></div>';return;}
+  const rated=allProjects.map(({p,r})=>{
+    const cx=calcComplexity(p);
+    const as=calcCompositeScore(p);
+    return{name:p.name,release:r.name,rating:cx.rating,effort:cx.effort,score:cx.score,adoptionScore:as};
+  }).sort((a,b)=>b.score-a.score);
+  const colorMap={Critical:'var(--red)',High:'#C28E00',Medium:'var(--gold)',Low:'var(--green)'};
+  const bgMap={Critical:'rgba(139,26,26,0.1)',High:'rgba(194,142,0,0.1)',Medium:'rgba(184,146,42,0.08)',Low:'rgba(29,104,64,0.08)'};
+  el.innerHTML=`<div class="cx-heatmap">
+    <div class="cx-sub">Where OCM energy needs to be concentrated</div>
+    <div class="cx-grid">${rated.map(p=>`<div class="cx-card" style="border-left:4px solid ${colorMap[p.rating]};background:${bgMap[p.rating]}">
+      <div class="cx-card-name">${esc(p.name)}</div>
+      <div class="cx-card-rel">${esc(p.release)}</div>
+      <div class="cx-card-metrics">
+        <div class="cx-metric"><span class="cx-metric-val" style="color:${colorMap[p.rating]}">${p.rating}</span><span class="cx-metric-lbl">Complexity</span></div>
+        <div class="cx-metric"><span class="cx-metric-val">${p.effort}</span><span class="cx-metric-lbl">OCM Effort</span></div>
+        <div class="cx-metric"><span class="cx-metric-val">${p.adoptionScore}%</span><span class="cx-metric-lbl">Adoption</span></div>
+      </div>
+    </div>`).join('')}</div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// PORTFOLIO VALUE REALIZATION
+// ════════════════════════════════════════════════════════
+function renderValueRealization(){
+  const el=document.getElementById('exec-value-realization');if(!el)return;
+  const postGL=[];
+  releases.forEach(r=>r.projects.forEach(p=>{if(isPostGoLive(p))postGL.push({p,r});}));
+  if(!postGL.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Value realization data appears here for projects past their go-live date.</p></div>';return;}
+  let delivered=0,partial=0,notDelivered=0,notAssessed=0;
+  const items=postGL.map(({p,r})=>{
+    const vr=calcValueRealization(p.valueCase);
+    if(vr===null){notAssessed++;return{name:p.name,release:r.name,vr:null,status:'Not Assessed',color:'var(--ink-60)',criteria:0,met:0};}
+    const total=p.valueCase.successCriteria.filter(c=>c.metStatus).length;
+    const metCount=p.valueCase.successCriteria.filter(c=>c.metStatus==='Yes').length;
+    if(vr>=80){delivered++;return{name:p.name,release:r.name,vr,status:'Delivered',color:'var(--green)',criteria:total,met:metCount};}
+    if(vr>=50){partial++;return{name:p.name,release:r.name,vr,status:'Partially Delivered',color:'var(--amber)',criteria:total,met:metCount};}
+    notDelivered++;return{name:p.name,release:r.name,vr,status:'Did Not Deliver',color:'var(--red)',criteria:total,met:metCount};
+  });
+  el.innerHTML=`<div class="vr-wrap">
+    <div class="vr-sub">Are we getting what we paid for?</div>
+    <div class="vr-summary">
+      <div class="vr-sum-card" style="border-left:4px solid var(--green)"><div class="vr-sum-val">${delivered}</div><div class="vr-sum-lbl">Delivered</div></div>
+      <div class="vr-sum-card" style="border-left:4px solid var(--amber)"><div class="vr-sum-val">${partial}</div><div class="vr-sum-lbl">Partially Delivered</div></div>
+      <div class="vr-sum-card" style="border-left:4px solid var(--red)"><div class="vr-sum-val">${notDelivered}</div><div class="vr-sum-lbl">Did Not Deliver</div></div>
+      ${notAssessed?`<div class="vr-sum-card" style="border-left:4px solid var(--ink-60)"><div class="vr-sum-val">${notAssessed}</div><div class="vr-sum-lbl">Not Assessed</div></div>`:''}
+    </div>
+    <div class="vr-list">${items.map(i=>`<div class="vr-item">
+      <div class="vr-item-name">${esc(i.name)}<span class="vr-item-rel">${esc(i.release)}</span></div>
+      <div class="vr-item-right">
+        ${i.vr!==null?`<div class="vr-item-bar-wrap"><div class="vr-item-bar"><div class="vr-item-fill" style="width:${i.vr}%;background:${i.color}"></div></div></div>
+        <div class="vr-item-val" style="color:${i.color}">${i.vr}%</div>`:`<span style="color:var(--ink-60);font-size:12px">No criteria assessed</span>`}
+        <div class="vr-item-status" style="color:${i.color}">${i.status}</div>
+      </div>
+    </div>`).join('')}</div>
+  </div>`;
 }
 
 function renderBenchmarkCard(){
@@ -7299,9 +7440,64 @@ function genReadinessRec(aiNarrative,audience){
   }
   y+=6;
 
-  // ── 8. ADKAR Readiness ──
+  // ── 8. Measurement & Evidence ──
+  y=pdfCheckPage(doc,y,w,h,pg,120);
+  y=pdfSection(doc,y,'8. Measurement & Evidence',w);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  doc.text('This readiness assessment was derived from the following inputs:',mg,y+2);y+=8;
+  // Component scores + data sources
+  const compScores=[];
+  const fwScoresP=dims.map(d=>p.adkarScores?.[d.key]||3);
+  const fwPctP=fwScoresP.length?Math.round(fwScoresP.reduce((a,b)=>a+b,0)/fwScoresP.length/5*100):0;
+  const sentPctP=shs.length?Math.round(shs.reduce((a,sh)=>{const ps=p.pulseResults?.[sh.id]?.scores||{};return a+sentimentScore(sh,ps);},0)/shs.length):50;
+  const kirkPctsP=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
+  const trainPctP=kirkPctsP.length?Math.round(kirkPctsP.reduce((a,b)=>a+b,0)/kirkPctsP.length):0;
+  const lhDataP=calcLifecycleHealth(p);const lcPctP=lhDataP.score;
+  const commsDimsP=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
+  const commsAvgP=commsDimsP.length?commsDimsP.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDimsP.length:3;
+  const commsPctP=Math.round(commsAvgP/5*100);
+  const gsP=projGateScore(p);const flagsP=getProjFlagCount(p);
+  const riskPctP=Math.max(0,Math.min(100,gsP!==null?Math.round(gsP*(flagsP===0?1:flagsP<=2?0.8:0.5)):50));
+  compScores.push({label:fwName()+' Assessment',score:fwPctP,weight:'25%',ds:getDataSourceType('framework',p)});
+  compScores.push({label:'Stakeholder Sentiment',score:sentPctP,weight:'20%',ds:getDataSourceType('sentiment',p)});
+  compScores.push({label:'Training Effectiveness',score:trainPctP,weight:'20%',ds:getDataSourceType('training',p)});
+  compScores.push({label:'Lifecycle Health',score:lcPctP,weight:'10%',ds:getDataSourceType('lifecycle',p)});
+  compScores.push({label:'Communications',score:commsPctP,weight:'10%',ds:getDataSourceType('comms',p)});
+  compScores.push({label:'Risk Adjustment',score:riskPctP,weight:'15%',ds:getDataSourceType('risk',p)});
+  doc.autoTable({startY:y,margin:{left:mg,right:mg},headStyles:{fillColor:[12,31,63],fontSize:7,cellPadding:3},bodyStyles:{fontSize:7,cellPadding:2.5},
+    head:[['Component','Score','Weight','Data Source']],
+    body:compScores.map(c=>[c.label,c.score+'%',c.weight,c.ds])
+  });y=doc.lastAutoTable.finalY+6;
+  // Confidence level
+  const confP=calcDataConfidence(p);
+  const confLevel=confP.measured>66?'High':confP.measured>33?'Medium':'Low';
+  doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
+  doc.text('Confidence Level: '+confLevel,mg,y+2);y+=5;
+  doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
+  doc.text('Measured: '+confP.measured+'%  |  Observed: '+confP.observed+'%  |  Estimated: '+confP.estimated+'%',mg,y+2);y+=7;
+  // Strongest + weakest
+  const sorted=[...compScores].sort((a,b)=>b.score-a.score);
+  doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(29,104,64);
+  doc.text('Strongest Indicators:',mg,y+2);y+=5;
+  doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  sorted.slice(0,3).forEach((c,i)=>{doc.text((i+1)+'. '+c.label+': '+c.score+'% ('+c.ds+')',mg+4,y+2);y+=4;});y+=3;
+  doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(184,50,50);
+  doc.text('Weakest Indicators:',mg,y+2);y+=5;
+  doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  sorted.slice(-3).reverse().forEach((c,i)=>{doc.text((i+1)+'. '+c.label+': '+c.score+'% ('+c.ds+')',mg+4,y+2);y+=4;});y+=3;
+  // Proof points + lifecycle signals
+  const ppCount=(p.proofPoints||[]).length;
+  const redSigs=lhDataP.signals.filter(s=>s.strength==='red');
+  const yellowSigs=lhDataP.signals.filter(s=>s.strength==='yellow');
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+  doc.text('Proof Points Cited: '+ppCount+' documented evidence items',mg,y+2);y+=5;
+  doc.text('Active Lifecycle Signal Flags: '+redSigs.length+' Concern, '+yellowSigs.length+' Watch',mg,y+2);y+=5;
+  redSigs.forEach(s=>{y=pdfCheckPage(doc,y,w,h,pg,8);doc.setTextColor(139,26,26);doc.text('- '+s.label+': '+s.value,mg+4,y+2);y+=4;});
+  doc.setTextColor(60,60,60);y+=6;
+
+  // ── 9. ADKAR Readiness ──
   y=pdfCheckPage(doc,y,w,h,pg,60);
-  y=pdfSection(doc,y,'8. '+fwShort()+' Readiness',w);
+  y=pdfSection(doc,y,'9. '+fwShort()+' Readiness',w);
   dims.forEach(d=>{
     const val=p.adkarScores?.[d.key]||3;
     doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
@@ -7314,7 +7510,7 @@ function genReadinessRec(aiNarrative,audience){
   // ── 9. Stakeholder Readiness ──
   if(shs.length){
     y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,'9. Stakeholder Readiness Summary',w);
+    y=pdfSection(doc,y,'10. Stakeholder Readiness Summary',w);
     const sRows=shs.map(sh=>{const sc=adoptScore(sh.factors);return[sh.name,sc+'%',adoptTier(sc).tier,_shCoalitionRole(sc),kirkReady(sh).toUpperCase(),reinReady(sh).toUpperCase()];});
     doc.autoTable({startY:y,head:[['Group','Adoption %','Risk Tier','Coalition Role','Kirkpatrick','Reinforcement']],body:sRows,
       margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2.5},
@@ -7333,7 +7529,7 @@ function genReadinessRec(aiNarrative,audience){
   // ── 10. Risk Flags ──
   if(flags.length){
     y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,'10. Risk Flags Requiring Resolution',w);
+    y=pdfSection(doc,y,'11. Risk Flags Requiring Resolution',w);
     const fRows=flags.map(f=>[f.gate||'',f.item||'',f.consequence||'',f.defOwner||'Unassigned']);
     doc.autoTable({startY:y,head:[['Gate','Gap','Consequence','Owner']],body:fRows,
       margin:{left:mg,right:mg},styles:{fontSize:7,cellPadding:2},
@@ -7555,6 +7751,20 @@ async function loadDemoData(){
     {id:uid(),description:'Patient portal registration requires dual authentication not supported by current SSO configuration.',severity:'Critical',trainingImpact:'Front desk staff need training on manual registration fallback process. Portal training for patients deferred until SSO is resolved.'},
     {id:uid(),description:'Custom clinical note templates from legacy system have been migrated and validated.',severity:'Low',trainingImpact:'No additional training impact — templates match existing workflow.'}
   ]};
+  // Lifecycle signals — moderate project
+  p1a.lifecycleSignals={
+    requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:false,delayDays:0,scopeChangeRequests:1,workaroundRequests:1,workaroundNotes:'Physicians requested verbal order proxy entry workflow'},
+    testing:{qaDefects:62,uatDefects:18,uatParticipationRate:76,testingApproach:'mixed'},
+    training:{startDateChanges:1,startDateReasons:['System scope changes'],envDefects:3,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:2},
+    deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
+  };
+  p1a.stakeholders[0].trust=3;
+  p1a.stakeholders[0].trustHistory=[{date:'2025-11-01',value:3,note:'Initial'},{date:'2026-01-01',value:3,note:'Stable — physicians cautious but engaged'}];
+  p1a.stakeholders[0].touchpoints=[{id:uid(),date:'2025-11-20',type:'Demo',description:'EHR order entry demo for physician champions',trustImpact:'Increased'},{id:uid(),date:'2026-01-15',type:'Q&A Session',description:'Open Q&A — productive but surfaced verbal order concern',trustImpact:'No Change'}];
+  p1a.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:3,extraReviewCycles:1,escalations:0,attendanceDrop:false};
+  p1a.valueCase={statement:'Transition from paper-based charting to integrated electronic health records to improve clinical documentation accuracy and patient safety.',requestor:'Chief Medical Officer',impactLevel:'High',successCriteria:[{id:uid(),criterion:'Documentation compliance above 95%',metStatus:null},{id:uid(),criterion:'Zero clinical safety events attributed to EHR transition',metStatus:null},{id:uid(),criterion:'Physician satisfaction above 3.5/5',metStatus:null}],unintendedConsequences:''};
+  p1a.proofPoints=[{id:uid(),what:'Physician champion engagement exceeded target — 8 of 10 department champions actively participating in design reviews',when:'2025-12-01',proves:'Strong coalition building. Physician buy-in is developing through peer involvement rather than top-down mandates.',source:'Meeting Notes',dimensionTags:['Stakeholder Sentiment','Framework Assessment']}];
   r1.projects=[p1a,p1b];
   releases.push(r1);
 
@@ -7595,6 +7805,51 @@ async function loadDemoData(){
   p3a.resources.pm=[{name:'Anna Schmidt',contact:''}];
   p3a.stakeholders=[{id:uid(),name:'Machine Operators',factors:{resistance:4,env:2,window:2,complexity:5,saturation:3,leadership:2},objectives:['Operate in new MES','Enter production data','Respond to system alerts'],kirk:{L1:{method:'Hands-on factory training',timing:'3 days pre-go-live'},L2:{method:'Production simulation line',assessment:'Pass safety + speed checks'},L3:{observable:'Downtime reduction',interval:'30-day post cutover'},L4:{outcome:'5% efficiency improvement',metric:'Production metrics'}},rein:{owner:'Plant Manager',activities:'Shift leader check-ins + production reviews',intervals:['Daily','Week 1','Week 4'],escalation:'Stop production if error rate > 2%'}},{id:uid(),name:'Warehouse Staff',factors:{resistance:3,env:3,window:3,complexity:4,saturation:3,leadership:3},objectives:['Pick items per SAP','Manage inventory transfers','Scan and reconcile'],kirk:{L1:{method:'Classroom SAP basics',timing:'1 week pre-cutover'},L2:{method:'Mock warehouse drill',assessment:'Speed + accuracy'},L3:{observable:'Inventory accuracy',interval:'14-day post go-live'},L4:{outcome:'Cycle count time < 2 hours',metric:'Inventory reports'}},rein:{owner:'Warehouse Manager',activities:'Daily huddles + floor supervision',intervals:['Daily','Week 1','Week 2'],escalation:'Escalate if cycle counts fail'}},{id:uid(),name:'HR Business Partners',factors:{resistance:2,env:3,window:3,complexity:3,saturation:3,leadership:4},objectives:['Support workforce transition communications','Manage role changes in HRIS','Coordinate retraining programs'],kirk:{L1:{method:'Virtual briefing',timing:'2 weeks pre-cutover'},L2:{method:'Scenario walkthrough',assessment:'Role mapping proficiency'},L3:{observable:'HRIS update accuracy',interval:'30-day post cutover'},L4:{outcome:'Zero workforce disruption grievances',metric:'HR case log'}},rein:{owner:'HR Director',activities:'Monthly alignment meetings + change impact reviews',intervals:['Month 1','Month 2'],escalation:'Escalate if grievances filed'}}];
   p3a.impactAssessment={groups:[{name:'Machine Operators',level:'Critical',changeTypes:['Technology','Process','Role'],currentState:'Manual production tracking with paper-based work orders.',futureState:'Digital MES with real-time production monitoring and automated work orders.',actions:[{text:'Complete floor-by-floor readiness assessment',done:false},{text:'Set up training simulation line',done:false}]},{name:'HR Business Partners',level:'Medium',changeTypes:['Process'],currentState:'Manual workforce planning and role definitions.',futureState:'SAP-integrated workforce planning with automated role mapping.',actions:[{text:'Map current roles to new SAP structure',done:false}]}]};
+  // Lifecycle signals — at risk project (mirrors ABAWD-like scenario)
+  p3a.lifecycleSignals={
+    requirements:{onSchedule:false,daysVariance:8,reviewCycles:4,disputes:true,disputeNotes:'Production scheduling rules differ across plants. Operators dispute proposed batch sizes.'},
+    design:{reviewsDelayed:true,delayDays:7,scopeChangeRequests:3,workaroundRequests:4,workaroundNotes:'Workarounds requested for batch override, manual quality hold, shift handoff report, and downtime entry.'},
+    testing:{qaDefects:285,uatDefects:3,uatParticipationRate:38,testingApproach:'guided'},
+    training:{startDateChanges:3,startDateReasons:['UAT delays','Training environment defects','Insufficient time scoped'],envDefects:9,scopeUnderestimated:true,scopeNotes:'Original scope did not account for multi-plant workflow variations or shift-specific procedures.',materialReworkCycles:3},
+    deployment:{goliveDateChanges:2,parallelOpsExtended:true,parallelOpsDays:14,supportTicketsWeek1:72,supportTicketsMonth1:195,workaroundRequestsPostGL:6}
+  };
+  // Trust + emotional readiness for Machine Operators (at risk)
+  p3a.stakeholders[0].trust=2;
+  p3a.stakeholders[0].trustHistory=[{date:'2025-11-01',value:3,note:'Initial assessment'},{date:'2025-12-15',value:2,note:'Dropped after workaround requests rejected'},{date:'2026-01-20',value:2,note:'No improvement after comms push'}];
+  p3a.stakeholders[0].preconceptions=[
+    {id:uid(),text:'Believes the new MES will slow down production by requiring tablet data entry during shifts',status:'Active'},
+    {id:uid(),text:'Had negative experience with a failed barcode scanning rollout in 2023',status:'Being Addressed'}
+  ];
+  p3a.stakeholders[0].touchpoints=[
+    {id:uid(),date:'2025-11-15',type:'Demo',description:'Initial MES walkthrough for floor supervisors',trustImpact:'Increased'},
+    {id:uid(),date:'2025-12-10',type:'Q&A Session',description:'Open forum — high volume of skeptical questions about downtime impact',trustImpact:'No Change'},
+    {id:uid(),date:'2026-01-08',type:'Leadership Lab',description:'Plant manager session on why the change matters',trustImpact:'No Change'},
+    {id:uid(),date:'2026-02-05',type:'Walkthrough',description:'Hands-on guided walkthrough on simulation line',trustImpact:'Increased'}
+  ];
+  p3a.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:9,extraReviewCycles:3,escalations:2,attendanceDrop:true};
+  // Warehouse Staff — moderate
+  if(p3a.stakeholders[1]){
+    p3a.stakeholders[1].trust=3;
+    p3a.stakeholders[1].trustHistory=[{date:'2025-11-01',value:3,note:''},{date:'2026-01-01',value:3,note:'Stable'}];
+    p3a.stakeholders[1].touchpoints=[{id:uid(),date:'2025-12-01',type:'Training Session',description:'SAP warehouse basics overview',trustImpact:'Increased'}];
+    p3a.stakeholders[1].anxietyIndicators={whatDoesThisMeanFreq:3,extraReviewCycles:1,escalations:0,attendanceDrop:false};
+  }
+  // HR Business Partners — healthy
+  if(p3a.stakeholders[2]){
+    p3a.stakeholders[2].trust=4;
+    p3a.stakeholders[2].trustHistory=[{date:'2025-11-01',value:3,note:''},{date:'2025-12-15',value:4,note:'Positive after executive briefing'},{date:'2026-01-20',value:4,note:'Stable'}];
+    p3a.stakeholders[2].preconceptions=[{id:uid(),text:'Concerned about learning curve for older staff',status:'Resolved'}];
+    p3a.stakeholders[2].touchpoints=[{id:uid(),date:'2025-11-15',type:'Meeting',description:'Role mapping alignment session',trustImpact:'Increased'},{id:uid(),date:'2026-01-10',type:'Training Session',description:'HRIS module training — positive reception',trustImpact:'Increased'}];
+    p3a.stakeholders[2].anxietyIndicators={whatDoesThisMeanFreq:1,extraReviewCycles:0,escalations:0,attendanceDrop:false};
+  }
+  // Proof points
+  p3a.proofPoints=[
+    {id:uid(),what:'UAT participation dropped from 78% to 38% between testing rounds 2 and 3',when:'2026-01-15',proves:'User engagement declining as testing fatigue sets in. Remaining testers may not represent real-world usage patterns.',source:'Attendance Record',dimensionTags:['Stakeholder Sentiment','Lifecycle Health']},
+    {id:uid(),what:'3 separate operator groups asked "what does this mean?" about the same production status field during walkthrough sessions',when:'2026-01-22',proves:'Communication gap on this functionality. Field label and purpose unclear to end users.',source:'Facilitation Notes',dimensionTags:['Communications','Training Effectiveness']},
+    {id:uid(),what:'Leadership lab attendance was 100% for session 1 and 55% for session 2',when:'2026-02-01',proves:'Initial interest but declining commitment. Follow-up engagement strategy needed.',source:'Attendance Record',dimensionTags:['Stakeholder Sentiment']},
+    {id:uid(),what:'Training start date moved 3 times in 6 weeks due to UAT delays and training environment defects',when:'2026-02-10',proves:'Schedule instability compressing end-user preparation window. L3 measurement reliability at risk.',source:'Meeting Notes',dimensionTags:['Lifecycle Health','Training Effectiveness']},
+    {id:uid(),what:'4 workaround requests submitted during design review — batch override, manual quality hold, shift handoff, downtime entry',when:'2025-12-20',proves:'Operators do not believe the system will meet their needs in 4 documented workflow areas.',source:'Meeting Notes',dimensionTags:['Stakeholder Sentiment','Lifecycle Health']}
+  ];
   r3.projects=[p3a];
   releases.push(r3);
 
@@ -7651,6 +7906,49 @@ async function loadDemoData(){
   p6a.postLaunch={};
   p6a.postLaunch[p6a.stakeholders[0].id]={d30:{adoption:82,tickets:14,proficiency:78,notes:'Strong adoption, minor issues with garnishment module.'},d60:{adoption:91,tickets:6,proficiency:88,notes:'Significant improvement. Team is self-sufficient.'}};
   p6a.postLaunch[p6a.stakeholders[1].id]={d30:{adoption:68,tickets:22,proficiency:65,notes:'Struggling with new report builder. Additional coaching scheduled.'}};
+  // Lifecycle signals — healthy project
+  p6a.lifecycleSignals={
+    requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:false,delayDays:0,scopeChangeRequests:1,workaroundRequests:0,workaroundNotes:''},
+    testing:{qaDefects:48,uatDefects:11,uatParticipationRate:92,testingApproach:'mixed'},
+    training:{startDateChanges:1,startDateReasons:['Resource unavailability'],envDefects:2,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:1},
+    deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:12,supportTicketsMonth1:28,workaroundRequestsPostGL:1}
+  };
+  // Trust — healthy
+  p6a.stakeholders[0].trust=4;
+  p6a.stakeholders[0].trustHistory=[{date:'2025-10-01',value:3,note:'Initial'},{date:'2025-12-01',value:4,note:'Strong after parallel run success'},{date:'2026-02-01',value:5,note:'Full confidence post go-live'}];
+  p6a.stakeholders[0].touchpoints=[
+    {id:uid(),date:'2025-10-15',type:'Training Session',description:'Full payroll processing training — 3-day intensive',trustImpact:'Increased'},
+    {id:uid(),date:'2025-11-20',type:'Demo',description:'Parallel run walkthrough with live data comparison',trustImpact:'Increased'},
+    {id:uid(),date:'2026-01-15',type:'Q&A Session',description:'Post go-live feedback session — minor issues resolved on the spot',trustImpact:'Increased'}
+  ];
+  p6a.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:1,extraReviewCycles:0,escalations:0,attendanceDrop:false};
+  p6a.stakeholders[1].trust=4;
+  p6a.stakeholders[1].trustHistory=[{date:'2025-10-01',value:3,note:''},{date:'2025-12-01',value:3,note:'Cautious'},{date:'2026-02-01',value:4,note:'Improved after coaching'}];
+  p6a.stakeholders[1].touchpoints=[
+    {id:uid(),date:'2025-11-01',type:'Training Session',description:'Report builder workshop',trustImpact:'No Change'},
+    {id:uid(),date:'2026-01-10',type:'Walkthrough',description:'One-on-one coaching on advanced reporting',trustImpact:'Increased'}
+  ];
+  p6a.stakeholders[1].anxietyIndicators={whatDoesThisMeanFreq:2,extraReviewCycles:1,escalations:0,attendanceDrop:false};
+  // Value case — delivered
+  p6a.valueCase={
+    statement:'Consolidate payroll processing from 3 legacy systems to a single modern platform, reducing processing time from 4 days to 1 day per cycle and eliminating manual reconciliation.',
+    requestor:'Chief Financial Officer',
+    impactLevel:'High',
+    successCriteria:[
+      {id:uid(),criterion:'Payroll processing time reduced from 4 days to 1 day',metStatus:'Yes',actualOutcome:'Processing now takes 1.2 days — on target'},
+      {id:uid(),criterion:'Zero payroll errors for first 3 cycles',metStatus:'Partially',actualOutcome:'1 minor error in cycle 2 related to garnishment — corrected within hours'},
+      {id:uid(),criterion:'Manual reconciliation eliminated',metStatus:'Yes',actualOutcome:'Fully automated reconciliation in production'},
+      {id:uid(),criterion:'Employee satisfaction above 4.0',metStatus:'Yes',actualOutcome:'Satisfaction score at 4.3 after 60-day survey'}
+    ],
+    unintendedConsequences:'HR Business Partners discovered the new reporting capabilities enabled workforce analytics they did not have before — leading to an unplanned but positive expansion of HR analytics capability.'
+  };
+  // Proof points — success evidence
+  p6a.proofPoints=[
+    {id:uid(),what:'Parallel payroll run produced zero-variance results against legacy system for 2 consecutive cycles',when:'2025-12-15',proves:'System accuracy validated before go-live. Quantitative evidence of readiness.',source:'System Data',dimensionTags:['Lifecycle Health','Training Effectiveness']},
+    {id:uid(),what:'100% of payroll specialists completed all training modules with a 95% average assessment score',when:'2026-01-10',proves:'Strong knowledge transfer — L2 metrics confirm readiness.',source:'System Data',dimensionTags:['Training Effectiveness']},
+    {id:uid(),what:'Post go-live support tickets averaged 12 per week — below the 20-ticket threshold',when:'2026-03-01',proves:'Healthy adoption. Users are self-sufficient with minimal support needs.',source:'Defect Log',dimensionTags:['Lifecycle Health']}
+  ];
   r6.projects=[p6a];
   releases.push(r6);
 
