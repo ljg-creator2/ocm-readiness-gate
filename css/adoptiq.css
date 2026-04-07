@@ -1266,6 +1266,7 @@ tr.sat-mod{border-left:3px solid #d97706}
 .gen-status{text-align:center;padding:12px;font-size:12px;color:var(--ink-60);margin-top:10px}
 .gen-status.error{color:var(--red)}
 [data-theme="dark"] .gen-modal-box{background:var(--surface)}
+[data-theme="dark"] .gen-modal-box h2{color:rgba(255,255,255,0.9)}
 [data-theme="dark"] .gen-aud-opt{background:var(--bg-deep);border-color:var(--border)}
 [data-theme="dark"] .gen-aud-opt.selected{background:rgba(184,146,42,0.08);border-color:var(--gold)}
 @media(max-width:480px){
