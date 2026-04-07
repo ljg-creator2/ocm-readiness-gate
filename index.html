@@ -175,9 +175,9 @@
     <div id="what-data-tells"></div>
     <div class="prog-strip">
       <div class="ps-card cn"><div class="ps-lbl">Active Releases</div><div class="ps-val" id="ps-total">0</div><div class="ps-sub">Across all agencies</div></div>
-      <div class="ps-card cr"><div class="ps-lbl">Total Risk Flags</div><div class="ps-val" id="ps-flags">0</div><div class="ps-sub">Across all releases</div></div>
+      <div class="ps-card cr"><div class="ps-lbl">Total Open Issues</div><div class="ps-val" id="ps-flags">0</div><div class="ps-sub">Across all releases</div></div>
       <div class="ps-card ca"><div class="ps-lbl">Releases At Risk</div><div class="ps-val" id="ps-atrisk">0</div><div class="ps-sub" id="ps-crit-sub">Including critical</div></div>
-      <div class="ps-card cg"><div class="ps-lbl">Avg Gate Readiness</div><div class="ps-val" id="ps-gate">—</div><div class="ps-sub">Portfolio average</div></div>
+      <div class="ps-card cg"><div class="ps-lbl">Avg Readiness</div><div class="ps-val" id="ps-gate">—</div><div class="ps-sub">Portfolio average</div></div>
       <div class="ps-card cb"><div class="ps-lbl">Nearest Go-Live</div><div class="ps-val" id="ps-near-d" style="font-size:20px;padding-top:6px;letter-spacing:0">—</div><div class="ps-sub" id="ps-near-r">No go-live dates set</div></div>
     </div>
     <!-- EXECUTIVE DASHBOARD -->
@@ -190,7 +190,7 @@
           <div class="exec-chart-wrap"><canvas id="chart-port-readiness" role="img" aria-label="Portfolio readiness donut chart"></canvas></div>
         </div>
         <div class="exec-card">
-          <div class="exec-card-title">Risk Distribution</div>
+          <div class="exec-card-title">Risk by Group</div>
           <div class="exec-chart-wrap"><canvas id="chart-port-risk" role="img" aria-label="Risk distribution donut chart"></canvas></div>
         </div>
         <div class="exec-card exec-card-wide">
@@ -248,12 +248,12 @@
         <summary class="dash-section-toggle">Trend Charts</summary>
         <div class="exec-dash-grid" style="padding:0 12px 12px">
           <div class="exec-card">
-            <div class="exec-card-title">Gate Readiness Trend</div>
+            <div class="exec-card-title">Readiness Trend</div>
             <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-gate" role="img" aria-label="Gate readiness trend line chart"></canvas></div>
             <div class="trend-chart-note">Dashed line = 80% go-live ready target</div>
           </div>
           <div class="exec-card">
-            <div class="exec-card-title">Risk Flags Trend</div>
+            <div class="exec-card-title">Open Issues Trend</div>
             <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-flags" role="img" aria-label="Risk flags trend line chart"></canvas></div>
           </div>
           <div class="exec-card">
@@ -500,9 +500,9 @@
       </div>
       <!-- KPI -->
       <div class="kpi-strip">
-        <div class="kc cn"><div class="kc-l">Avg Gate Readiness</div><div class="kc-v" id="r-kpi-gate">—</div><div class="kc-s">Across all projects</div></div>
-        <div class="kc cr"><div class="kc-l">Total Risk Flags</div><div class="kc-v" id="r-kpi-flags">0</div><div class="kc-s">Across all projects</div></div>
-        <div class="kc ca"><div class="kc-l">Highest Adoption Risk</div><div class="kc-v sm" id="r-kpi-rg">—</div><div class="kc-s" id="r-kpi-rg-s">Stakeholder group</div></div>
+        <div class="kc cn"><div class="kc-l">Avg Readiness</div><div class="kc-v" id="r-kpi-gate">—</div><div class="kc-s">Across all projects</div></div>
+        <div class="kc cr"><div class="kc-l">Total Open Issues</div><div class="kc-v" id="r-kpi-flags">0</div><div class="kc-s">Across all projects</div></div>
+        <div class="kc ca"><div class="kc-l">Highest Risk Group</div><div class="kc-v sm" id="r-kpi-rg">—</div><div class="kc-s" id="r-kpi-rg-s">Affected group</div></div>
         <div class="kc cg"><div class="kc-l">Projects Tracked</div><div class="kc-v" id="r-kpi-projs">0</div><div class="kc-s">Total in this release</div></div>
         <div class="kc cb"><div class="kc-l" id="r-kpi-adkar-label">ADKAR Avg</div><div class="kc-v" id="r-kpi-adkar">—</div><div class="kc-s">Across all projects</div></div>
       </div>
@@ -514,12 +514,12 @@
       <!-- Active flags preview -->
       <div class="two-col" style="margin-top:20px">
         <div class="panel">
-          <div class="ph"><div><div class="pt">Gate Readiness by Project</div><div class="ps-text">Completion percentage per project</div></div></div>
+          <div class="ph"><div><div class="pt">Readiness by Project</div><div class="ps-text">Completion percentage per project</div></div></div>
           <div class="pb" id="rel-ov-gates"><div class="es"><div class="es-rule"></div><p class="es-txt">Mark gate items within each project to see scores here.</p></div></div>
         </div>
         <div class="panel">
-          <div class="ph"><div><div class="pt">Active Risk Flags</div><div class="ps-text">Most recent across all projects</div></div></div>
-          <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div></div>
+          <div class="ph"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent across all projects</div></div></div>
+          <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
         </div>
       </div>
     </div>
@@ -607,7 +607,7 @@
         <button class="nav-btn" onclick="showProjTab('adopthm',this)">Adoption Map</button>
         <button class="nav-btn" onclick="showProjTab('gates',this)">Gate Tracker</button>
         <button class="nav-btn" onclick="showProjTab('lifecycle',this)">Lifecycle Signals</button>
-        <button class="nav-btn" onclick="showProjTab('flags',this)">Risk Flags</button>
+        <button class="nav-btn" onclick="showProjTab('flags',this)">Open Issues</button>
         <button class="nav-btn" onclick="showProjTab('heatmap',this)">Dependency Map</button>
         <button class="nav-btn" onclick="showProjTab('resources',this)">Resources</button>
         <button class="nav-btn" onclick="showProjTab('pulse',this)">Pulse</button>
@@ -664,7 +664,7 @@
         </select>
       </div>
       <div class="ib-stat">
-        <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Gate Readiness</div>
+        <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Overall Readiness</div>
         <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="How this score works" aria-label="How scoring works">ⓘ</button>
       </div>
     </div>
@@ -673,11 +673,11 @@
     <!-- PROJECT OVERVIEW -->
     <div class="tab-sec active" id="psec-overview">
       <div class="kpi-strip">
-        <div class="kc cn"><div class="kc-l">Gate Readiness</div><div class="kc-v" id="p-kpi-gate">—</div><div class="kc-s">Avg across all gates</div></div>
-        <div class="kc cr"><div class="kc-l">Active Risk Flags</div><div class="kc-v" id="p-kpi-flags">0</div><div class="kc-s">Requiring escalation</div></div>
-        <div class="kc ca"><div class="kc-l">Highest Adoption Risk</div><div class="kc-v sm" id="p-kpi-rg">—</div><div class="kc-s" id="p-kpi-rg-s">Stakeholder group</div></div>
-        <div class="kc cg"><div class="kc-l">Groups Tracked</div><div class="kc-v" id="p-kpi-grps">0</div><div class="kc-s">Stakeholder populations</div></div>
-        <div class="kc cb"><div class="kc-l" id="p-kpi-adkar-label">ADKAR Score</div><div class="kc-v" id="p-kpi-adkar">—</div><div class="kc-s">Overall composite</div></div>
+        <div class="kc cn"><div class="kc-l">Overall Readiness</div><div class="kc-v" id="p-kpi-gate">—</div><div class="kc-s">Across all review checkpoints</div></div>
+        <div class="kc cr"><div class="kc-l">Open Issues</div><div class="kc-v" id="p-kpi-flags">0</div><div class="kc-s">Needing attention</div></div>
+        <div class="kc ca"><div class="kc-l">Highest Risk Group</div><div class="kc-v sm" id="p-kpi-rg">—</div><div class="kc-s" id="p-kpi-rg-s">Affected group</div></div>
+        <div class="kc cg"><div class="kc-l">Groups Monitored</div><div class="kc-v" id="p-kpi-grps">0</div><div class="kc-s">Affected populations</div></div>
+        <div class="kc cb"><div class="kc-l" id="p-kpi-adkar-label">ADKAR Score</div><div class="kc-v" id="p-kpi-adkar">—</div><div class="kc-s">Change readiness average</div></div>
       </div>
       <!-- PREDICTED TRAJECTORY -->
       <div id="p-trajectory-card" class="trajectory-card" style="display:none">
@@ -706,7 +706,7 @@
       <!-- PROJECT CHARTS -->
       <div class="exec-dash-grid" style="margin-bottom:20px">
         <div class="exec-card">
-          <div class="exec-card-title">Gate Readiness</div>
+          <div class="exec-card-title">Readiness by Checkpoint</div>
           <div class="exec-chart-wrap"><canvas id="chart-proj-gates" role="img" aria-label="Project gate readiness donut chart"></canvas></div>
         </div>
         <div class="exec-card">
@@ -740,8 +740,8 @@
       <!-- PROOF POINTS -->
       <div id="p-proof-points-wrap"></div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Active Risk Flags</div><div class="ps-text">Most recent items requiring action</div></div></div>
-        <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div></div>
+        <div class="ph"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent items requiring action</div></div></div>
+        <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
       </div>
       <div class="panel">
         <div class="ph"><div><div class="pt">Assigned Resources</div><div class="ps-text">Edit full resource details in the Resources tab</div></div></div>
@@ -779,7 +779,7 @@
       <div class="tab-eye" id="assess-eye">ADKAR Model</div>
       <div class="tab-head" id="assess-head">ADKAR Readiness Assessment</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt" id="assess-pt">ADKAR Readiness by Dimension</div><div class="ps-text">Score each dimension 1–5. Notes capture qualitative insight from stakeholder engagement activities.</div></div></div>
+        <div class="ph"><div><div class="pt" id="assess-pt">Change Readiness by Area</div><div class="ps-text">Score each area 1–5. Notes capture observations from your engagement activities.</div></div></div>
         <div class="pb np">
           <div class="adkar-grid" id="p-adkar-grid"></div>
           <div class="ak-sum">
@@ -803,7 +803,7 @@
             <button class="btn-outline" onclick="openDocImport('stakeholders')" title="Import from document">&#x1F4C4; Import</button>
           </div>
         </div>
-        <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups to begin scoring adoption likelihood.</p></div></div></div>
+        <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">Add the groups of people affected by this change to begin tracking their readiness.</p></div></div></div>
       </div>
     </div>
     <!-- ADOPTION MAP -->
@@ -812,7 +812,7 @@
       <div class="tab-head">Adoption Risk Heat Map</div>
       <div class="panel">
         <div class="ph"><div><div class="pt">Per-Group Risk by Adoption Factor</div><div class="ps-text">Includes measurement readiness and reinforcement readiness.</div></div></div>
-        <div class="pb" id="p-ahm-panel"><div class="es"><div class="es-rule"></div><p class="es-txt">Score stakeholder groups in the Adoption Scoring tab to populate this map.</p></div></div>
+        <div class="pb" id="p-ahm-panel"><div class="es"><div class="es-rule"></div><p class="es-txt">Score affected groups in the Adoption Scoring tab to populate this map.</p></div></div>
       </div>
     </div>
     <!-- GATES -->
@@ -847,10 +847,10 @@
     </div>
     <!-- FLAGS -->
     <div class="tab-sec" id="psec-flags">
-      <div class="tab-eye">Risk Intelligence</div>
-      <div class="tab-head">Change Readiness Risk Register</div>
+      <div class="tab-eye">Issues &amp; Risks</div>
+      <div class="tab-head">Open Issues</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Automated Risk Flags</div><div class="ps-text">Generated when gate items are marked Incomplete. Resource owners auto-populated from the release team.</div></div></div>
+        <div class="ph"><div><div class="pt">Items Needing Attention</div><div class="ps-text">Generated automatically when checklist items are marked incomplete. Owners are pulled from the release team.</div></div></div>
         <div class="pb" id="p-flags-panel"></div>
       </div>
     </div>

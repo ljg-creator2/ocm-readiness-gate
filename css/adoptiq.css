@@ -1093,6 +1093,10 @@ tr.sat-mod{border-left:3px solid #d97706}
 [data-theme="dark"] .score-composite-val{color:rgba(255,255,255,0.9)}
 .exp-sec-title{font-weight:700;font-size:14px;color:var(--navy)}
 [data-theme="dark"] .exp-sec-title{color:rgba(255,255,255,0.9)}
+.alert-overflow{display:none}
+.alert-overflow.show{display:block}
+.alert-toggle-btn{display:block;width:100%;padding:6px;background:transparent;border:1px dashed rgba(255,255,255,0.2);border-radius:4px;color:rgba(255,255,255,0.6);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font-b);margin-top:4px;text-align:center;letter-spacing:0.04em}
+.alert-toggle-btn:hover{border-color:var(--gold);color:var(--gold)}
 [data-theme="dark"] .gate-info-pop{background:var(--surface);border-color:var(--border)}
 @media(max-width:600px){
   .score-modal-box{padding:20px}

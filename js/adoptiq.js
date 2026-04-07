@@ -869,12 +869,12 @@ function getSoWhat(metric,value,context){
       if(v>=85)return'Champion — on trajectory to become a reference site. Continue reinforcement focus through go-live.';
       if(v>=65)return'On Track — maintain current engagement cadence. Monitor stakeholder sentiment as go-live approaches.';
       if(v>=40){
-        const weak=ctx.weakestComponent||'stakeholder engagement';
-        const gate=ctx.nextGate||'the next gate';
-        return`At Risk — current trajectory suggests readiness thresholds may not be met by ${gate} without intervention in ${weak}.`;
+        const weak=ctx.weakestComponent||'people and trust';
+        const gate=ctx.nextGate||'the next checkpoint';
+        return`At Risk — current trajectory suggests this project will not be ready by ${gate} without intervention in ${weak}.`;
       }
-      const drivers=ctx.topDrivers||'risk flags and low sentiment scores';
-      return`Critical — recommend go-live reassessment. Primary drivers: ${drivers}.`;
+      const drivers=ctx.topDrivers||'open issues and low trust';
+      return`Critical — this project should not proceed to launch without addressing: ${drivers}.`;
     }
     case'sentiment':{
       const v=parseFloat(value)||0;
@@ -890,18 +890,18 @@ function getSoWhat(metric,value,context){
     }
     case'kirkpatrickGap':{
       const l2=parseFloat(ctx.l2)||0,l3=parseFloat(ctx.l3)||0;
-      if(l2>=3.5&&l3<2.5)return`Workers are completing training but not applying skills on the job — a transfer gap, not a knowledge gap. L2 (Learning) scores ${l2.toFixed(1)} but L3 (Behavior) scores ${l3.toFixed(1)}. Consider reinforcement activities, job aids, and supervisory coaching.`;
-      if(l3>=3.5)return'Strong behavioral transfer — training is translating into on-the-job application. Maintain reinforcement schedule.';
-      return'Behavior transfer is developing. Continue monitoring at the defined L3 measurement interval.';
+      if(l2>=3.5&&l3<2.5)return`People are completing training but not applying what they learned on the job. They know how — they're just not doing it yet. Consider job aids, coaching, and supervisory support to bridge the gap.`;
+      if(l3>=3.5)return'Strong results — training is translating into on-the-job application. Maintain the reinforcement schedule.';
+      return'On-the-job application is developing. Continue monitoring at the scheduled check-in intervals.';
     }
     case'gateScore':{
       const v=parseInt(value)||0;
       const declined=ctx.declined||false;
       const gateNum=ctx.gateNum||'';
-      if(declined)return`Trajectory declining — gate score dropped since ${gateNum?'Gate '+gateNum:'the previous gate'}. Review which items moved from green to yellow/red and address root causes.`;
-      if(v<50)return'No-Go threshold — proceeding to go-live without resolving open items is high risk. A structured mitigation plan is required.';
-      if(v<75)return'Conditional Go — partial readiness. Document specific conditions that must be met before proceeding.';
-      return'Go threshold met — readiness is sufficient to proceed. Maintain monitoring through go-live.';
+      if(declined)return`Readiness is declining — score dropped since ${gateNum?'checkpoint '+gateNum:'the previous review'}. Review which items are falling behind and address root causes.`;
+      if(v<50)return'Not ready to proceed — launching without resolving the open items is high risk.';
+      if(v<75)return'Conditionally ready — some items still need to be completed. Document what must be resolved before proceeding.';
+      return'Ready to proceed — readiness is sufficient. Continue monitoring through launch.';
     }
     case'lifecycleHealth':{
       const v=parseInt(value)||0;
@@ -913,9 +913,9 @@ function getSoWhat(metric,value,context){
     case'frameworkDim':{
       const v=parseFloat(value)||0;
       const dim=ctx.dim||'this dimension';
-      if(v<2.5)return`${dim} scores in the bottom quartile. Targeted interventions — such as focused sessions, sponsor messaging, or coaching — are recommended before the next gate.`;
-      if(v>=4)return`Strong ${dim} score. Sustain through continued engagement and visible reinforcement.`;
-      return`Moderate ${dim} score. Monitor for decline and address any emerging gaps proactively.`;
+      if(v<2.5)return`${dim} is low. Focused attention — direct conversations, leadership messaging, or coaching — is recommended before the next review.`;
+      if(v>=4)return`Strong ${dim}. Keep doing what is working.`;
+      return`${dim} is moderate. Monitor for decline and address any emerging gaps early.`;
     }
     case'complexity':{
       const v=ctx.rating||'Medium';
@@ -1227,8 +1227,8 @@ function renderPortfolio(){
       </div>
       <div class="r-card-bd">
         <div class="rc-metrics">
-          <div class="rcm"><div class="rcm-l">Gate Readiness</div><div class="rcm-v">${rl.gateScore!==null?rl.gateScore+'%':'—'}</div></div>
-          <div class="rcm"><div class="rcm-l">Risk Flags</div><div class="rcm-v">${rl.flags}</div></div>
+          <div class="rcm"><div class="rcm-l">Readiness</div><div class="rcm-v">${rl.gateScore!==null?rl.gateScore+'%':'—'}</div></div>
+          <div class="rcm"><div class="rcm-l">Open Issues</div><div class="rcm-v">${rl.flags}</div></div>
           <div class="rcm"><div class="rcm-l">${fwShort()} Avg</div><div class="rcm-v">${rl.adkar!==null?rl.adkar+'/5':'—'}</div></div>
           <div class="rcm"><div class="rcm-l">Projects</div><div class="rcm-v">${(r.projects||[]).length} / ${tp} tr.</div></div>
         </div>
@@ -1655,8 +1655,8 @@ function renderRelProjCards(){
       </div>
       <div class="pc-bd">
         <div class="pc-metrics">
-          <div class="pcm"><div class="pcm-l">Gate Readiness</div><div class="pcm-v">${gs!==null?gs+'%':'—'}</div></div>
-          <div class="pcm"><div class="pcm-l">Risk Flags</div><div class="pcm-v">${fl}</div></div>
+          <div class="pcm"><div class="pcm-l">Readiness</div><div class="pcm-v">${gs!==null?gs+'%':'—'}</div></div>
+          <div class="pcm"><div class="pcm-l">Open Issues</div><div class="pcm-v">${fl}</div></div>
           <div class="pcm"><div class="pcm-l">${fwShort()}</div><div class="pcm-v">${adk}/5</div></div>
         </div>
         <div class="pc-foot">
@@ -1997,7 +1997,7 @@ function renderTrustSection(sh){
             ${sentSW?`<div class="so-what-line">${esc(sentSW)}</div>`:''}
           </div>
           <div class="trust-breakdown">
-            <div class="trust-mod-row"><span>Base (adoption factors)</span><span>${adoptScore(sh.factors)}%</span></div>
+            <div class="trust-mod-row"><span>Base readiness score</span><span>${adoptScore(sh.factors)}%</span></div>
             <div class="trust-mod-row"><span>Trust modifier</span><span style="color:${trust<3?'var(--red)':trust>3?'var(--green)':'var(--ink-60)'}">${trust<3?'−'+(3-trust)*8:trust>3?'+'+(trust-3)*4:'0'}pts</span></div>
             <div class="trust-mod-row"><span>Anxiety modifier</span><span style="color:${highAnxiety?'var(--red)':'var(--ink-60)'}'">${highAnxiety?'−'+([(ai.whatDoesThisMeanFreq||0)>5,(ai.extraReviewCycles||0)>2,(ai.escalations||0)>1,ai.attendanceDrop].filter(Boolean).length*5):'0'}pts</span></div>
             <div class="trust-mod-row"><span>Touchpoint modifier</span><span style="color:${increased>decreased?'var(--green)':decreased>increased?'var(--red)':'var(--ink-60)'}">${increased>0||decreased>0?((increased-decreased)*5>0?'+':'')+Math.max(-30,Math.min(15,(increased-decreased)*5)+'pts'):'0pts'}</span></div>
@@ -2273,12 +2273,12 @@ function openScoreExplainer(){
   else if(totalScore>=40)tierKey='atrisk';
 
   const components=[
-    {label:fwName()+' Assessment',weight:'25%',pct:fwPct,color:'var(--navy)',dsType:getDataSourceType('framework',p)},
-    {label:'Stakeholder Sentiment',weight:'20%',pct:sentPct,color:'var(--gold)',dsType:getDataSourceType('sentiment',p)},
-    {label:'Training Effectiveness',weight:'20%',pct:trainPct,color:'var(--green)',dsType:getDataSourceType('training',p)},
-    {label:'Lifecycle Health',weight:'10%',pct:lcPct,color:'#6B5EA8',dsType:getDataSourceType('lifecycle',p)},
-    {label:'Comms Completion',weight:'10%',pct:commsPct,color:'#4A6FA5',dsType:getDataSourceType('comms',p)},
-    {label:'Risk Adjustment',weight:'15%',pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)',dsType:getDataSourceType('risk',p)}
+    {label:'Change Readiness',weight:'25%',pct:fwPct,color:'var(--navy)',dsType:getDataSourceType('framework',p)},
+    {label:'People & Trust',weight:'20%',pct:sentPct,color:'var(--gold)',dsType:getDataSourceType('sentiment',p)},
+    {label:'Training & Preparedness',weight:'20%',pct:trainPct,color:'var(--green)',dsType:getDataSourceType('training',p)},
+    {label:'Project Health',weight:'10%',pct:lcPct,color:'#6B5EA8',dsType:getDataSourceType('lifecycle',p)},
+    {label:'Communication',weight:'10%',pct:commsPct,color:'#4A6FA5',dsType:getDataSourceType('comms',p)},
+    {label:'Open Issues',weight:'15%',pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)',dsType:getDataSourceType('risk',p)}
   ];
 
   const modal=document.createElement('div');
@@ -2287,7 +2287,7 @@ function openScoreExplainer(){
   modal.innerHTML=`<div class="score-modal-box">
     <button class="score-modal-close" onclick="document.getElementById('score-explainer-modal').classList.remove('open')" aria-label="Close">&times;</button>
     <h2>How This Score Works</h2>
-    <p style="font-size:13px;color:var(--ink-60);margin:8px 0 20px">The Adoption Score is a weighted composite of six readiness dimensions, calculated from your project data.</p>
+    <p style="font-size:13px;color:var(--ink-60);margin:8px 0 20px">This score measures how prepared your organization is for this change. It combines six areas of readiness, each weighted by how much it affects successful adoption.</p>
 
     <h3>Score Confidence</h3>
     <div class="score-conf-wrap">
@@ -2328,7 +2328,7 @@ function openScoreExplainer(){
     </div>
 
     <div class="score-method-note">
-      <strong>Methodology Notes:</strong> Stakeholder Sentiment is calculated from multiple data sources including engagement touchpoint outcomes, trust level assessments, anxiety indicators, and pulse survey results (when available). No single data source determines the sentiment score. Scores based on <em>Estimated</em> inputs would be strengthened by adding measured data sources (surveys, lifecycle metrics, or documented observations). Training effectiveness gives greater weight to Kirkpatrick L3 (Behavior) and L4 (Results) over L1–L2, reflecting actual performance transfer.
+      <strong>How We Calculate This:</strong> People & Trust is calculated from multiple data sources — engagement outcomes, trust assessments, concern indicators, and survey results (when available). No single data source drives the score. Scores marked <em>Estimated</em> would be strengthened by adding real data (surveys, project metrics, or documented observations). Training & Preparedness gives greater weight to whether people are actually applying skills on the job over whether they completed a course.
     </div>
   </div>`;
 
@@ -3271,9 +3271,9 @@ function getWeakestComponent(p){
   const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
   const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
   const lhScore=calcLifecycleHealth(p).score;
-  const scored={[fwName()+' Assessment']:fwPct,'Stakeholder Sentiment':sentPct,'Training Effectiveness':trainPct,'Lifecycle Health':lhScore};
+  const scored={'Change Readiness':fwPct,'People & Trust':sentPct,'Training & Preparedness':trainPct,'Project Health':lhScore};
   const min=Object.entries(scored).sort((a,b)=>a[1]-b[1])[0];
-  return min?min[0]:'stakeholder engagement';
+  return min?min[0]:'people and trust';
 }
 function getNextGate(p){
   for(let i=0;i<GATE_DEFS.length;i++){
@@ -3293,7 +3293,7 @@ function getTopDrivers(p){
   const lh=calcLifecycleHealth(p);
   const redSigs=lh.signals.filter(s=>s.strength==='red').length;
   if(redSigs>0)parts.push(`${redSigs} critical lifecycle signal${redSigs>1?'s':''}`);
-  return parts.length?parts.slice(0,2).join(' and '):'risk flags and low sentiment scores';
+  return parts.length?parts.slice(0,2).join(' and '):'open issues and low trust';
 }
 
 // ════════════════════════════════════════════════════════
@@ -3371,7 +3371,7 @@ function updateVCCriterion(i,field,val){const p=getProj();if(!p||!p.valueCase)re
 // PROOF POINTS
 // ════════════════════════════════════════════════════════
 const PROOF_SOURCES=['Meeting Notes','System Data','Survey Response','Defect Log','Attendance Record','Facilitation Notes','Other'];
-const PROOF_DIMS=['Framework Assessment','Stakeholder Sentiment','Training Effectiveness','Lifecycle Health','Communications','Risk Flags','Gate Readiness'];
+const PROOF_DIMS=['Change Readiness','People & Trust','Training & Preparedness','Project Health','Communication','Open Issues','Overall Readiness'];
 function renderProofPoints(p){
   const el=document.getElementById('p-proof-points-wrap');if(!el)return;
   if(!p.proofPoints)p.proofPoints=[];
@@ -3823,7 +3823,7 @@ function renderExecAgencyHM(){
   });});
   const agencies=Object.keys(agencyMap);
   if(!agencies.length){el.innerHTML='';return;}
-  let h='<thead><tr><th class="phm-rh">Agency</th><th>Releases</th><th>Avg Gate</th><th>Avg '+fwShort()+'</th><th>Risk Flags</th></tr></thead><tbody>';
+  let h='<thead><tr><th class="phm-rh">Agency</th><th>Releases</th><th>Avg Readiness</th><th>Avg '+fwShort()+'</th><th>Open Issues</th></tr></thead><tbody>';
   agencies.forEach(a=>{const d=agencyMap[a];
     const avgG=d.gateScores.length?Math.round(d.gateScores.reduce((s,v)=>s+v,0)/d.gateScores.length):null;
     const avgA=d.adkars.length?(d.adkars.reduce((s,v)=>s+v,0)/d.adkars.length).toFixed(1):null;
@@ -3844,25 +3844,25 @@ function generatePortfolioNarratives(){
     const uatEmpty=!(p.resources?.uat?.length&&p.resources.uat.some(e=>e.name));
     if(uatEmpty&&d!==null&&d<=30&&d>=0)uatMissing++;
   });});
-  if(uatMissing)insights.push({icon:'!',cls:'warn',text:`${uatMissing} project${uatMissing>1?'s have':' has'} no UAT resources assigned within 30 days of go-live.`});
-  // Low gate readiness
+  if(uatMissing)insights.push({icon:'!',cls:'warn',text:`${uatMissing} project${uatMissing>1?'s have':' has'} no testing resources assigned and launch${uatMissing>1?'':' is'} within 30 days.`});
+  // Low readiness
   const lowGate=releases.filter(r=>{const rl=relRollup(r);return rl.gateScore!==null&&rl.gateScore<50;});
-  if(lowGate.length)insights.push({icon:'⚠',cls:'warn',text:`${lowGate.length} release${lowGate.length>1?'s are':' is'} below 50% gate readiness: ${lowGate.map(r=>r.name).join(', ')}.`});
-  // Critical stakeholders
+  if(lowGate.length)insights.push({icon:'!',cls:'warn',text:`${lowGate.length} release${lowGate.length>1?'s are':' is'} below 50% readiness: ${lowGate.map(r=>r.name).join(', ')}. These are not ready to proceed.`});
+  // Critical groups
   let critSH=0;
   releases.forEach(r=>r.projects.forEach(p=>p.stakeholders.forEach(sh=>{if(adoptScore(sh.factors)<40)critSH++;})));
-  if(critSH)insights.push({icon:'!',cls:'warn',text:`${critSH} stakeholder group${critSH>1?'s are':' is'} at critical adoption risk (below 40%).`});
-  // Competing go-lives
+  if(critSH)insights.push({icon:'!',cls:'warn',text:`${critSH} affected group${critSH>1?'s are':' is'} at critical risk — below 40% readiness. Without intervention, these groups are unlikely to adopt the change.`});
+  // Competing launches
   const goLives=releases.filter(r=>r.golive).map(r=>({name:r.name,d:new Date(r.golive)})).sort((a,b)=>a.d-b.d);
   for(let i=1;i<goLives.length;i++){const diff=Math.abs(goLives[i].d-goLives[i-1].d)/86400000;
-    if(diff<=7)insights.push({icon:'⚠',cls:'warn',text:`${goLives[i-1].name} and ${goLives[i].name} go live within ${Math.round(diff)} days of each other — resource contention risk.`});}
-  // High readiness releases
+    if(diff<=7)insights.push({icon:'!',cls:'warn',text:`${goLives[i-1].name} and ${goLives[i].name} launch within ${Math.round(diff)} day${Math.round(diff)===1?'':'s'} of each other — people and resources will be stretched thin.`});}
+  // High readiness
   const highReady=releases.filter(r=>{const rl=relRollup(r);return rl.gateScore!==null&&rl.gateScore>=80;});
-  if(highReady.length)insights.push({icon:'✓',cls:'good',text:`${highReady.length} release${highReady.length>1?'s are':' is'} at 80%+ gate readiness: ${highReady.map(r=>r.name).join(', ')}.`});
-  // ADKAR strengths
+  if(highReady.length)insights.push({icon:'—',cls:'good',text:`${highReady.length} release${highReady.length>1?'s are':' is'} at 80%+ readiness: ${highReady.map(r=>r.name).join(', ')}. On track.`});
+  // Strong change readiness scores
   const strongAdkar=releases.filter(r=>{const rl=relRollup(r);return rl.adkar!==null&&parseFloat(rl.adkar)>=4;});
-  if(strongAdkar.length)insights.push({icon:'✓',cls:'good',text:`${strongAdkar.length} release${strongAdkar.length>1?'s show':' shows'} strong ${fwShort()} scores (4+/5).`});
-  if(!insights.length)insights.push({icon:'—',cls:'neutral',text:'Portfolio data is insufficient to generate insights. Add projects and score gates to begin.'});
+  if(strongAdkar.length)insights.push({icon:'—',cls:'good',text:`${strongAdkar.length} release${strongAdkar.length>1?'s show':' shows'} strong change readiness scores (4+/5).`});
+  if(!insights.length)insights.push({icon:'—',cls:'neutral',text:'Not enough data to generate insights yet. Add projects and complete the readiness checklists to begin.'});
   return insights;
 }
 
@@ -8031,22 +8031,39 @@ function renderAlerts(){
     if(r.golive){
       const d=daysTo(r.golive);
       if(d!==null&&d<0)
-        alerts.push({id:'overdue-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> go-live was <strong>${Math.abs(d)} day${Math.abs(d)===1?'':'s'} ago</strong> — release is overdue.`});
+        alerts.push({id:'overdue-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> was scheduled to launch <strong>${Math.abs(d)} day${Math.abs(d)===1?'':'s'} ago</strong> and is overdue.`});
       else if(d!==null&&d===0)
-        alerts.push({id:'today-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live <strong>today</strong> — final readiness check required.`});
+        alerts.push({id:'today-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> launches <strong>today</strong>.`});
       else if(d!==null&&d<=7)
-        alerts.push({id:'7day-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} day${d===1?'':'s'}</strong> — final readiness check required.`});
+        alerts.push({id:'7day-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> launches in <strong>${d} day${d===1?'':'s'}</strong>.`});
       else if(d!==null&&d<=30&&rl.status.cls!=='on-track')
-        alerts.push({id:'30day-'+r.id,cls:'warn',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> goes live in <strong>${d} days</strong> and is ${rl.status.label}.`});
+        alerts.push({id:'30day-'+r.id,cls:'warn',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> launches in <strong>${d} days</strong> and is not on track.`});
     }
     if(rl.status.cls==='critical')
-      alerts.push({id:'crit-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> is <strong>Critical</strong> — ${rl.flags} active risk flag${rl.flags===1?'':'s'} require attention.`});
+      alerts.push({id:'crit-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> is <strong>Critical</strong> — ${rl.flags} open issue${rl.flags===1?'':'s'} require attention.`});
   });
   // Deduplicate and filter dismissed
   const seen=new Set();const deduped=alerts.filter(a=>{const k=a.id;if(seen.has(k)||dismissed.includes(k))return false;seen.add(k);return true;});
   if(!deduped.length){bar.style.display='none';return;}
   bar.style.display='block';
-  bar.innerHTML=`<div style="max-width:1440px;margin:0 auto;padding:4px 0">${deduped.map(a=>`<div class="alert-item" data-alert-id="${a.id}"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span><button class="alert-dismiss" onclick="dismissAlert('${a.id}')" title="Dismiss">&times;</button></div>`).join('')}</div>`;
+  const MAX_VISIBLE=3;
+  const visible=deduped.slice(0,MAX_VISIBLE);
+  const overflow=deduped.length-MAX_VISIBLE;
+  let html=`<div style="max-width:1440px;margin:0 auto;padding:4px 0">`;
+  html+=visible.map(a=>`<div class="alert-item" data-alert-id="${a.id}"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span><button class="alert-dismiss" onclick="dismissAlert('${a.id}')" title="Dismiss">&times;</button></div>`).join('');
+  if(overflow>0){
+    html+=`<div class="alert-overflow" id="alert-overflow">${deduped.slice(MAX_VISIBLE).map(a=>`<div class="alert-item" data-alert-id="${a.id}"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span><button class="alert-dismiss" onclick="dismissAlert('${a.id}')" title="Dismiss">&times;</button></div>`).join('')}</div>`;
+    html+=`<button class="alert-toggle-btn" id="alert-toggle-btn" onclick="toggleAlertOverflow()">Show ${overflow} more</button>`;
+  }
+  html+=`</div>`;
+  bar.innerHTML=html;
+}
+function toggleAlertOverflow(){
+  const ov=document.getElementById('alert-overflow');
+  const btn=document.getElementById('alert-toggle-btn');
+  if(!ov||!btn)return;
+  const showing=ov.classList.toggle('show');
+  btn.textContent=showing?'Show less':'Show '+ov.querySelectorAll('.alert-item').length+' more';
 }
 function dismissAlert(alertId){
   const dismissed=JSON.parse(sessionStorage.getItem('adoptiq_dismissed_alerts')||'[]');
