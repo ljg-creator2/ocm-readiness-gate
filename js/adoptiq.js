@@ -12,7 +12,59 @@ function showLogin(){hideLanding();document.getElementById('v-login').classList.
 function hideLogin(){document.getElementById('v-login').classList.remove('active');}
 function landingToLogin(){hideLanding();showLogin();showSignin();}
 async function landingToDemo(){hideLanding();hideLogin();await loadDemoData();document.getElementById('v-portfolio').classList.add('active');}
-function landingBookWalkthrough(){window.open('mailto:info@providenceconsulting.com?subject=AdoptIQ%20Walkthrough%20Request&body=I%20am%20interested%20in%20a%20walkthrough%20of%20AdoptIQ.','_blank');}
+function landingBookWalkthrough(){openBookingModal();}
+function openBookingModal(){
+  let existing=document.getElementById('booking-modal');if(existing)existing.remove();
+  const modal=document.createElement('div');modal.id='booking-modal';modal.className='lp-booking-modal';
+  modal.innerHTML=`<div class="lp-booking-box">
+    <button class="lp-booking-close" onclick="document.getElementById('booking-modal').remove()">&times;</button>
+    <div class="lp-booking-hdr">
+      <div class="lp-booking-logo">A</div>
+      <h2>Book a Walkthrough</h2>
+      <p>Tell us about your organization and we'll schedule a personalized demo of AdoptIQ.</p>
+    </div>
+    <form id="booking-form" name="walkthrough-request" method="POST" data-netlify="true" onsubmit="return submitBooking(event)">
+      <input type="hidden" name="form-name" value="walkthrough-request">
+      <div class="lp-booking-fields">
+        <div class="lp-booking-row">
+          <div class="lp-booking-field"><label>First Name *</label><input type="text" name="firstName" required placeholder="Jane"></div>
+          <div class="lp-booking-field"><label>Last Name *</label><input type="text" name="lastName" required placeholder="Smith"></div>
+        </div>
+        <div class="lp-booking-field"><label>Work Email *</label><input type="email" name="email" required placeholder="jane@agency.gov"></div>
+        <div class="lp-booking-field"><label>Organization *</label><input type="text" name="organization" required placeholder="Your agency, firm, or company"></div>
+        <div class="lp-booking-field"><label>Role</label><input type="text" name="role" placeholder="e.g. OCM Lead, Program Manager, Director"></div>
+        <div class="lp-booking-field"><label>What are you looking to solve?</label>
+          <textarea name="message" rows="3" placeholder="Tell us about your change management challenges or what you'd like to see in the walkthrough..."></textarea></div>
+        <div class="lp-booking-field"><label>Preferred Contact Method</label>
+          <div class="lp-booking-prefs">
+            <label class="lp-booking-pref"><input type="radio" name="contactMethod" value="email" checked> Email</label>
+            <label class="lp-booking-pref"><input type="radio" name="contactMethod" value="phone"> Phone</label>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="lp-btn-primary" style="width:100%;margin-top:16px">Request Walkthrough</button>
+      <p class="lp-booking-note">We typically respond within 1–3 business days.</p>
+    </form>
+    <div id="booking-success" style="display:none" class="lp-booking-success">
+      <div class="lp-booking-check">&#10003;</div>
+      <h3>Request Received</h3>
+      <p>Thank you. We'll be in touch within 1–3 business days to schedule your walkthrough.</p>
+      <button class="lp-btn-secondary" onclick="document.getElementById('booking-modal').remove()" style="margin-top:20px">Close</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  requestAnimationFrame(()=>modal.classList.add('open'));
+  modal.addEventListener('click',function(e){if(e.target===this)this.remove();});
+}
+function submitBooking(e){
+  e.preventDefault();
+  const form=document.getElementById('booking-form');
+  const data=new FormData(form);
+  fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(data).toString()})
+    .then(()=>{form.style.display='none';document.getElementById('booking-success').style.display='block';})
+    .catch(()=>{form.style.display='none';document.getElementById('booking-success').style.display='block';});
+  return false;
+}
 function hideAllLoginPanels(){['login-signin','login-signup','login-forgot','login-verify'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
 function showSignin(){hideAllLoginPanels();document.getElementById('login-signin').style.display='block';document.getElementById('login-err').textContent='';}
 function showSignup(){hideAllLoginPanels();document.getElementById('login-signup').style.display='block';document.getElementById('signup-err').textContent='';document.getElementById('signup-email').value='';document.getElementById('signup-pw').value='';document.getElementById('signup-confirm').value='';document.getElementById('pw-strength').textContent='';}
