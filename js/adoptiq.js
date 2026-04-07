@@ -7765,6 +7765,21 @@ async function loadDemoData(){
   p1a.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:3,extraReviewCycles:1,escalations:0,attendanceDrop:false};
   p1a.valueCase={statement:'Transition from paper-based charting to integrated electronic health records to improve clinical documentation accuracy and patient safety.',requestor:'Chief Medical Officer',impactLevel:'High',successCriteria:[{id:uid(),criterion:'Documentation compliance above 95%',metStatus:null},{id:uid(),criterion:'Zero clinical safety events attributed to EHR transition',metStatus:null},{id:uid(),criterion:'Physician satisfaction above 3.5/5',metStatus:null}],unintendedConsequences:''};
   p1a.proofPoints=[{id:uid(),what:'Physician champion engagement exceeded target — 8 of 10 department champions actively participating in design reviews',when:'2025-12-01',proves:'Strong coalition building. Physician buy-in is developing through peer involvement rather than top-down mandates.',source:'Meeting Notes',dimensionTags:['People & Trust','Change Readiness']}];
+  // Nursing Documentation — moderate risk
+  p1b.lifecycleSignals={
+    requirements:{onSchedule:true,daysVariance:0,reviewCycles:3,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:true,delayDays:4,scopeChangeRequests:2,workaroundRequests:1,workaroundNotes:'Nurses requested a paper-based fallback for medication scanning during downtime'},
+    testing:{qaDefects:78,uatDefects:22,uatParticipationRate:72,testingApproach:'mixed'},
+    training:{startDateChanges:1,startDateReasons:['System scope changes'],envDefects:4,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:2},
+    deployment:{goliveDateChanges:1,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
+  };
+  p1b.stakeholders[0].trust=3;
+  p1b.stakeholders[0].trustHistory=[{date:'2025-11-01',value:3,note:'Initial'},{date:'2026-01-01',value:3,note:'Stable — cautious but cooperating'}];
+  p1b.stakeholders[0].touchpoints=[{id:uid(),date:'2025-11-20',type:'Training Session',description:'Nursing documentation workflow training — hands-on lab',trustImpact:'Increased'},{id:uid(),date:'2025-12-15',type:'Q&A Session',description:'Open Q&A about BCMA scanning process',trustImpact:'No Change'},{id:uid(),date:'2026-01-10',type:'Walkthrough',description:'Unit-by-unit walkthrough with super users',trustImpact:'Increased'}];
+  p1b.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:4,extraReviewCycles:1,escalations:0,attendanceDrop:false};
+  p1b.stakeholders[0].preconceptions=[{id:uid(),text:'Worried the barcode scanner will slow down medication administration during emergencies',status:'Being Addressed'}];
+  p1b.valueCase={statement:'Reduce medication administration errors by implementing barcode-verified medication scanning at point of care.',requestor:'Chief Nursing Officer',impactLevel:'High',successCriteria:[{id:uid(),criterion:'Medication error rate reduced by 60%',metStatus:null},{id:uid(),criterion:'BCMA scan compliance above 95%',metStatus:null},{id:uid(),criterion:'Nurse satisfaction above 3.5/5',metStatus:null}],unintendedConsequences:''};
+  p1b.proofPoints=[{id:uid(),what:'72% of nursing staff participated in UAT — below the 80% target but above minimum threshold',when:'2026-01-20',proves:'Acceptable but not strong engagement. Staff who did not participate may struggle post go-live.',source:'Attendance Record',dimensionTags:['People & Trust','Project Health']},{id:uid(),what:'Workaround requested for paper-based medication scanning fallback during system downtime',when:'2025-12-08',proves:'Nurses are planning for system failure before it launches — a sign of low confidence in reliability.',source:'Meeting Notes',dimensionTags:['People & Trust']}];
   r1.projects=[p1a,p1b];
   releases.push(r1);
 
@@ -7791,6 +7806,35 @@ async function loadDemoData(){
   ]};
   p2b.stakeholders=[{id:uid(),name:'Branch Tellers',factors:{resistance:3,env:2,window:3,complexity:4,saturation:3,leadership:3},objectives:['Navigate new online banking portal','Assist customers with digital migration','Troubleshoot common login issues'],kirk:{L1:{method:'eLearning + branch huddles',timing:'4 weeks pre-launch'},L2:{method:'Scenario-based quiz',assessment:'85% pass rate'},L3:{observable:'Customer assist accuracy',interval:'30-day post launch'},L4:{outcome:'Reduce in-branch transactions 20%',metric:'Transaction analytics'}},rein:{owner:'Branch Manager',activities:'Weekly huddles + floor support',intervals:['Week 1','Week 2','Month 1'],escalation:'Escalate if adoption below 60%'}}];
   p2b.impactAssessment={groups:[{name:'Branch Tellers',level:'Medium',changeTypes:['Technology','Process'],currentState:'Assist customers in-branch for all banking needs.',futureState:'Guide customers to self-service digital channels, handle exceptions only.',actions:[{text:'Develop digital migration talking points',done:false},{text:'Pilot with select branches',done:false}]}]};
+  // Teller Platform — on track
+  p2a.lifecycleSignals={
+    requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:false,delayDays:0,scopeChangeRequests:1,workaroundRequests:0,workaroundNotes:''},
+    testing:{qaDefects:55,uatDefects:14,uatParticipationRate:82,testingApproach:'mixed'},
+    training:{startDateChanges:0,startDateReasons:[],envDefects:2,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:1},
+    deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
+  };
+  p2a.stakeholders[0].trust=4;
+  p2a.stakeholders[0].trustHistory=[{date:'2025-11-01',value:3,note:'Initial'},{date:'2026-01-01',value:4,note:'Improved after simulation training'}];
+  p2a.stakeholders[0].touchpoints=[{id:uid(),date:'2025-12-01',type:'Training Session',description:'Transaction simulation with live test data',trustImpact:'Increased'},{id:uid(),date:'2026-01-15',type:'Demo',description:'New fraud detection walkthrough for branch managers',trustImpact:'Increased'}];
+  p2a.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:2,extraReviewCycles:0,escalations:0,attendanceDrop:false};
+  p2a.valueCase={statement:'Modernize the teller platform to reduce average transaction time by 40% and integrate real-time fraud detection at point of service.',requestor:'EVP Retail Banking',impactLevel:'High',successCriteria:[{id:uid(),criterion:'Average transaction time reduced by 40%',metStatus:null},{id:uid(),criterion:'Zero fraudulent transactions in first 90 days',metStatus:null},{id:uid(),criterion:'Branch teller satisfaction above 4.0',metStatus:null}],unintendedConsequences:''};
+  p2a.proofPoints=[{id:uid(),what:'82% UAT participation rate — above the 80% target',when:'2026-02-01',proves:'Strong user engagement in testing. Tellers are invested in validating the system before launch.',source:'Attendance Record',dimensionTags:['People & Trust','Project Health']}];
+  // Online Banking — early stage, at risk
+  p2b.lifecycleSignals={
+    requirements:{onSchedule:false,daysVariance:5,reviewCycles:3,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:false,delayDays:0,scopeChangeRequests:2,workaroundRequests:1,workaroundNotes:'Tellers requested an offline mode for customer migration assistance during branch outages'},
+    testing:{qaDefects:0,uatDefects:0,uatParticipationRate:0,testingApproach:''},
+    training:{startDateChanges:0,startDateReasons:[],envDefects:0,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:0},
+    deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
+  };
+  p2b.stakeholders[0].trust=3;
+  p2b.stakeholders[0].trustHistory=[{date:'2025-11-01',value:3,note:'Initial — cautious about digital migration mandate'}];
+  p2b.stakeholders[0].preconceptions=[{id:uid(),text:'Believes digital migration will reduce branch foot traffic and eventually lead to branch closures',status:'Active'},{id:uid(),text:'Thinks customers will resist self-service and blame tellers for pushing them online',status:'Active'}];
+  p2b.stakeholders[0].touchpoints=[{id:uid(),date:'2025-12-05',type:'Meeting',description:'Initial briefing on online banking rollout plan',trustImpact:'No Change'}];
+  p2b.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:6,extraReviewCycles:2,escalations:1,attendanceDrop:false};
+  p2b.valueCase={statement:'Launch self-service online banking to reduce in-branch transaction volume by 20% and improve customer satisfaction scores.',requestor:'Chief Digital Officer',impactLevel:'High',successCriteria:[{id:uid(),criterion:'Online transaction adoption rate above 60%',metStatus:null},{id:uid(),criterion:'In-branch volume reduced by 20%',metStatus:null},{id:uid(),criterion:'Customer satisfaction maintained above 4.2',metStatus:null}],unintendedConsequences:''};
+  p2b.proofPoints=[{id:uid(),what:'6 "what does this mean" questions from tellers in a single briefing about the digital migration talking points',when:'2025-12-05',proves:'The communication about this change is not clear. Tellers do not understand their role in the migration.',source:'Facilitation Notes',dimensionTags:['Communication','People & Trust']}];
   r2.projects=[p2a,p2b];
   releases.push(r2);
 
@@ -7865,6 +7909,16 @@ async function loadDemoData(){
   const p4b=newProject('',['Müller & Sons AG'],0);
   p4b.status='Not Started';
   migrateResources(p4b);
+  // Client 360 — on track
+  p4a.lifecycleSignals={
+    requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:false,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},
+    testing:{qaDefects:32,uatDefects:9,uatParticipationRate:85,testingApproach:'exploratory'},
+    training:{startDateChanges:0,startDateReasons:[],envDefects:1,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:1},
+    deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
+  };
+  p4a.valueCase={statement:'Consolidate 4 legacy CRM views into a single Client 360 dashboard to reduce account lookup time from 3 minutes to 30 seconds.',requestor:'VP Client Services',impactLevel:'Medium',successCriteria:[{id:uid(),criterion:'Account lookup time reduced to under 30 seconds',metStatus:null},{id:uid(),criterion:'Client-facing staff satisfaction above 4.0',metStatus:null}],unintendedConsequences:''};
+  p4a.proofPoints=[{id:uid(),what:'85% UAT participation with exploratory testing approach — users proactively tested edge cases beyond scripted scenarios',when:'2026-02-15',proves:'High engagement and ownership. Users are invested in the quality of the system.',source:'Attendance Record',dimensionTags:['People & Trust','Project Health']}];
   r4.projects=[p4a,p4b];
   releases.push(r4);
 
@@ -7888,6 +7942,38 @@ async function loadDemoData(){
   p5b.resources.pm=[{name:'Katherine Johnson',contact:''}];
   p5b.stakeholders=[{id:uid(),name:'Constituents/Public Users',factors:{resistance:3,env:2,window:3,complexity:2,saturation:2,leadership:2},objectives:['Access benefit information','Submit applications online','Track application status'],kirk:{L1:{method:'Website tutorials + FAQs',timing:'Ongoing'},L2:{method:'Call center training pilot',assessment:'Support staff proficiency'},L3:{observable:'Portal usage adoption',interval:'30-day post launch'},L4:{outcome:'50% online submission rate',metric:'Portal analytics'}},rein:{owner:'Help Desk Manager',activities:'Daily monitoring + weekly optimization',intervals:['Daily','Weekly'],escalation:'Escalate if 311 call volume spikes'}},{id:uid(),name:'Agency Leadership',factors:{resistance:1,env:4,window:5,complexity:2,saturation:1,leadership:5},objectives:['Monitor portal adoption metrics','Ensure constituent satisfaction','Report to oversight committee'],kirk:{L1:{method:'Executive dashboard walkthrough',timing:'1 week pre-launch'},L2:{method:'Dashboard proficiency check',assessment:'Operational'},L3:{observable:'Dashboard usage frequency',interval:'Monthly'},L4:{outcome:'Positive constituent feedback trend',metric:'Satisfaction surveys'}},rein:{owner:'Deputy Commissioner',activities:'Quarterly steering committee + monthly KPI review',intervals:['Monthly','Quarterly'],escalation:'Escalate if satisfaction drops below 80%'}}];
   p5b.impactAssessment={groups:[{name:'Constituents/Public Users',level:'High',changeTypes:['Technology','Process'],currentState:'In-person and phone-based service delivery.',futureState:'Digital self-service portal for benefits and applications.',actions:[{text:'Develop accessibility compliance plan',done:true},{text:'User testing with diverse populations',done:false}]},{name:'Agency Leadership',level:'Low',changeTypes:['Process'],currentState:'Manual reporting and in-person oversight.',futureState:'Real-time digital dashboards and automated reporting.',actions:[{text:'Dashboard training for leadership team',done:false}]}]};
+  // Case Management — complete, delivered value
+  p5a.golive='2025-11-30';
+  p5a.lifecycleSignals={
+    requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:false,delayDays:0,scopeChangeRequests:1,workaroundRequests:0,workaroundNotes:''},
+    testing:{qaDefects:40,uatDefects:15,uatParticipationRate:90,testingApproach:'mixed'},
+    training:{startDateChanges:0,startDateReasons:[],envDefects:1,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:1},
+    deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:15,supportTicketsMonth1:35,workaroundRequestsPostGL:1}
+  };
+  p5a.stakeholders[0].trust=4;
+  p5a.stakeholders[0].trustHistory=[{date:'2025-08-01',value:3,note:'Initial'},{date:'2025-10-01',value:4,note:'Improved after hands-on practice'},{date:'2025-12-01',value:5,note:'High confidence post go-live'}];
+  p5a.stakeholders[0].touchpoints=[{id:uid(),date:'2025-09-01',type:'Training Session',description:'Case processing workflow — 3-day intensive',trustImpact:'Increased'},{id:uid(),date:'2025-10-15',type:'Walkthrough',description:'Go-live simulation with real caseload data',trustImpact:'Increased'},{id:uid(),date:'2025-12-15',type:'Q&A Session',description:'Post go-live feedback — minor issues resolved',trustImpact:'Increased'}];
+  p5a.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:1,extraReviewCycles:0,escalations:0,attendanceDrop:false};
+  if(p5a.stakeholders[1]){p5a.stakeholders[1].trust=5;p5a.stakeholders[1].touchpoints=[{id:uid(),date:'2025-10-01',type:'Meeting',description:'Executive dashboard review — strong endorsement',trustImpact:'Increased'}];p5a.stakeholders[1].anxietyIndicators={whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false};}
+  p5a.valueCase={statement:'Replace legacy case management system to reduce average benefit processing time from 14 days to 5 days and eliminate manual data entry errors.',requestor:'Commissioner of Social Services',impactLevel:'High',successCriteria:[{id:uid(),criterion:'Average processing time reduced to 5 days or less',metStatus:'Yes',actualOutcome:'Average processing time now 4.2 days'},{id:uid(),criterion:'Data entry error rate below 1%',metStatus:'Yes',actualOutcome:'Error rate at 0.6% — below target'},{id:uid(),criterion:'Case worker satisfaction above 4.0',metStatus:'Partially',actualOutcome:'Satisfaction at 3.8 — close but below target due to initial learning curve'},{id:uid(),criterion:'Zero benefit payment delays attributed to system issues',metStatus:'Yes',actualOutcome:'No system-related payment delays in first 90 days'}],unintendedConsequences:'Case workers discovered the new reporting capabilities enabled them to identify at-risk families earlier — leading to proactive outreach that was not part of the original scope.'};
+  p5a.proofPoints=[{id:uid(),what:'90% of caseworkers participated in UAT and completed all test scenarios within the target time',when:'2025-10-20',proves:'Strong workforce readiness. The training approach was effective and the system is intuitive enough for the user base.',source:'System Data',dimensionTags:['Training & Preparedness','Project Health']},{id:uid(),what:'Post go-live support tickets averaged 15 per week — well below the 20-ticket threshold',when:'2025-12-15',proves:'Users are self-sufficient. The training and go-live support model worked as designed.',source:'Defect Log',dimensionTags:['Project Health']},{id:uid(),what:'Commissioner received positive feedback from 3 regional directors within the first month',when:'2025-12-30',proves:'Leadership alignment is strong. The change has executive-level support from the field, not just headquarters.',source:'Meeting Notes',dimensionTags:['People & Trust']}];
+  // Public Portal — complete, partial delivery
+  p5b.golive='2025-11-30';
+  p5b.lifecycleSignals={
+    requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},
+    design:{reviewsDelayed:false,delayDays:0,scopeChangeRequests:2,workaroundRequests:0,workaroundNotes:''},
+    testing:{qaDefects:28,uatDefects:8,uatParticipationRate:75,testingApproach:'guided'},
+    training:{startDateChanges:0,startDateReasons:[],envDefects:0,scopeUnderestimated:false,scopeNotes:'',materialReworkCycles:1},
+    deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:22,supportTicketsMonth1:45,workaroundRequestsPostGL:0}
+  };
+  p5b.stakeholders[0].trust=3;
+  p5b.stakeholders[0].trustHistory=[{date:'2025-09-01',value:3,note:'Constituents are a diverse population — trust varies widely'}];
+  p5b.stakeholders[0].touchpoints=[{id:uid(),date:'2025-10-01',type:'Demo',description:'Public beta launch with feedback survey',trustImpact:'Increased'}];
+  p5b.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:3,extraReviewCycles:0,escalations:0,attendanceDrop:false};
+  if(p5b.stakeholders[1]){p5b.stakeholders[1].trust=5;p5b.stakeholders[1].touchpoints=[{id:uid(),date:'2025-10-15',type:'Meeting',description:'Dashboard metrics review with Deputy Commissioner',trustImpact:'Increased'}];}
+  p5b.valueCase={statement:'Launch a public-facing self-service portal to allow constituents to apply for benefits, check status, and upload documents without visiting an office or calling a hotline.',requestor:'Deputy Commissioner',impactLevel:'High',successCriteria:[{id:uid(),criterion:'50% of new applications submitted online within 6 months',metStatus:'Partially',actualOutcome:'Currently at 38% — adoption growing but below target. Accessibility barriers identified for older demographics.'},{id:uid(),criterion:'Call center volume reduced by 30%',metStatus:'No',actualOutcome:'Call center volume reduced by only 12% — many constituents still call to confirm online submissions were received.'},{id:uid(),criterion:'Constituent satisfaction above 4.0',metStatus:'Partially',actualOutcome:'Satisfaction at 3.6 — positive among younger users but lower among populations with limited technology access.'}],unintendedConsequences:'Unexpected demand from constituents requesting a Spanish-language version of the portal, which was not in the original scope. Now being planned as a Phase 2 enhancement.'};
+  p5b.proofPoints=[{id:uid(),what:'Call center volume only reduced 12% vs 30% target — many callers are confirming their online submissions were received',when:'2026-01-15',proves:'Trust in the digital channel is not yet established. Constituents are double-checking their submissions by phone.',source:'System Data',dimensionTags:['People & Trust','Communication']},{id:uid(),what:'22 support tickets in the first week, primarily from users struggling with document upload functionality',when:'2025-12-07',proves:'The document upload UX needs improvement. This is a usability issue, not a training issue.',source:'Defect Log',dimensionTags:['Project Health']}];
   r5.projects=[p5a,p5b];
   releases.push(r5);
 
