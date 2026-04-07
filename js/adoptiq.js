@@ -2305,7 +2305,7 @@ function openScoreExplainer(){
     </div>
 
     <h3>Formula Breakdown</h3>
-    <div style="font-size:22px;font-weight:700;color:var(--navy);margin:8px 0 16px;font-family:var(--font-d)">Composite Score: ${totalScore}%</div>
+    <div class="score-composite-val">Composite Score: ${totalScore}%</div>
     ${components.map(c=>`<div class="score-bar-row">
       <div class="score-bar-label">${c.label} ${dataSourceBadge(c.dsType)}</div>
       <div class="score-bar-track"><div class="score-bar-fill" style="width:${c.pct}%;background:${c.color}"><span class="score-bar-val">${c.pct}%</span></div></div>
@@ -2344,7 +2344,7 @@ function showGateInfoPop(btn){
   document.querySelectorAll('.gate-info-pop').forEach(p=>p.remove());
   const pop=document.createElement('div');
   pop.className='gate-info-pop';
-  pop.innerHTML=`<div style="font-weight:700;margin-bottom:6px;color:var(--navy)">Gate Score Thresholds</div>
+  pop.innerHTML=`<div class="score-composite-val" style="font-size:14px;margin-bottom:6px">Gate Score Thresholds</div>
     <div class="gate-thresh"><span class="gate-dot" style="background:var(--green)"></span> Go — ≥ 75%</div>
     <div class="gate-thresh"><span class="gate-dot" style="background:var(--amber)"></span> Conditional — 50–74%</div>
     <div class="gate-thresh"><span class="gate-dot" style="background:var(--red)"></span> No-Go — < 50%</div>`;
@@ -3310,7 +3310,7 @@ function renderValueCase(p){
   el.innerHTML=`<div class="exp-sec panel" style="margin-bottom:20px">
     <button class="exp-tog" onclick="toggleExp('vc-body',this)" aria-expanded="false" style="width:100%;padding:16px 20px;background:transparent;border:none;cursor:pointer;text-align:left">
       <div class="exp-tog-l" style="flex:1">
-        <span style="font-weight:700;font-size:14px;color:var(--navy)">Value Case</span>
+        <span class="exp-sec-title">Value Case</span>
         <span class="exp-badge" style="font-weight:400;font-size:11px;color:var(--ink-60);margin-left:8px">What this project is supposed to deliver — and whether it did</span>
         ${vr!==null?`<span class="exp-badge" style="background:${vrColor};color:#fff">${vr}% Realized</span>`:''}
       </div>
@@ -3379,7 +3379,7 @@ function renderProofPoints(p){
   el.innerHTML=`<div class="exp-sec panel" style="margin-bottom:20px">
     <button class="exp-tog" onclick="toggleExp('pp-body',this)" aria-expanded="false" style="width:100%;padding:16px 20px;background:transparent;border:none;cursor:pointer;text-align:left">
       <div class="exp-tog-l" style="flex:1">
-        <span style="font-weight:700;font-size:14px;color:var(--navy)">Proof Points</span>
+        <span class="exp-sec-title">Proof Points</span>
         ${pts.length?`<span class="exp-badge ready">${pts.length} logged</span>`:'<span class="exp-badge needed">None yet</span>'}
       </div>
       <span class="exp-arr">&#9660;</span>
@@ -3895,7 +3895,7 @@ function generateWhatDataTells(){
         const drop=last3[0]-last3[2];
         const trustDrop=p.stakeholders.some(sh=>(sh.trustHistory||[]).length>=2&&sh.trustHistory[sh.trustHistory.length-1].value<sh.trustHistory[sh.trustHistory.length-2].value);
         const driver=trustDrop?'stakeholder trust is trending negative':'gate completion rate is declining';
-        insights.push({severity:'critical',icon:'📉',text:`${p.name} gate readiness has declined for 3 consecutive phases. Primary driver: ${driver}. Immediate intervention recommended before the next milestone.`,source:'Gate Progression',link:{rel:r.id,proj:p.id,tab:'gates'}});
+        insights.push({severity:'critical',icon:'!',text:`${p.name} readiness has declined for 3 consecutive review cycles. Primary driver: ${driver}. This project is losing ground — intervention is needed before the next milestone.`,source:'Readiness Progression',link:{rel:r.id,proj:p.id,tab:'gates'}});
       }
     }
   });
@@ -3906,7 +3906,7 @@ function generateWhatDataTells(){
     if(cx.rating==='High'||cx.rating==='Critical'){
       const ocmResources=(p.resources?.ocm_train||[]).filter(e=>e.name).length+(p.resources?.ocm_impl||[]).filter(e=>e.name).length;
       if(ocmResources===0){
-        insights.push({severity:'critical',icon:'⚠',text:`${p.name} has a ${cx.rating} complexity rating (${cx.score} points) but has no OCM resources assigned. This mismatch significantly increases go-live risk.`,source:'Complexity Rating & Resource Assignments',link:{rel:r.id,proj:p.id,tab:'resources'}});
+        insights.push({severity:'critical',icon:'!',text:`${p.name} is rated ${cx.rating} complexity but has no change management resources assigned. Without dedicated OCM support, this project is significantly more likely to fail at go-live.`,source:'Complexity & Resources',link:{rel:r.id,proj:p.id,tab:'resources'}});
       }
     }
   });
@@ -3927,7 +3927,7 @@ function generateWhatDataTells(){
   if(l2Count>=3&&l2Count===l3Count){
     const l2Avg=(l2Total/l2Count).toFixed(1),l3Avg=(l3Total/l3Count).toFixed(1);
     if(parseFloat(l2Avg)>=3.5&&parseFloat(l3Avg)<2.5){
-      insights.push({severity:'warn',icon:'📚',text:`Across ${l2Count} stakeholder groups in the portfolio, L2 (Learning) plans average ${l2Avg}/5 while L3 (Behavior) plans average ${l3Avg}/5. Training is being planned but on-the-job transfer strategies are underdeveloped. Consider a portfolio-wide reinforcement review.`,source:'Kirkpatrick L2–L3 Assessment',link:null});
+      insights.push({severity:'warn',icon:'!',text:`Across ${l2Count} stakeholder groups, training plans are well-defined but on-the-job application strategies are weak. People are being taught how to use the system but not supported in actually changing how they work. Consider a portfolio-wide reinforcement review.`,source:'Training Transfer Assessment',link:null});
     }
   }
 
@@ -3935,9 +3935,9 @@ function generateWhatDataTells(){
   allProjects.forEach(({p,r})=>{
     const wr=(p.lifecycleSignals?.design?.workaroundRequests)||0;
     if(wr>=3){
-      insights.push({severity:'critical',icon:'🚩',text:`${p.name} logged ${wr} stakeholder workaround requests during the design phase. This is a leading indicator of adoption resistance — stakeholders do not believe the system will meet their needs in ${wr} documented cases.`,source:'Lifecycle Signals — Design Phase',link:{rel:r.id,proj:p.id,tab:'lifecycle'}});
+      insights.push({severity:'critical',icon:'!',text:`${p.name} logged ${wr} workaround requests during design. In ${wr} documented cases, stakeholders do not believe the system will meet their needs. This is a strong early indicator of adoption resistance.`,source:'Lifecycle Signals — Design Phase',link:{rel:r.id,proj:p.id,tab:'lifecycle'}});
     } else if(wr>=1){
-      insights.push({severity:'warn',icon:'⚑',text:`${p.name} logged ${wr} workaround request${wr>1?'s':''} during design. Monitor closely — this can escalate into adoption resistance.`,source:'Lifecycle Signals — Design Phase',link:{rel:r.id,proj:p.id,tab:'lifecycle'}});
+      insights.push({severity:'warn',icon:'!',text:`${p.name} logged ${wr} workaround request${wr>1?'s':''} during design. Monitor closely — this can escalate into adoption resistance.`,source:'Lifecycle Signals — Design Phase',link:{rel:r.id,proj:p.id,tab:'lifecycle'}});
     }
   });
 
@@ -3946,7 +3946,7 @@ function generateWhatDataTells(){
   for(let i=1;i<goLiveProjects.length;i++){
     const diff=Math.abs(new Date(goLiveProjects[i].p.golive)-new Date(goLiveProjects[i-1].p.golive))/86400000;
     if(diff<=30){
-      insights.push({severity:'warn',icon:'🔄',text:`${goLiveProjects[i-1].p.name} and ${goLiveProjects[i].p.name} go live within ${Math.round(diff)} days of each other. Stakeholders affected by both projects face elevated change saturation. Review sequencing options to reduce simultaneous impact.`,source:'Portfolio Go-Live Timeline',link:null});
+      insights.push({severity:'warn',icon:'!',text:`${goLiveProjects[i-1].p.name} and ${goLiveProjects[i].p.name} launch within ${Math.round(diff)} days of each other. People affected by both will be managing two major changes simultaneously. Consider staggering timelines to reduce overload.`,source:'Portfolio Launch Timeline',link:null});
     }
   }
 
@@ -3954,7 +3954,7 @@ function generateWhatDataTells(){
   allProjects.forEach(({p,r})=>{
     const lowTrust=p.stakeholders.filter(sh=>(sh.trust||3)<=2);
     if(lowTrust.length>0){
-      insights.push({severity:'critical',icon:'💔',text:`${p.name} has ${lowTrust.length} stakeholder group${lowTrust.length>1?'s':''} with trust levels at Skeptical or Active Distrust (${lowTrust.map(sh=>sh.name).join(', ')}). Low trust at this stage is a strong predictor of adoption failure.`,source:'Stakeholder Trust Assessments',link:{rel:r.id,proj:p.id,tab:'adoption'}});
+      insights.push({severity:'critical',icon:'!',text:`${p.name} has ${lowTrust.length} stakeholder group${lowTrust.length>1?'s':''} with low trust (${lowTrust.map(sh=>sh.name).join(', ')}). These groups are skeptical or actively distrustful of the change. Without direct intervention, adoption will fail regardless of training quality.`,source:'Stakeholder Trust Assessments',link:{rel:r.id,proj:p.id,tab:'adoption'}});
     }
   });
 
@@ -3962,7 +3962,7 @@ function generateWhatDataTells(){
   const base=generatePortfolioNarratives().filter(i=>i.cls!=='neutral');
   base.forEach(i=>insights.push({severity:i.cls==='warn'?'warn':'good',icon:i.icon,text:i.text,source:'Portfolio Analytics',link:null}));
 
-  if(!insights.length)insights.push({severity:'good',icon:'✓',text:'No critical signals detected across the portfolio. Continue monitoring as projects approach key milestones.',source:'Portfolio Analytics',link:null});
+  if(!insights.length)insights.push({severity:'good',icon:'—',text:'No critical signals detected across the portfolio. Continue monitoring as projects approach key milestones.',source:'Portfolio Analytics',link:null});
   return insights.slice(0,8);
 }
 let _wdtCollapsed=false;
@@ -3983,7 +3983,7 @@ function renderWhatDataTells(){
     </div>
     <div class="wdt-body${_wdtCollapsed?' collapsed':''}" id="wdt-body" style="max-height:${_wdtCollapsed?'0':'2000px'}">
       <div class="wdt-list">${insights.map(i=>`<div class="insight-card ${i.severity}">
-        <div class="ic-icon">${i.icon}</div>
+        <div class="ic-dot ${i.severity}"></div>
         <div class="ic-body">
           <div class="ic-text">${esc(i.text)}</div>
           <div class="ic-source">Source: ${esc(i.source)}${i.link?` — <a href="#" class="ic-link" onclick="openProjectFromPortfolio('${i.link.rel}','${i.link.proj}','${i.link.tab||'overview'}');return false">View Details</a>`:''}</div>
