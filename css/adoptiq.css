@@ -1132,6 +1132,7 @@ tr.sat-mod{border-left:3px solid #d97706}
 .import-status.success{background:var(--green-bg);color:var(--green)}
 .import-status.error{background:var(--red-bg);color:var(--red)}
 [data-theme="dark"] .import-modal-box{background:var(--surface);color:var(--ink)}
+[data-theme="dark"] .import-preview h3{color:rgba(255,255,255,0.9)}
 [data-theme="dark"] .import-drop{border-color:var(--border)}
 @media(max-width:600px){
   .import-modal-box{padding:20px;width:100%}
@@ -1168,6 +1169,7 @@ tr.sat-mod{border-left:3px solid #d97706}
 .traj-driver-desc{font-size:11px;color:var(--ink-60);line-height:1.45}
 .traj-disclaimer{font-size:10px;color:var(--ink-35);text-align:center;padding:8px;background:rgba(184,146,42,0.06);border-radius:var(--r6);line-height:1.5;font-style:italic}
 [data-theme="dark"] .trajectory-card{background:var(--surface);border-color:var(--border)}
+[data-theme="dark"] .trajectory-title{color:rgba(255,255,255,0.9)}
 [data-theme="dark"] .traj-warning{background:rgba(139,26,26,0.15)}
 [data-theme="dark"] .traj-driver{background:var(--bg-deep);border-color:var(--border)}
 @media(max-width:600px){
@@ -1223,6 +1225,7 @@ tr.sat-mod{border-left:3px solid #d97706}
 .smart-fab:hover{background:var(--gold-light);box-shadow:0 6px 24px rgba(184,146,42,0.5);transform:translateY(-2px)}
 .smart-fab-icon{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0}
 
+[data-theme="dark"] .smart-recs-title{color:rgba(255,255,255,0.9)}
 [data-theme="dark"] .smart-recs-panel{background:var(--surface);border-color:var(--border)}
 [data-theme="dark"] .smart-rec-card{background:var(--bg-deep);border-color:var(--border)}
 [data-theme="dark"] .smart-rec-priority.high{color:var(--gold)}
@@ -1354,6 +1357,7 @@ tr.sat-mod{border-left:3px solid #d97706}
 
 /* Dark mode */
 [data-theme="dark"] .pulse-ai-panel{background:var(--surface);border-color:var(--border)}
+[data-theme="dark"] .pai-section-hd{color:rgba(255,255,255,0.9)}
 [data-theme="dark"] .pai-summary{background:var(--bg-deep)}
 [data-theme="dark"] .pai-theme{background:var(--bg-deep);border-color:var(--border)}
 [data-theme="dark"] .pai-quote{background:var(--bg-deep);border-color:var(--border)}
