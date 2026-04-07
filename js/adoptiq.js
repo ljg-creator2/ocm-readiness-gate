@@ -6,8 +6,13 @@ const SUPABASE_URL='https://yufehucjvviwanbulcok.supabase.co';
 const SUPABASE_ANON_KEY='sb_publishable_6YS9ifWHEU53f-H9svKJpg_paNqSFam';
 const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-function showLogin(){document.getElementById('v-login').classList.add('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
+function showLanding(){document.getElementById('v-landing').classList.add('active');document.getElementById('v-login').classList.remove('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
+function hideLanding(){document.getElementById('v-landing').classList.remove('active');}
+function showLogin(){hideLanding();document.getElementById('v-login').classList.add('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
 function hideLogin(){document.getElementById('v-login').classList.remove('active');}
+function landingToLogin(){hideLanding();showLogin();showSignin();}
+async function landingToDemo(){hideLanding();hideLogin();await loadDemoData();document.getElementById('v-portfolio').classList.add('active');}
+function landingBookWalkthrough(){window.open('mailto:info@providenceconsulting.com?subject=AdoptIQ%20Walkthrough%20Request&body=I%20am%20interested%20in%20a%20walkthrough%20of%20AdoptIQ.','_blank');}
 function hideAllLoginPanels(){['login-signin','login-signup','login-forgot','login-verify'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
 function showSignin(){hideAllLoginPanels();document.getElementById('login-signin').style.display='block';document.getElementById('login-err').textContent='';}
 function showSignup(){hideAllLoginPanels();document.getElementById('login-signup').style.display='block';document.getElementById('signup-err').textContent='';document.getElementById('signup-email').value='';document.getElementById('signup-pw').value='';document.getElementById('signup-confirm').value='';document.getElementById('pw-strength').textContent='';}
@@ -71,7 +76,7 @@ let currentUserId=null;
 async function signOut(){
   currentUserId=null;releases=[];
   await _supabase.auth.signOut();
-  showLogin();showSignin();
+  showLanding();
 }
 
 async function bootApp(){
@@ -156,7 +161,7 @@ async function initAuth(){
   if(session&&session.user){
     if(!session.user.email_confirmed_at){await _supabase.auth.signOut();return;}
     currentUserId=session.user.id;
-    hideLogin();await bootApp();updateAvatars();
+    hideLanding();hideLogin();await bootApp();updateAvatars();
     if(checkReadOnlyParam())enableReadOnly();
   }
 }
@@ -7578,7 +7583,7 @@ function exitDemo(){
   isDemoMode=false;
   setDemoMode(false);
   releases=[];
-  showLogin();showSignin();
+  showLanding();
 }
 
 async function ensureTeam(releaseId){

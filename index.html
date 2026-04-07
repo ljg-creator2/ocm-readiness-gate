@@ -20,9 +20,164 @@
 <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
 <!-- ══════════════════════════════════════════
+     LANDING PAGE
+══════════════════════════════════════════ -->
+<div id="v-landing" class="active">
+  <nav class="lp-nav">
+    <div class="lp-nav-i">
+      <div class="lp-nav-brand"><span class="lp-nav-logo">A</span><span class="lp-nav-name">AdoptIQ</span></div>
+      <div class="lp-nav-right">
+        <a href="#lp-features" class="lp-nav-link">Features</a>
+        <a href="#lp-how" class="lp-nav-link">How It Works</a>
+        <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme">&#9789;</button>
+        <button class="lp-nav-signin" onclick="landingToLogin()">Sign In</button>
+      </div>
+    </div>
+  </nav>
+
+  <section class="lp-hero">
+    <div class="lp-hero-i">
+      <div class="lp-hero-text">
+        <p class="lp-eyebrow">Adoption Intelligence Platform</p>
+        <h1 class="lp-h1">Stop Guessing.<br>Start Proving Readiness.</h1>
+        <p class="lp-hero-sub">AdoptIQ gives change management practitioners a single, evidence-based platform to track readiness, measure adoption, and prove results to leadership — replacing spreadsheets, slide decks, and gut feel with real data.</p>
+        <div class="lp-hero-ctas">
+          <button class="lp-btn-primary" onclick="landingToDemo()">Try Demo</button>
+          <button class="lp-btn-secondary" onclick="landingBookWalkthrough()">Book a Walkthrough</button>
+        </div>
+      </div>
+      <div class="lp-hero-img">
+        <div class="lp-screenshot"><div class="lp-screenshot-placeholder">Platform Screenshot</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-problem">
+    <div class="lp-section-i">
+      <h2 class="lp-h2">Change Management Has a Measurement Problem</h2>
+      <p class="lp-problem-text">70% of change initiatives fail to meet their objectives. The primary reason is not technology — it's people. Yet most OCM teams have no way to measure whether people are actually ready, prove that training investments are working, or show leadership the evidence behind a go/no-go recommendation.</p>
+    </div>
+  </section>
+
+  <section class="lp-features" id="lp-features">
+    <div class="lp-section-i" style="max-width:1100px">
+      <p class="lp-eyebrow">Capabilities</p>
+      <h2 class="lp-h2">Everything You Need to Prove Readiness</h2>
+      <div class="lp-feat-grid">
+        <div class="lp-feat-card">
+          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+          <h3 class="lp-feat-title">Readiness Gates</h3>
+          <p class="lp-feat-desc">Structured review checkpoints with evidence tracking at every stage. See exactly what's complete, what's at risk, and what's blocking go-live.</p>
+        </div>
+        <div class="lp-feat-card">
+          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
+          <h3 class="lp-feat-title">People & Trust Tracking</h3>
+          <p class="lp-feat-desc">Go beyond operational readiness. Track trust levels, engagement outcomes, anxiety signals, and emotional readiness across every affected group.</p>
+        </div>
+        <div class="lp-feat-card">
+          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
+          <h3 class="lp-feat-title">Training & Outcomes</h3>
+          <p class="lp-feat-desc">Measure whether training is actually changing behavior — not just whether people completed a course. Track from reaction through business results.</p>
+        </div>
+        <div class="lp-feat-card">
+          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <h3 class="lp-feat-title">Lifecycle Signals</h3>
+          <p class="lp-feat-desc">Capture the signals already happening in your project — requirements disputes, testing gaps, training delays — that predict adoption failure before go-live.</p>
+        </div>
+        <div class="lp-feat-card">
+          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+          <h3 class="lp-feat-title">Evidence-Based Decisions</h3>
+          <p class="lp-feat-desc">Every score traces to a data source. Every recommendation comes with proof points. When leadership asks "how do you know?" — you have the answer.</p>
+        </div>
+        <div class="lp-feat-card">
+          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <h3 class="lp-feat-title">Portfolio Intelligence</h3>
+          <p class="lp-feat-desc">See the full picture across every project in your portfolio. Know where OCM resources need to be concentrated and where change saturation is highest.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-how" id="lp-how">
+    <div class="lp-section-i" style="max-width:1000px">
+      <p class="lp-eyebrow">How It Works</p>
+      <h2 class="lp-h2">Three Steps to Measurable Readiness</h2>
+      <div class="lp-steps">
+        <div class="lp-step">
+          <div class="lp-step-num">1</div>
+          <h3 class="lp-step-title">Set Up</h3>
+          <p class="lp-step-desc">Define your releases, add projects, map the people affected, and configure your readiness checkpoints.</p>
+        </div>
+        <div class="lp-step-arrow">&#8594;</div>
+        <div class="lp-step">
+          <div class="lp-step-num">2</div>
+          <h3 class="lp-step-title">Track</h3>
+          <p class="lp-step-desc">Log evidence at every stage — training outcomes, trust levels, lifecycle signals, and engagement results.</p>
+        </div>
+        <div class="lp-step-arrow">&#8594;</div>
+        <div class="lp-step">
+          <div class="lp-step-num">3</div>
+          <h3 class="lp-step-title">Prove Results</h3>
+          <p class="lp-step-desc">Generate executive dashboards, go/no-go recommendations, and exportable reports backed by measurable evidence.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-video">
+    <div class="lp-section-i">
+      <p class="lp-eyebrow">See It In Action</p>
+      <h2 class="lp-h2">Watch the Walkthrough</h2>
+      <div class="lp-video-wrap">
+        <div class="lp-video-placeholder">
+          <div class="lp-play-btn">&#9654;</div>
+          <p>Video coming soon</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-credibility">
+    <div class="lp-section-i">
+      <h2 class="lp-h2">Built by Practitioners, for Practitioners</h2>
+      <p class="lp-cred-text">AdoptIQ was designed by change management professionals who have led adoption programs across government agencies, financial services, healthcare, and manufacturing. It embeds proven methodologies into a structured, measurable workflow.</p>
+      <div class="lp-method-logos">
+        <span class="lp-method-badge">ADKAR</span>
+        <span class="lp-method-badge">Kirkpatrick</span>
+        <span class="lp-method-badge">Kotter</span>
+        <span class="lp-method-badge">Bridges</span>
+        <span class="lp-method-badge">McKinsey 7S</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-final-cta">
+    <div class="lp-section-i">
+      <h2 class="lp-h2">Ready to Prove Readiness?</h2>
+      <p class="lp-final-sub">Start with a live demo or schedule a walkthrough with our team.</p>
+      <div class="lp-hero-ctas">
+        <button class="lp-btn-primary" onclick="landingToDemo()">Try Demo</button>
+        <button class="lp-btn-secondary" onclick="landingBookWalkthrough()">Book a Walkthrough</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="lp-footer">
+    <div class="lp-footer-i">
+      <div class="lp-footer-brand"><span class="lp-footer-logo">A</span><span class="lp-footer-name">Providence Consulting Firm</span></div>
+      <div class="lp-footer-links">
+        <button class="lp-footer-link" onclick="landingToLogin()">Sign In</button>
+        <button class="lp-footer-link" onclick="landingBookWalkthrough()">Contact</button>
+      </div>
+      <div class="lp-footer-copy">&copy; 2026 Providence Consulting Firm, LLC. All rights reserved.</div>
+    </div>
+  </footer>
+</div>
+
+<!-- ══════════════════════════════════════════
      LOGIN SCREEN
 ══════════════════════════════════════════ -->
-<div id="v-login" class="active">
+<div id="v-login">
   <div class="login-card">
     <div class="login-logo">A</div>
     <div class="login-title">AdoptIQ</div>
