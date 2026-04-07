@@ -867,7 +867,7 @@ function getSoWhat(metric,value,context){
     case'adoptionScore':{
       const v=parseInt(value)||0;
       if(v>=85)return'Champion — on trajectory to become a reference site. Continue reinforcement focus through go-live.';
-      if(v>=65)return'On Track — maintain current engagement cadence. Monitor stakeholder sentiment as go-live approaches.';
+      if(v>=65)return'On Track — maintain current engagement cadence. Monitor people and trust as go-live approaches.';
       if(v>=40){
         const weak=ctx.weakestComponent||'people and trust';
         const gate=ctx.nextGate||'the next checkpoint';
@@ -1204,7 +1204,7 @@ function renderPortfolio(){
       <div class="hero-h">Enterprise-Grade Change Readiness,<br>Measured and Managed</div>
       <div class="hero-sub">AdoptIQ integrates ADKAR, Kirkpatrick, and SDLC gate methodology into a single command center — giving OCM leaders the visibility to drive adoption at scale.</div>
       <div class="hero-features">
-        <div class="hero-feat"><div class="hero-feat-icon">&#9632;</div><div><div class="hero-feat-t">4-Gate Readiness Tracker</div><div class="hero-feat-d">Map training dependencies across the full SDLC lifecycle</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon">&#9632;</div><div><div class="hero-feat-t">4-Readiness Tracker</div><div class="hero-feat-d">Map training dependencies across the full SDLC lifecycle</div></div></div>
         <div class="hero-feat"><div class="hero-feat-icon">&#9650;</div><div><div class="hero-feat-t">${fwName()} Assessment Engine</div><div class="hero-feat-d">Score readiness dimensions across your chosen change framework</div></div></div>
         <div class="hero-feat"><div class="hero-feat-icon">&#9679;</div><div><div class="hero-feat-t">Adoption Risk Scoring</div><div class="hero-feat-d">Quantify stakeholder readiness with 6-factor analysis</div></div></div>
         <div class="hero-feat"><div class="hero-feat-icon">&#9733;</div><div><div class="hero-feat-t">Kirkpatrick Measurement</div><div class="hero-feat-d">L1–L4 evaluation framework built into every stakeholder group</div></div></div>
@@ -1296,7 +1296,7 @@ function generateAiqSuggestions(){
     suggestions.push('What is the overall readiness of my portfolio?');
   }
   if(totalFlags>0){
-    suggestions.push('Summarize all active risk flags');
+    suggestions.push('Summarize all active open issues');
   }
   if(allProjects.length>1){
     suggestions.push('Compare adoption scores across all projects');
@@ -1635,7 +1635,7 @@ function renderRelKPIs(){
     if(hr.score!==null&&hr.score<worstScore){worstScore=hr.score;worstName=hr.name+' ('+p.name+')';}
   });
   document.getElementById('r-kpi-rg').textContent=worstScore<101?worstName:'—';
-  document.getElementById('r-kpi-rg-s').textContent=worstScore<101?worstScore+'% adoption likelihood':'Stakeholder group';
+  document.getElementById('r-kpi-rg-s').textContent=worstScore<101?worstScore+'% readiness':'Stakeholder group';
 }
 function renderRelProjCards(){
   const r=getRel();if(!r)return;
@@ -1677,7 +1677,7 @@ function renderRelOverview(){
   // Gate bars per project
   const gp=document.getElementById('rel-ov-gates');
   const projs=(r.projects||[]);
-  if(!projs.length){gp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add projects to see gate readiness here.</p></div>';}
+  if(!projs.length){gp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add projects to see readiness here.</p></div>';}
   else{gp.innerHTML=projs.map(p=>{
     const gs=projGateScore(p);const col=gs===null?'var(--bg-dark)':gs>=80?'var(--green)':gs>=50?'var(--gold)':'var(--red)';
     return`<div class="ov-row"><div class="ov-name">${esc(p.name)}</div>
@@ -1688,7 +1688,7 @@ function renderRelOverview(){
   const fp=document.getElementById('rel-ov-flags');
   const allFlags=[];
   projs.forEach(p=>{GATE_DEFS.forEach(gate=>{gate.items.forEach((item,i)=>{if(p.gateState[gate.id+'_'+i]==='red')allFlags.push({gate:gate.label,item:item.text,proj:p.name});});});});
-  if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div>';}
+  if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active open issues at this time.</p></div>';}
   else{fp.innerHTML=allFlags.slice(0,5).map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.proj)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
 }
 
@@ -1816,7 +1816,7 @@ function getPFlags(){
 }
 function renderPFlags(){
   const f=getPFlags();const pan=document.getElementById('p-flags-panel');
-  if(!f.length){pan.innerHTML='<div class="nfs"><div class="nfs-rule"></div><p class="nfs-txt">No active risk flags. Mark gate items Incomplete in the Gate Tracker to generate flags.</p></div>';return;}
+  if(!f.length){pan.innerHTML='<div class="nfs"><div class="nfs-rule"></div><p class="nfs-txt">No active open issues. Mark gate items Incomplete in the Gate Tracker to generate flags.</p></div>';return;}
   pan.innerHTML=f.map((fl,i)=>`<div class="rf">
     <div class="rf-meta"><div class="rf-num">Risk Flag ${i+1} of ${f.length}</div><div class="rf-tag">${esc(fl.gate)} — ${esc(fl.sub)}</div></div>
     <div class="rf-row"><strong>Gap:</strong> ${esc(fl.item)}</div>
@@ -1892,7 +1892,7 @@ function addPSH(){
 function removePSH(id){const p=getProj();if(!p)return;p.stakeholders=p.stakeholders.filter(s=>s.id!==id);renderPSH();renderPKPIs();touch('proj');schedSave();}
 function renderPSH(){
   const p=getProj();if(!p)return;const wrap=document.getElementById('p-sh-wrap');
-  if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups to begin scoring adoption likelihood.</p></div>';renderPAHM();return;}
+  if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups to begin scoring readiness.</p></div>';renderPAHM();return;}
   const adkarR=p.adkarScores['R'];
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
   wrap.innerHTML=p.stakeholders.map(sh=>{
@@ -2209,7 +2209,7 @@ function renderPKPIs(){
   document.getElementById('p-kpi-grps').textContent=p.stakeholders.length;
   const hr=projHighestRisk(p);
   document.getElementById('p-kpi-rg').textContent=hr.name;
-  document.getElementById('p-kpi-rg-s').textContent=hr.score!==null?hr.score+'% adoption likelihood':'Stakeholder group';
+  document.getElementById('p-kpi-rg-s').textContent=hr.score!==null?hr.score+'% readiness':'Stakeholder group';
   updateProjGateScoreBand();
 }
 
@@ -2225,12 +2225,12 @@ function openScoreExplainer(){
   const shs=p.stakeholders||[];
   const dims=getActiveDims();
 
-  // Framework Assessment (25%)
+  // Change Readiness (25%)
   const fwScores=dims.map(d=>p.adkarScores?.[d.key]||3);
   const fwAvg=fwScores.length?fwScores.reduce((a,b)=>a+b,0)/fwScores.length:3;
   const fwPct=Math.round(fwAvg/5*100);
 
-  // Stakeholder Sentiment (20%) — multi-source: trust, anxiety, touchpoints, pulse
+  // People & Trust (20%) — multi-source: trust, anxiety, touchpoints, pulse
   const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>{
     const ps=p.pulseResults?.[sh.id]?.scores||{};
     return a+sentimentScore(sh,ps);
@@ -2255,7 +2255,7 @@ function openScoreExplainer(){
   const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
   const commsPct=Math.round(commsAvg/5*100);
 
-  // Risk Adjustment (15%)
+  // Open Issues (15%)
   const gs=projGateScore(p);
   const flagCount=getProjFlagCount(p);
   const riskPct=Math.max(0,Math.min(100, gs!==null ? Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)) : 50));
@@ -2305,7 +2305,7 @@ function openScoreExplainer(){
     </div>
 
     <h3>Formula Breakdown</h3>
-    <div class="score-composite-val">Composite Score: ${totalScore}%</div>
+    <div class="score-composite-val">Overall Score: ${totalScore}%</div>
     ${components.map(c=>`<div class="score-bar-row">
       <div class="score-bar-label">${c.label} ${dataSourceBadge(c.dsType)}</div>
       <div class="score-bar-track"><div class="score-bar-fill" style="width:${c.pct}%;background:${c.color}"><span class="score-bar-val">${c.pct}%</span></div></div>
@@ -3211,7 +3211,7 @@ function renderPOverview(){
   renderValueCase(p);
   renderProofPoints(p);
   const fp=document.getElementById('p-ov-flags');const flags=getPFlags().slice(0,4);
-  if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active risk flags at this time.</p></div>';}
+  if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active open issues at this time.</p></div>';}
   else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.sub)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
   renderPResources();
   renderProjCharts();
@@ -3279,7 +3279,7 @@ function getNextGate(p){
   for(let i=0;i<GATE_DEFS.length;i++){
     const g=GATE_DEFS[i];
     const reds=g.items.filter((_,j)=>p.gateState[g.id+'_'+j]==='red').length;
-    if(reds>0)return'Gate '+(i+1);
+    if(reds>0)return'Checkpoint '+(i+1);
   }
   return'the next gate';
 }
@@ -3288,7 +3288,7 @@ function getTopDrivers(p){
   const shs=p.stakeholders||[];
   const lowTrust=shs.filter(sh=>(sh.trust||3)<3).length;
   const parts=[];
-  if(flags>0)parts.push(`${flags} active risk flag${flags>1?'s':''}`);
+  if(flags>0)parts.push(`${flags} active open issue${flags>1?'s':''}`);
   if(lowTrust>0)parts.push(`${lowTrust} stakeholder group${lowTrust>1?'s':''} with low trust`);
   const lh=calcLifecycleHealth(p);
   const redSigs=lh.signals.filter(s=>s.strength==='red').length;
@@ -3646,7 +3646,7 @@ function updateLSReasons(phase,field,reason,checked){
 function renderProjCharts(){
   getActiveDims();
   const p=getProj();if(!p)return;
-  // Gate Readiness Donut
+  // Readiness Donut
   destroyChart('proj-gates');
   const gc=document.getElementById('chart-proj-gates');if(!gc)return;
   const gateData=GATE_DEFS.map(gate=>{
@@ -3758,7 +3758,7 @@ function renderExecAttention(){
   }});
   // Critical stakeholders
   releases.forEach(r=>{r.projects.forEach(p=>{p.stakeholders.forEach(sh=>{
-    const sc=adoptScore(sh.factors);if(sc<40)items.push({sev:'warn',label:`${esc(r.name)} › ${esc(p.name)}`,sub:`${esc(sh.name)} at ${sc}% adoption likelihood`});
+    const sc=adoptScore(sh.factors);if(sc<40)items.push({sev:'warn',label:`${esc(r.name)} › ${esc(p.name)}`,sub:`${esc(sh.name)} at ${sc}% readiness`});
   });});});
 
   if(!items.length){el.innerHTML='<div class="es" style="padding:30px"><p class="es-txt" style="color:var(--green);font-weight:600">&#10003; No critical items. Portfolio is healthy.</p></div>';return;}
@@ -3797,13 +3797,13 @@ function renderExecTopRisks(){
   const risks=[];
   releases.forEach(r=>{
     const d=daysTo(r.golive);const rl=relRollup(r);
-    if(d!==null&&d<0)risks.push({sev:3,text:`${esc(r.name)} is ${Math.abs(d)} days overdue with ${rl.gateScore||0}% gate readiness.`});
-    if(d!==null&&d>=0&&d<=14&&rl.gateScore!==null&&rl.gateScore<50)risks.push({sev:3,text:`${esc(r.name)} goes live in ${d} days but gate readiness is only ${rl.gateScore}%.`});
+    if(d!==null&&d<0)risks.push({sev:3,text:`${esc(r.name)} is ${Math.abs(d)} days overdue with ${rl.gateScore||0}% readiness.`});
+    if(d!==null&&d>=0&&d<=14&&rl.gateScore!==null&&rl.gateScore<50)risks.push({sev:3,text:`${esc(r.name)} goes live in ${d} days but readiness is only ${rl.gateScore}%.`});
     r.projects.forEach(p=>{
-      const fl=projFlagCount(p);if(fl>=3)risks.push({sev:2,text:`${esc(p.name)} (${esc(r.name)}) has ${fl} active risk flags requiring immediate attention.`});
+      const fl=projFlagCount(p);if(fl>=3)risks.push({sev:2,text:`${esc(p.name)} (${esc(r.name)}) has ${fl} active open issues requiring immediate attention.`});
       const uatEmpty=!(p.resources?.uat?.length&&p.resources.uat.some(e=>e.name));
       if(uatEmpty&&d!==null&&d<=30&&d>=0)risks.push({sev:2,text:`${esc(p.name)} has no UAT resources assigned with go-live in ${d} days.`});
-      p.stakeholders.forEach(sh=>{const sc=adoptScore(sh.factors);if(sc<40)risks.push({sev:1,text:`${esc(sh.name)} (${esc(p.name)}) at ${sc}% adoption likelihood — critical risk tier.`});});
+      p.stakeholders.forEach(sh=>{const sc=adoptScore(sh.factors);if(sc<40)risks.push({sev:1,text:`${esc(sh.name)} (${esc(p.name)}) at ${sc}% readiness — critical risk tier.`});});
     });
   });
   risks.sort((a,b)=>b.sev-a.sev);
@@ -5803,7 +5803,7 @@ function exportProjectSummary(){
   t+=`Overall Score: ${avg}/5\n\n`;
   ADKAR_DIMS.forEach(d=>{t+=`${d.word} (${d.letter}): ${p.adkarScores[d.key]}/5\n`;if(p.adkarNotes[d.key])t+=`  Notes: ${p.adkarNotes[d.key]}\n`;});
   t+='\n\nACTIVE RISK FLAGS ('+flags.length+')\n'+'─'.repeat(45)+'\n';
-  if(!flags.length){t+='No active risk flags.\n';}
+  if(!flags.length){t+='No active open issues.\n';}
   else{flags.forEach((fl,i)=>{t+=`\nFlag ${i+1}: ${fl.gate} — ${fl.sub}\n  Gap:          ${fl.item}\n  Consequence:  ${fl.consequence}\n`;const ow=fl.defOwner||(p.flagOwners&&p.flagOwners[fl.key])||'';const du=(p.flagDueDates&&p.flagDueDates[fl.key])||'';if(ow)t+=`  Owner:        ${ow}\n`;if(du)t+=`  Resolution:   ${du}\n`;});}
   t+='\n\nSTAKEHOLDER ASSESSMENT SUMMARY\n'+'─'.repeat(45)+'\n';
   if(!p.stakeholders.length){t+='No stakeholder groups scored.\n';}
@@ -5876,9 +5876,9 @@ function exportProjectPDF(){
       doc.setFont('helvetica','normal');doc.text(`${e.name}${e.contact?' — '+e.contact:''}`,55,y);y+=5;
     });});y+=4;
   }
-  // Gate Readiness
+  // Readiness
   y=pdfCheckPage(doc,y,w,h,pg,20);
-  y=pdfSection(doc,y,'Gate Readiness',w);
+  y=pdfSection(doc,y,'Readiness',w);
   GATE_DEFS.forEach(gate=>{
     y=pdfCheckPage(doc,y,w,h,pg,16);
     const tot=gate.items.length;const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
@@ -5913,7 +5913,7 @@ function exportProjectPDF(){
   const flags=getPFlags();
   y=pdfCheckPage(doc,y,w,h,pg,16);
   y=pdfSection(doc,y,`Active Risk Flags (${flags.length})`,w);
-  if(!flags.length){doc.setFontSize(8);doc.text('No active risk flags.',14,y);y+=6;}
+  if(!flags.length){doc.setFontSize(8);doc.text('No active open issues.',14,y);y+=6;}
   else{
     const flagRows=flags.map(f=>[`${f.gate} — ${f.sub}`,f.item,f.consequence]);
     doc.autoTable({startY:y,head:[['Gate','Gap','Consequence']],body:flagRows,
@@ -5973,7 +5973,7 @@ function exportReleasePDF(){
   // Per-project gate bars
   r.projects.forEach(p=>{
     y=pdfCheckPage(doc,y,w,h,pg,30);
-    y=pdfSection(doc,y,p.name+' — Gate Readiness',w);
+    y=pdfSection(doc,y,p.name+' — Readiness',w);
     GATE_DEFS.forEach(gate=>{
       y=pdfCheckPage(doc,y,w,h,pg,12);
       const tot=gate.items.length;const grn=gate.items.filter((_,i)=>p.gateState[gate.id+'_'+i]==='green').length;
@@ -6033,7 +6033,7 @@ function exportHandoffPDF(){
   doc.text(`Portfolio Status:  ${gCnt} On Track  ·  ${aCnt} At Risk  ·  ${rCnt} Critical`,mg,y);y+=7;
   const scores=releases.map(r=>relRollup(r).gateScore).filter(s=>s!==null);
   const avgGate=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):0;
-  doc.text(`Average Gate Readiness: ${avgGate}%`,mg,y);y+=7;
+  doc.text(`Average Readiness: ${avgGate}%`,mg,y);y+=7;
   const tFlags=releases.reduce((s,r)=>s+relRollup(r).flags,0);
   doc.text(`Total Risk Flags: ${tFlags}`,mg,y);y+=12;
   // Narratives
@@ -6067,7 +6067,7 @@ function exportHandoffPDF(){
     doc.text(r.name,mg,y);y+=8;
     const rl=relRollup(r);const rg=relRAG(r);
     doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(60,60,60);
-    doc.text(`Status: ${rg.label}   |   Gate Readiness: ${rl.gateScore!==null?rl.gateScore+'%':'—'}   |   Go-Live: ${r.golive?fmtDate(r.golive):'Not set'}`,mg,y);y+=10;
+    doc.text(`Status: ${rg.label}   |   Readiness: ${rl.gateScore!==null?rl.gateScore+'%':'—'}   |   Go-Live: ${r.golive?fmtDate(r.golive):'Not set'}`,mg,y);y+=10;
     // Project table
     if(r.projects.length){
       y=pdfSection(doc,y,'Projects',w);
@@ -6084,7 +6084,7 @@ function exportHandoffPDF(){
     r.projects.forEach(p=>{
       // Gate readiness bars
       y=pdfCheckPage(doc,y,w,h,pg,30);
-      y=pdfSection(doc,y,p.name+' — Gate Readiness',w);
+      y=pdfSection(doc,y,p.name+' — Readiness',w);
       GATE_DEFS.forEach(gate=>{
         y=pdfCheckPage(doc,y,w,h,pg,12);
         const tot=gate.items.length;const naC=gate.items.filter((_,i)=>(p.gateState||{})[gate.id+'_'+i]==='na').length;
@@ -6421,8 +6421,8 @@ function genStakeholderAnalysis(aiNarrative,audience){
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   let execText='This analysis covers '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+' across the '+p.name+' initiative. ';
-  if(highRiskGroup)execText+='The highest-risk group is '+highRiskGroup.name+' at '+adoptScore(highRiskGroup.factors)+'% adoption likelihood. ';
-  execText+='The average adoption likelihood across all groups is '+avgAdopt+'%, placing the overall engagement posture at '+overallPosture+'. ';
+  if(highRiskGroup)execText+='The highest-risk group is '+highRiskGroup.name+' at '+adoptScore(highRiskGroup.factors)+'% readiness. ';
+  execText+='The average readiness across all groups is '+avgAdopt+'%, placing the overall engagement posture at '+overallPosture+'. ';
   if(coalition.resistant>0)execText+=coalition.resistant+' group'+(coalition.resistant!==1?'s show':' shows')+' active resistance indicators requiring immediate intervention. ';
   if(coalition.champion>0)execText+=coalition.champion+' group'+(coalition.champion!==1?'s qualify':' qualifies')+' as potential Change Champion'+(coalition.champion!==1?'s':'')+' and should be leveraged for peer advocacy.';
   const execLines=doc.splitTextToSize(execText,w-28);
@@ -6569,7 +6569,7 @@ function genStakeholderAnalysis(aiNarrative,audience){
   y=pdfCheckPage(doc,y,w,h,pg,50);
   y=pdfSection(doc,y,'5. Coalition Map Summary',w);
   doc.setFontSize(8);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
-  const coalNarr='The coalition composition below reflects the distribution of stakeholder groups by their adoption likelihood. A healthy change coalition requires a critical mass of Champions and Supporters. '+
+  const coalNarr='The coalition composition below reflects the distribution of stakeholder groups by their readiness. A healthy change coalition requires a critical mass of Champions and Supporters. '+
     (coalition.resistant+coalition.fence>coalition.champion+coalition.supporter?
     'Currently, the balance tips toward resistance and ambivalence, indicating that sponsor engagement and targeted interventions must be prioritized before go-live.':
     'The current balance favors adoption, though continued engagement is essential to prevent backsliding among Supporters and Fence-Sitters.');
@@ -7026,14 +7026,14 @@ function genResistancePlan(aiNarrative,audience){
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   const resistPosture=critSH.length>=3||critGaps.length>0?'critical':critSH.length>=1?'elevated':'manageable';
   let resistExec='The resistance posture for '+p.name+' is currently assessed as '+resistPosture+'. ';
-  resistExec+='Of '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+', '+critSH.length+' exhibit adoption likelihood below 60%, indicating active or emerging resistance. ';
-  if(flags.length)resistExec+=flags.length+' active risk flag'+(flags.length!==1?'s require':' requires')+' attention. ';
+  resistExec+='Of '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+', '+critSH.length+' exhibit readiness below 60%, indicating active or emerging resistance. ';
+  if(flags.length)resistExec+=flags.length+' active open issue'+(flags.length!==1?'s require':' requires')+' attention. ';
   if(critGaps.length)resistExec+=critGaps.length+' critical implementation gap'+(critGaps.length!==1?'s compound':' compounds')+' the resistance risk. ';
   resistExec+=fwShort()+' average is '+adkar+'/5'+(adkar<3?', which is below the minimum threshold for proceeding and signals systemic readiness gaps':'')+'. ';
   // Priority actions
   const priorities=[];
   if(critSH.length)priorities.push('Deploy targeted interventions for '+critSH.length+' at-risk group'+(critSH.length!==1?'s':''));
-  if(flags.length)priorities.push('Resolve '+flags.length+' active risk flag'+(flags.length!==1?'s':''));
+  if(flags.length)priorities.push('Resolve '+flags.length+' active open issue'+(flags.length!==1?'s':''));
   if(adkar<3)priorities.push('Address '+fwShort()+' gaps through intensive stakeholder engagement');
   if(priorities.length)resistExec+='Recommended priority actions: '+priorities.join('; ')+'.';
   const resistExecLines=doc.splitTextToSize(resistExec,w-28);doc.text(resistExecLines,mg,y+3);y+=3+resistExecLines.length*4+6;
@@ -7276,8 +7276,8 @@ function genReadinessRec(aiNarrative,audience){
   if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
-  let recExec='Based on a comprehensive analysis of gate readiness ('+(gate||0)+'%), '+fwShort()+' assessment ('+adkar+'/5), '+
-    shs.length+' stakeholder group'+(shs.length!==1?'s':'')+', '+flags.length+' active risk flag'+(flags.length!==1?'s':'')+', and '+
+  let recExec='Based on a comprehensive analysis of readiness ('+(gate||0)+'%), '+fwShort()+' assessment ('+adkar+'/5), '+
+    shs.length+' stakeholder group'+(shs.length!==1?'s':'')+', '+flags.length+' active open issue'+(flags.length!==1?'s':'')+', and '+
     gaps.length+' implementation gap'+(gaps.length!==1?'s':'')+', ';
   if(rec.status==='READY')recExec+='the recommendation is to PROCEED with the '+p.name+' go-live as planned. All readiness criteria are met, and the organization demonstrates sufficient preparedness for a successful transition. Continued monitoring through pulse surveys and 30/60/90 day reviews is recommended.';
   else if(rec.status==='NOT_READY')recExec+='the recommendation is to DELAY the '+p.name+' go-live. Critical readiness gaps exist that, if unaddressed, present substantial risk of adoption failure. A structured remediation plan with defined milestones is required before reassessment.';
@@ -7302,7 +7302,7 @@ function genReadinessRec(aiNarrative,audience){
   y=pdfCheckPage(doc,y,w,h,pg,50);
   y=pdfSection(doc,y,'3. Evidence Dashboard',w);
   const metrics=[
-    ['Gate Readiness',(gate||0)+'%',gate>=80?'Pass':gate>=50?'Marginal':'Fail'],
+    ['Readiness',(gate||0)+'%',gate>=80?'Pass':gate>=50?'Marginal':'Fail'],
     [fwShort()+' Average',adkar+'/5',adkar>=3.5?'Pass':adkar>=2.5?'Marginal':'Fail'],
     ['Active Risk Flags',flags.length+'',flags.length===0?'Pass':flags.length<=2?'Marginal':'Fail'],
     ['Open Gaps',gaps.length+' ('+critGaps.length+' critical)',critGaps.length===0?'Pass':'Fail'],
@@ -7339,12 +7339,12 @@ function genReadinessRec(aiNarrative,audience){
     const condNarr='The following conditions must be resolved prior to or immediately following go-live. Each condition represents a gap that, if unaddressed, increases the probability of adoption failure.';
     const condLines=doc.splitTextToSize(condNarr,w-28);doc.text(condLines,mg,y+2);y+=2+condLines.length*4+4;
     const conditions=[];
-    if(flags.length)conditions.push(['Resolve Risk Flags','Resolve '+flags.length+' active risk flag'+(flags.length!==1?'s':'')+' identified in the gate review','Before go-live','Project team']);
+    if(flags.length)conditions.push(['Resolve Risk Flags','Resolve '+flags.length+' active open issue'+(flags.length!==1?'s':'')+' identified in the gate review','Before go-live','Project team']);
     if(adkar<3.5){
       const lowDims=dims.filter(d=>(p.adkarScores?.[d.key]||3)<3);
       if(lowDims.length)conditions.push(['Improve '+fwShort()+' Scores','Raise '+lowDims.map(d=>d.word).join(', ')+' score'+(lowDims.length!==1?'s':'')+' to minimum 3/5','Before go-live','OCM Lead']);
     }
-    if(gate<80)conditions.push(['Complete Gate Items','Advance gate readiness from '+(gate||0)+'% to minimum 80%','Before go-live','Project Manager']);
+    if(gate<80)conditions.push(['Complete Gate Items','Advance readiness from '+(gate||0)+'% to minimum 80%','Before go-live','Project Manager']);
     const atRisk=shs.filter(sh=>adoptScore(sh.factors)<60);
     if(atRisk.length)conditions.push(['Address At-Risk Groups','Deploy targeted interventions for '+atRisk.map(sh=>sh.name).join(', '),'Before go-live','OCM Lead']);
     if(kirkPct<75)conditions.push(['Complete Evaluation Design','Advance Kirkpatrick evaluation design from '+kirkPct+'% to 75%+ completion','Before go-live','Training Lead']);
@@ -7368,7 +7368,7 @@ function genReadinessRec(aiNarrative,audience){
     if(rec.status==='READY')timeNarr+='Based on current readiness scores, the timeline is achievable. No adjustments recommended.';
     else if(rec.status==='NOT_READY'){
       const remedWeeks=Math.max(4,Math.ceil((flags.length*5+critGaps.length*10)/5));
-      timeNarr+='Based on the volume of unresolved gaps and risk flags, a minimum of '+remedWeeks+' additional weeks is recommended for remediation before re-assessment. ';
+      timeNarr+='Based on the volume of unresolved gaps and open issues, a minimum of '+remedWeeks+' additional weeks is recommended for remediation before re-assessment. ';
       timeNarr+='A revised go-live target of approximately '+(remedWeeks)+' weeks from today would allow adequate time to address critical barriers.';
     }else{
       timeNarr+='The timeline is tight given the conditions that must be met. ';
@@ -7417,7 +7417,7 @@ function genReadinessRec(aiNarrative,audience){
     doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
     const nrActions=[];
     if(critGaps.length)nrActions.push('Resolve '+critGaps.length+' critical implementation gap'+(critGaps.length!==1?'s':'')+' -- these are blocking adoption readiness');
-    if(flags.length)nrActions.push('Address '+flags.length+' active risk flag'+(flags.length!==1?'s':'')+' through targeted remediation sprints');
+    if(flags.length)nrActions.push('Address '+flags.length+' active open issue'+(flags.length!==1?'s':'')+' through targeted remediation sprints');
     if(adkar<2.5)nrActions.push('Conduct intensive stakeholder engagement to raise '+fwShort()+' scores above 2.5/5 minimum threshold');
     const atRisk=shs.filter(sh=>adoptScore(sh.factors)<40);
     if(atRisk.length)nrActions.push('Deploy resistance management interventions for critical-risk groups: '+atRisk.map(sh=>sh.name).join(', '));
@@ -7459,11 +7459,11 @@ function genReadinessRec(aiNarrative,audience){
   const gsP=projGateScore(p);const flagsP=getProjFlagCount(p);
   const riskPctP=Math.max(0,Math.min(100,gsP!==null?Math.round(gsP*(flagsP===0?1:flagsP<=2?0.8:0.5)):50));
   compScores.push({label:fwName()+' Assessment',score:fwPctP,weight:'25%',ds:getDataSourceType('framework',p)});
-  compScores.push({label:'Stakeholder Sentiment',score:sentPctP,weight:'20%',ds:getDataSourceType('sentiment',p)});
-  compScores.push({label:'Training Effectiveness',score:trainPctP,weight:'20%',ds:getDataSourceType('training',p)});
-  compScores.push({label:'Lifecycle Health',score:lcPctP,weight:'10%',ds:getDataSourceType('lifecycle',p)});
-  compScores.push({label:'Communications',score:commsPctP,weight:'10%',ds:getDataSourceType('comms',p)});
-  compScores.push({label:'Risk Adjustment',score:riskPctP,weight:'15%',ds:getDataSourceType('risk',p)});
+  compScores.push({label:'People & Trust',score:sentPctP,weight:'20%',ds:getDataSourceType('sentiment',p)});
+  compScores.push({label:'Training & Preparedness',score:trainPctP,weight:'20%',ds:getDataSourceType('training',p)});
+  compScores.push({label:'Project Health',score:lcPctP,weight:'10%',ds:getDataSourceType('lifecycle',p)});
+  compScores.push({label:'Communication',score:commsPctP,weight:'10%',ds:getDataSourceType('comms',p)});
+  compScores.push({label:'Open Issues',score:riskPctP,weight:'15%',ds:getDataSourceType('risk',p)});
   doc.autoTable({startY:y,margin:{left:mg,right:mg},headStyles:{fillColor:[12,31,63],fontSize:7,cellPadding:3},bodyStyles:{fontSize:7,cellPadding:2.5},
     head:[['Component','Score','Weight','Data Source']],
     body:compScores.map(c=>[c.label,c.score+'%',c.weight,c.ds])
@@ -7764,7 +7764,7 @@ async function loadDemoData(){
   p1a.stakeholders[0].touchpoints=[{id:uid(),date:'2025-11-20',type:'Demo',description:'EHR order entry demo for physician champions',trustImpact:'Increased'},{id:uid(),date:'2026-01-15',type:'Q&A Session',description:'Open Q&A — productive but surfaced verbal order concern',trustImpact:'No Change'}];
   p1a.stakeholders[0].anxietyIndicators={whatDoesThisMeanFreq:3,extraReviewCycles:1,escalations:0,attendanceDrop:false};
   p1a.valueCase={statement:'Transition from paper-based charting to integrated electronic health records to improve clinical documentation accuracy and patient safety.',requestor:'Chief Medical Officer',impactLevel:'High',successCriteria:[{id:uid(),criterion:'Documentation compliance above 95%',metStatus:null},{id:uid(),criterion:'Zero clinical safety events attributed to EHR transition',metStatus:null},{id:uid(),criterion:'Physician satisfaction above 3.5/5',metStatus:null}],unintendedConsequences:''};
-  p1a.proofPoints=[{id:uid(),what:'Physician champion engagement exceeded target — 8 of 10 department champions actively participating in design reviews',when:'2025-12-01',proves:'Strong coalition building. Physician buy-in is developing through peer involvement rather than top-down mandates.',source:'Meeting Notes',dimensionTags:['Stakeholder Sentiment','Framework Assessment']}];
+  p1a.proofPoints=[{id:uid(),what:'Physician champion engagement exceeded target — 8 of 10 department champions actively participating in design reviews',when:'2025-12-01',proves:'Strong coalition building. Physician buy-in is developing through peer involvement rather than top-down mandates.',source:'Meeting Notes',dimensionTags:['People & Trust','Change Readiness']}];
   r1.projects=[p1a,p1b];
   releases.push(r1);
 
@@ -7844,11 +7844,11 @@ async function loadDemoData(){
   }
   // Proof points
   p3a.proofPoints=[
-    {id:uid(),what:'UAT participation dropped from 78% to 38% between testing rounds 2 and 3',when:'2026-01-15',proves:'User engagement declining as testing fatigue sets in. Remaining testers may not represent real-world usage patterns.',source:'Attendance Record',dimensionTags:['Stakeholder Sentiment','Lifecycle Health']},
-    {id:uid(),what:'3 separate operator groups asked "what does this mean?" about the same production status field during walkthrough sessions',when:'2026-01-22',proves:'Communication gap on this functionality. Field label and purpose unclear to end users.',source:'Facilitation Notes',dimensionTags:['Communications','Training Effectiveness']},
-    {id:uid(),what:'Leadership lab attendance was 100% for session 1 and 55% for session 2',when:'2026-02-01',proves:'Initial interest but declining commitment. Follow-up engagement strategy needed.',source:'Attendance Record',dimensionTags:['Stakeholder Sentiment']},
-    {id:uid(),what:'Training start date moved 3 times in 6 weeks due to UAT delays and training environment defects',when:'2026-02-10',proves:'Schedule instability compressing end-user preparation window. L3 measurement reliability at risk.',source:'Meeting Notes',dimensionTags:['Lifecycle Health','Training Effectiveness']},
-    {id:uid(),what:'4 workaround requests submitted during design review — batch override, manual quality hold, shift handoff, downtime entry',when:'2025-12-20',proves:'Operators do not believe the system will meet their needs in 4 documented workflow areas.',source:'Meeting Notes',dimensionTags:['Stakeholder Sentiment','Lifecycle Health']}
+    {id:uid(),what:'UAT participation dropped from 78% to 38% between testing rounds 2 and 3',when:'2026-01-15',proves:'User engagement declining as testing fatigue sets in. Remaining testers may not represent real-world usage patterns.',source:'Attendance Record',dimensionTags:['People & Trust','Project Health']},
+    {id:uid(),what:'3 separate operator groups asked "what does this mean?" about the same production status field during walkthrough sessions',when:'2026-01-22',proves:'Communication gap on this functionality. Field label and purpose unclear to end users.',source:'Facilitation Notes',dimensionTags:['Communication','Training & Preparedness']},
+    {id:uid(),what:'Leadership lab attendance was 100% for session 1 and 55% for session 2',when:'2026-02-01',proves:'Initial interest but declining commitment. Follow-up engagement strategy needed.',source:'Attendance Record',dimensionTags:['People & Trust']},
+    {id:uid(),what:'Training start date moved 3 times in 6 weeks due to UAT delays and training environment defects',when:'2026-02-10',proves:'Schedule instability compressing end-user preparation window. L3 measurement reliability at risk.',source:'Meeting Notes',dimensionTags:['Project Health','Training & Preparedness']},
+    {id:uid(),what:'4 workaround requests submitted during design review — batch override, manual quality hold, shift handoff, downtime entry',when:'2025-12-20',proves:'Operators do not believe the system will meet their needs in 4 documented workflow areas.',source:'Meeting Notes',dimensionTags:['People & Trust','Project Health']}
   ];
   r3.projects=[p3a];
   releases.push(r3);
@@ -7945,9 +7945,9 @@ async function loadDemoData(){
   };
   // Proof points — success evidence
   p6a.proofPoints=[
-    {id:uid(),what:'Parallel payroll run produced zero-variance results against legacy system for 2 consecutive cycles',when:'2025-12-15',proves:'System accuracy validated before go-live. Quantitative evidence of readiness.',source:'System Data',dimensionTags:['Lifecycle Health','Training Effectiveness']},
-    {id:uid(),what:'100% of payroll specialists completed all training modules with a 95% average assessment score',when:'2026-01-10',proves:'Strong knowledge transfer — L2 metrics confirm readiness.',source:'System Data',dimensionTags:['Training Effectiveness']},
-    {id:uid(),what:'Post go-live support tickets averaged 12 per week — below the 20-ticket threshold',when:'2026-03-01',proves:'Healthy adoption. Users are self-sufficient with minimal support needs.',source:'Defect Log',dimensionTags:['Lifecycle Health']}
+    {id:uid(),what:'Parallel payroll run produced zero-variance results against legacy system for 2 consecutive cycles',when:'2025-12-15',proves:'System accuracy validated before go-live. Quantitative evidence of readiness.',source:'System Data',dimensionTags:['Project Health','Training & Preparedness']},
+    {id:uid(),what:'100% of payroll specialists completed all training modules with a 95% average assessment score',when:'2026-01-10',proves:'Strong knowledge transfer — L2 metrics confirm readiness.',source:'System Data',dimensionTags:['Training & Preparedness']},
+    {id:uid(),what:'Post go-live support tickets averaged 12 per week — below the 20-ticket threshold',when:'2026-03-01',proves:'Healthy adoption. Users are self-sufficient with minimal support needs.',source:'Defect Log',dimensionTags:['Project Health']}
   ];
   r6.projects=[p6a];
   releases.push(r6);
@@ -8329,7 +8329,7 @@ async function renderTrendCharts(){
   };
   const kpiEl=document.getElementById('trend-kpis');
   if(kpiEl)kpiEl.innerHTML=`
-    <div class="trend-kpi"><div class="trend-kpi-label">Gate Readiness</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,'%',false)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">Readiness</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,'%',false)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">Risk Flags</div><div class="trend-kpi-val">${curFlags!=null?curFlags:'—'}</div>${deltaHtml(flagDelta,'',true)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">${fwShort()} Score</div><div class="trend-kpi-val">${curAdkar!=null?curAdkar+'/5':'—'}</div>${deltaHtml(adkarDelta,'',false)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">Weeks Tracked</div><div class="trend-kpi-val">${recent.length}</div><span class="trend-delta trend-neutral">${labels[0]} — ${labels[labels.length-1]}</span></div>
@@ -8339,8 +8339,8 @@ async function renderTrendCharts(){
   const insights=[];
   // Gate readiness trajectory
   if(gateDelta!==null){
-    if(gateDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`Portfolio gate readiness improved by <strong>${gateDelta}%</strong> this week, now at <strong>${curGate}%</strong>.`});
-    else if(gateDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`Portfolio gate readiness dropped by <strong>${Math.abs(gateDelta)}%</strong> this week to <strong>${curGate}%</strong> — review incomplete gates.`});
+    if(gateDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`Portfolio readiness improved by <strong>${gateDelta}%</strong> this week, now at <strong>${curGate}%</strong>.`});
+    else if(gateDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`Portfolio readiness dropped by <strong>${Math.abs(gateDelta)}%</strong> this week to <strong>${curGate}%</strong> — review incomplete gates.`});
     else insights.push({icon:'—',cls:'neutral',text:`Gate readiness held steady at <strong>${curGate}%</strong>.`});
   }
   // Gate vs target
@@ -8370,8 +8370,8 @@ async function renderTrendCharts(){
         if(d<worstDelta){worstDelta=d;worstName=lr.name;}
       }
     });
-    if(bestDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`<strong>${esc(bestName)}</strong> improved the most this week (+${bestDelta}% gate readiness).`});
-    if(worstDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`<strong>${esc(worstName)}</strong> declined this week (${worstDelta}% gate readiness) — may need intervention.`});
+    if(bestDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`<strong>${esc(bestName)}</strong> improved the most this week (+${bestDelta}% readiness).`});
+    if(worstDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`<strong>${esc(worstName)}</strong> declined this week (${worstDelta}% readiness) — may need intervention.`});
   }
 
   const insEl=document.getElementById('trend-insights');
@@ -8398,14 +8398,14 @@ async function renderTrendCharts(){
   }
 
   // ── Charts ──
-  // Gate Readiness with 80% goal line
+  // Readiness with 80% goal line
   destroyChart('trend-gate');
   const gc=document.getElementById('chart-trend-gate');
   if(gc){
     const goalLine=new Array(labels.length).fill(80);
     chartInstances['trend-gate']=new Chart(gc,{type:'line',data:{
       labels,datasets:[
-        {label:'Gate Readiness %',data:gateScores,borderColor:CHART_GREEN,backgroundColor:'rgba(29,104,64,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GREEN,borderWidth:2},
+        {label:'Readiness %',data:gateScores,borderColor:CHART_GREEN,backgroundColor:'rgba(29,104,64,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GREEN,borderWidth:2},
         {label:'80% Target',data:goalLine,borderColor:'rgba(184,146,42,0.6)',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
       ]
     },options:{responsive:true,maintainAspectRatio:false,
