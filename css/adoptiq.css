@@ -295,6 +295,8 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--ink);font-size:1
 .btn-open-sm:hover{background:#1a3260}
 .btn-del-proj{font-family:var(--font-b);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;background:transparent;color:var(--ink-35);border:1px solid var(--border);padding:6px 10px;border-radius:var(--rs);cursor:pointer;transition:all .15s}
 .btn-del-proj:hover{border-color:var(--red);color:var(--red)}
+.btn-move-proj{font-family:var(--font-b);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;background:transparent;color:var(--ink-35);border:1px solid var(--border);padding:6px 10px;border-radius:var(--rs);cursor:pointer;transition:all .15s}
+.btn-move-proj:hover{border-color:var(--navy);color:var(--navy)}
 
 /* Release training scope */
 .scope-block{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r6);padding:16px 20px;margin-bottom:20px;transition:background .25s,border-color .25s}

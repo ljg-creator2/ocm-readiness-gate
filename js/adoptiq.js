@@ -456,6 +456,7 @@ let activeProjId=null;
 let noteKey=null;
 let delRelTarget=null;
 let delProjTarget=null;
+let moveProjTarget=null;
 let saveTimer=null;
 let saveIndTimer=null;
 let theme=localStorage.getItem('ocm_theme')||'light';
@@ -1111,6 +1112,8 @@ function openProject(pid){
   document.getElementById('p-status').value=p.status||'Not Started';
   renderProjAgencyChips();
   updateTRButtons();
+  const mvBtn=document.getElementById('ib-move-proj');
+  if(mvBtn)mvBtn.style.display=releases.length>1?'':'none';
   showView('v-project');
   document.querySelectorAll('#v-project .tab-sec').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('#v-project .nav-btn').forEach(b=>b.classList.remove('active'));
@@ -1221,6 +1224,32 @@ function confirmDelProject(){
   closeModal('del-proj-modal');delProjTarget=null;touch('rel');saveData();renderRelView();
 }
 
+// Move Project to Another Release
+function openMoveProject(pid,name){
+  moveProjTarget=pid;
+  document.getElementById('move-proj-sub').textContent=`Move "${name}" to a different release.`;
+  const sel=document.getElementById('move-proj-select');
+  sel.innerHTML=releases.filter(r=>r.id!==activeRelId).map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  openModal('move-proj-modal');
+  setTimeout(()=>sel.focus(),50);
+}
+function confirmMoveProject(){
+  const targetRelId=parseInt(document.getElementById('move-proj-select').value);
+  if(!targetRelId)return;
+  const srcRel=getRel();if(!srcRel)return;
+  const idx=srcRel.projects.findIndex(p=>p.id===moveProjTarget);
+  if(idx<0)return;
+  const tgtRel=releases.find(r=>r.id===targetRelId);
+  if(!tgtRel)return;
+  const [proj]=srcRel.projects.splice(idx,1);
+  tgtRel.projects.push(proj);
+  logAudit('project_moved','project',proj.name,{fromRelease:srcRel.name,toRelease:tgtRel.name});
+  closeModal('move-proj-modal');moveProjTarget=null;
+  touch('rel');saveData();
+  showSaveIndicator('Moved to '+tgtRel.name);
+  openRelease(targetRelId);
+}
+
 // New proj agency chips
 function addNewProjAgency(){
   const inp=document.getElementById('new-p-agency-inp');const val=inp.value.trim();if(!val)return;
@@ -1301,7 +1330,8 @@ function renderPortfolio(){
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('sat-sec').style.display=releases.length>=1?'block':'none';
-  renderSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
+  document.getElementById('res-sat-sec').style.display=releases.length>=1?'block':'none';
+  renderSaturationMap();renderResourceSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
   if(isReadOnly)applyReadOnlyRestrictions();
 }
 
@@ -1720,7 +1750,7 @@ function renderRelProjCards(){
           <span class="status-chip ${st.cls}">${st.label}</span>
           <div class="pc-acts">
             <button class="btn-del-proj" onclick="event.stopPropagation();openDelProject(${p.id},'${esc(p.name).replace(/'/g,"\\'")}')">Remove</button>
-            <button class="btn-open-sm" onclick="event.stopPropagation();openProject(${p.id})">Open</button>
+            ${releases.length>1?`<button class="btn-move-proj" onclick="event.stopPropagation();openMoveProject(${p.id},'${esc(p.name).replace(/'/g,"\\'")}')">Move</button>`:''}<button class="btn-open-sm" onclick="event.stopPropagation();openProject(${p.id})">Open</button>
           </div>
         </div>
       </div>
@@ -4689,6 +4719,89 @@ function renderSaturationMap(){
     // Restore cached forecast if available
     if(hasSaturated&&window._sfCache){renderSFForecastResult(window._sfCache);}
   }
+}
+
+// ════════════════════════════════════════════════════════
+// FEATURE: TRAINING RESOURCE SATURATION
+// ════════════════════════════════════════════════════════
+function renderResourceSaturationMap(){
+  const el=document.getElementById('res-sat-map');if(!el)return;
+  const TRAIN_ROLES=[{key:'ocm_train',label:'OCM Training',abbr:'Train'},{key:'ocm_impl',label:'OCM Implementation',abbr:'Impl'}];
+  // Build person map across all projects, training roles only
+  const personMap={};
+  releases.forEach(r=>{
+    (r.projects||[]).forEach(p=>{
+      TRAIN_ROLES.forEach(role=>{
+        (p.resources?.[role.key]||[]).forEach(res=>{
+          const nm=(res.name||'').trim();if(!nm)return;
+          const norm=nm.toLowerCase();
+          if(!personMap[norm])personMap[norm]={name:nm,assignments:[],projIds:new Set()};
+          personMap[norm].assignments.push({roleKey:role.key,roleLabel:role.label,roleAbbr:role.abbr,projId:p.id,projName:p.name,relName:r.name,relId:r.id});
+          personMap[norm].projIds.add(p.id);
+        });
+      });
+    });
+  });
+  const people=Object.values(personMap).map(p=>({...p,projectCount:p.projIds.size})).sort((a,b)=>b.projectCount-a.projectCount||a.name.localeCompare(b.name));
+  // Summary stat
+  const summaryEl=document.getElementById('res-sat-summary-stat');
+  if(!people.length){
+    if(summaryEl)summaryEl.textContent='No training resources found';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No training resources assigned. Add OCM Training or OCM Implementation resources to projects to see saturation data.</div>';return;
+  }
+  const high=people.filter(p=>p.projectCount>=3).length;
+  const mod=people.filter(p=>p.projectCount===2).length;
+  if(summaryEl){
+    const parts=[];
+    if(high)parts.push(high+' high saturation');
+    if(mod)parts.push(mod+' moderate');
+    parts.push(people.length+' total resources');
+    summaryEl.textContent=parts.join(' · ');
+  }
+  // Columns = all projects across portfolio
+  const allProjs=[];const projSet=new Set();
+  releases.forEach(r=>(r.projects||[]).forEach(p=>{if(!projSet.has(p.id)){projSet.add(p.id);allProjs.push({id:p.id,name:p.name,relName:r.name,relId:r.id});}}));
+  // Build table
+  let h='<div class="sat-alert-strip">';
+  h+='<div class="sat-alert-item"><span class="sat-alert-val'+(high?' sev-crit':'')+'">'+high+'</span><span class="sat-alert-lbl">High Saturation (3+)</span></div>';
+  h+='<div class="sat-alert-item"><span class="sat-alert-val'+(mod?' sev-high':'')+'">'+mod+'</span><span class="sat-alert-lbl">Moderate (2 projects)</span></div>';
+  h+='<div class="sat-alert-item"><span class="sat-alert-val">'+people.length+'</span><span class="sat-alert-lbl">Total Resources</span></div>';
+  h+='</div>';
+  h+='<div class="phm-scroll"><table class="phm-tbl sat-tbl"><thead><tr><th>Resource</th><th>Projects</th>';
+  allProjs.forEach(pr=>{h+='<th class="sat-proj-th" title="'+esc(pr.relName)+' → '+esc(pr.name)+'">'+esc(pr.name.length>15?pr.name.substring(0,14)+'…':pr.name)+'</th>';});
+  h+='</tr></thead><tbody>';
+  people.forEach(person=>{
+    const satLevel=person.projectCount>=3?'sat-high':person.projectCount===2?'sat-mod':'sat-low';
+    h+='<tr class="'+satLevel+'">';
+    h+='<td class="sat-grp-name">'+esc(person.name)+'</td>';
+    h+='<td class="sat-count"><span class="sat-count-badge '+satLevel+'">'+person.projectCount+'</span></td>';
+    allProjs.forEach(pr=>{
+      const matches=person.assignments.filter(a=>a.projId===pr.id);
+      if(matches.length){
+        const roles=matches.map(m=>m.roleAbbr).join(', ');
+        h+='<td class="sat-cell sat-cell-impact" style="cursor:pointer" title="'+esc(person.name)+' in '+esc(pr.name)+': '+roles+'" onclick="openResourceInProject('+matches[0].relId+','+pr.id+')">'+esc(roles)+'</td>';
+      }else{
+        h+='<td class="sat-cell sat-cell-empty">—</td>';
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  if(high){
+    h+='<div class="sat-warnings">';
+    people.filter(p=>p.projectCount>=3).forEach(person=>{
+      const projNames=[...person.projIds].map(pid=>{const a=person.assignments.find(x=>x.projId===pid);return a?a.projName:'';}).filter(Boolean);
+      h+='<div class="sat-warn-item"><span class="sev-badge sev-crit">SATURATED</span> <strong>'+esc(person.name)+'</strong> is assigned to '+person.projectCount+' projects: '+projNames.map(n=>esc(n)).join(', ')+'</div>';
+    });
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
+function openResourceInProject(relId,projId){
+  activeRelId=relId;openProject(projId);
+  // Switch to Resources tab (find the nav button by text)
+  const btns=document.querySelectorAll('#v-project .nav-btn');
+  btns.forEach(b=>{if(b.textContent.trim()==='Resources')showProjTab('resources',b);});
 }
 
 // ════════════════════════════════════════════════════════
