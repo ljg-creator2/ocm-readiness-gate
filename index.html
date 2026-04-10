@@ -489,16 +489,29 @@
     </div>
     <!-- Timeline moved above release cards -->
 
-    <div id="res-sat-sec" style="display:none">
+    <div id="wkl-bal-sec" style="display:none">
       <details class="port-collapse">
         <summary class="port-collapse-toggle">
-          <span class="port-collapse-title">Training Resource Saturation</span>
-          <span class="port-collapse-stat" id="res-sat-summary-stat"></span>
+          <span class="port-collapse-title">OCM Workload Balance</span>
+          <span class="port-collapse-stat" id="wkl-summary-stat"></span>
           <span class="port-collapse-arrow">&#9654;</span>
         </summary>
         <div class="port-collapse-body">
-          <div class="panel" style="border:none;box-shadow:none;margin:0">
-            <div class="pb"><div id="res-sat-map"></div></div>
+          <div id="wkl-summary-strip"></div>
+          <div style="margin-top:20px">
+            <div class="wkl-sec-title">Resource Roster</div>
+            <div class="wkl-sec-sub">OCM Training and Implementation assignments by person</div>
+            <div id="wkl-roster"></div>
+          </div>
+          <div style="margin-top:20px">
+            <div class="wkl-sec-title">Release Workload Comparison</div>
+            <div class="wkl-sec-sub">OCM resource coverage by release</div>
+            <div id="wkl-rel-compare"></div>
+          </div>
+          <div style="margin-top:24px">
+            <div class="wkl-sec-title">Cross-Release OCM Overlap</div>
+            <div class="wkl-sec-sub">OCM resources spanning multiple releases</div>
+            <div id="wkl-cross-rel"></div>
           </div>
         </div>
       </details>

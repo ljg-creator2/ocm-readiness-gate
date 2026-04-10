@@ -1330,8 +1330,8 @@ function renderPortfolio(){
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('sat-sec').style.display=releases.length>=1?'block':'none';
-  document.getElementById('res-sat-sec').style.display=releases.length>=1?'block':'none';
-  renderSaturationMap();renderResourceSaturationMap();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
+  document.getElementById('wkl-bal-sec').style.display=releases.length>=1?'block':'none';
+  renderSaturationMap();renderOcmWorkloadBalance();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
   if(isReadOnly)applyReadOnlyRestrictions();
 }
 
@@ -1734,11 +1734,14 @@ function renderRelProjCards(){
   }
   const cards=r.projects.map(p=>{
     const gs=projGateScore(p);const fl=projFlagCount(p);const adk=projAdkarAvg(p);const st=projStatus(p);
+    const noTrain=!(p.resources?.ocm_train||[]).some(x=>(x.name||'').trim());
+    const noImpl=!(p.resources?.ocm_impl||[]).some(x=>(x.name||'').trim());
+    const ocmGapHtml=(noTrain||noImpl)?`<div class="pc-ocm-gaps">${noTrain?'<span class="pc-ocm-gap">No OCM Training</span>':''}${noImpl?'<span class="pc-ocm-gap">No OCM Impl</span>':''}</div>`:'';
     return`<div class="pc" tabindex="0" draggable="true" data-proj-id="${p.id}" onclick="openProject(${p.id})" onkeydown="if(event.key==='Enter')openProject(${p.id})" role="button" aria-label="Open project ${esc(p.name)}">
       <div class="pc-hd">
         <div style="display:flex;align-items:center;justify-content:space-between"><div class="pc-name">${esc(p.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
         <div class="chip-row">${(p.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}</span>`).join('')}</div>
-        <div class="pc-tr-badge ${p.trainingRequired?'pc-tr-yes':'pc-tr-no'}">${p.trainingRequired?'Training Required':'No Training'}</div>
+        <div class="pc-tr-badge ${p.trainingRequired?'pc-tr-yes':'pc-tr-no'}">${p.trainingRequired?'Training Required':'No Training'}</div>${ocmGapHtml}
       </div>
       <div class="pc-bd">
         <div class="pc-metrics">
@@ -4802,6 +4805,226 @@ function openResourceInProject(relId,projId){
   // Switch to Resources tab (find the nav button by text)
   const btns=document.querySelectorAll('#v-project .nav-btn');
   btns.forEach(b=>{if(b.textContent.trim()==='Resources')showProjTab('resources',b);});
+}
+
+// ════════════════════════════════════════════════════════
+// FEATURE: OCM WORKLOAD BALANCE DASHBOARD
+// ════════════════════════════════════════════════════════
+function collectOcmWorkloadData(){
+  const OCM_ROLES=[{key:'ocm_train',label:'OCM Training',abbr:'Train'},{key:'ocm_impl',label:'OCM Implementation',abbr:'Impl'}];
+  const personMap={};
+  const projectGaps=[];
+  const releaseStats=[];
+
+  releases.forEach(r=>{
+    let relTotalSlots=0,relFilledSlots=0,relResources=new Set();
+    (r.projects||[]).forEach(p=>{
+      const missing=[];
+      OCM_ROLES.forEach(role=>{
+        const assigned=(p.resources?.[role.key]||[]).filter(res=>(res.name||'').trim());
+        relTotalSlots++;
+        if(assigned.length>0){
+          relFilledSlots++;
+          assigned.forEach(res=>{
+            const nm=res.name.trim();const norm=nm.toLowerCase();
+            relResources.add(norm);
+            if(!personMap[norm])personMap[norm]={name:nm,assignments:[],projIds:new Set(),relIds:new Set()};
+            personMap[norm].assignments.push({roleKey:role.key,roleLabel:role.label,roleAbbr:role.abbr,projId:p.id,projName:p.name,relName:r.name,relId:r.id,relGoLive:r.golive});
+            personMap[norm].projIds.add(p.id);
+            personMap[norm].relIds.add(r.id);
+          });
+        }else{
+          missing.push(role);
+        }
+      });
+      if(missing.length>0){
+        projectGaps.push({projId:p.id,projName:p.name,relName:r.name,relId:r.id,missingRoles:missing,missingCount:missing.length});
+      }
+    });
+    const projCount=(r.projects||[]).length;
+    releaseStats.push({relId:r.id,relName:r.name,golive:r.golive,phase:r.phase,totalSlots:relTotalSlots,filledSlots:relFilledSlots,fillPct:relTotalSlots?Math.round(relFilledSlots/relTotalSlots*100):0,totalResources:relResources.size,projectCount:projCount});
+  });
+
+  const people=Object.values(personMap);
+  const totalUnique=people.length;
+  const overAllocated=people.filter(p=>p.projIds.size>=3).length;
+  const crossRelease=people.filter(p=>p.relIds.size>=2).length;
+  const totalGaps=projectGaps.length;
+  projectGaps.sort((a,b)=>b.missingCount-a.missingCount);
+
+  return{personMap,people,projectGaps,releaseStats,summary:{totalUnique,overAllocated,crossRelease,totalGaps}};
+}
+
+function renderOcmWorkloadBalance(){
+  const sec=document.getElementById('wkl-bal-sec');if(!sec)return;
+  const data=collectOcmWorkloadData();
+  renderOcmWklSummary(data);
+  renderOcmWklRoster(data);
+  renderOcmWklReleaseComparison(data);
+  renderOcmWklCrossRelease(data);
+  // Header stat
+  const statEl=document.getElementById('wkl-summary-stat');
+  if(statEl){
+    const parts=[];
+    if(data.summary.totalGaps)parts.push(data.summary.totalGaps+' gap'+(data.summary.totalGaps!==1?'s':''));
+    if(data.summary.crossRelease)parts.push(data.summary.crossRelease+' cross-release');
+    if(data.summary.overAllocated)parts.push(data.summary.overAllocated+' over-allocated');
+    if(!parts.length)parts.push('All balanced');
+    statEl.textContent=parts.join(' · ');
+  }
+}
+
+function renderOcmWklSummary(data){
+  const el=document.getElementById('wkl-summary-strip');if(!el)return;
+  const s=data.summary;
+  el.innerHTML=`<div class="sat-alert-strip">
+    <div class="sat-alert-item"><span class="sat-alert-val">${s.totalUnique}</span><span class="sat-alert-lbl">Total OCM Resources</span></div>
+    <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over-Allocated (3+)</span></div>
+    <div class="sat-alert-item"><span class="sat-alert-val${s.crossRelease?' sev-high':''}">${s.crossRelease}</span><span class="sat-alert-lbl">Cross-Release Overlap</span></div>
+    <div class="sat-alert-item"><span class="sat-alert-val${s.totalGaps?' sev-crit':''}">${s.totalGaps}</span><span class="sat-alert-lbl">Projects w/ Gaps</span></div>
+  </div>`;
+}
+
+function renderOcmWklRoster(data){
+  const el=document.getElementById('wkl-roster');if(!el)return;
+  if(!data.people.length){el.innerHTML='<div class="wkl-empty">No OCM resources assigned across portfolio.</div>';return;}
+  // Bucket people by utilization level
+  const heavy=[],active=[],available=[];
+  data.people.forEach(person=>{
+    const pc=person.projIds.size;
+    if(pc>=3)heavy.push(person);
+    else if(pc===2)active.push(person);
+    else available.push(person);
+  });
+  [heavy,active,available].forEach(arr=>arr.sort((a,b)=>b.projIds.size-a.projIds.size||a.name.localeCompare(b.name)));
+
+  function renderPersonRow(person){
+    const projGroups={};
+    person.assignments.forEach(a=>{
+      if(!projGroups[a.projId])projGroups[a.projId]={projName:a.projName,relName:a.relName,relId:a.relId,projId:a.projId,roles:[]};
+      projGroups[a.projId].roles.push(a.roleAbbr);
+    });
+    const projs=Object.values(projGroups);
+    let r='<div class="wkl-roster-row">';
+    r+='<div class="wkl-roster-name">'+esc(person.name)+'</div>';
+    r+='<div class="wkl-roster-tags">';
+    projs.forEach(pr=>{
+      const roles=pr.roles.join(' + ');
+      r+='<span class="wkl-roster-tag" title="'+esc(pr.relName)+' → '+esc(pr.projName)+'" onclick="openResourceInProject('+pr.relId+','+pr.projId+')">'+esc(pr.projName)+' <span class="wkl-roster-role">'+esc(roles)+'</span></span>';
+    });
+    r+='</div></div>';
+    return r;
+  }
+
+  function renderGroup(label,badgeCls,people,collapsed){
+    if(!people.length)return '';
+    let g='<details class="wkl-roster-group"'+(collapsed?'':' open')+'>';
+    g+='<summary class="wkl-roster-grp-hdr '+badgeCls+'">';
+    g+='<span class="wkl-roster-grp-label">'+label+'</span>';
+    g+='<span class="wkl-roster-grp-count">'+people.length+'</span>';
+    g+='</summary>';
+    g+='<div class="wkl-roster-grp-body">';
+    people.forEach(p=>{g+=renderPersonRow(p);});
+    g+='</div></details>';
+    return g;
+  }
+
+  let h='';
+  h+=renderGroup('Over-Allocated — 3+ Projects','wkl-grp-heavy',heavy,false);
+  h+=renderGroup('Multi-Project — 2 Projects','wkl-grp-active',active,false);
+  h+=renderGroup('Single Project','wkl-grp-available',available,heavy.length>0||active.length>0);
+  el.innerHTML=h;
+}
+
+function renderOcmWklReleaseComparison(data){
+  const el=document.getElementById('wkl-rel-compare');if(!el)return;
+  if(!data.releaseStats.length){el.innerHTML='<div class="wkl-empty">No releases found.</div>';return;}
+  // For each release, compute per-role fill rates
+  let h='';
+  data.releaseStats.forEach(rs=>{
+    // Count projects with train assigned and impl assigned
+    const rel=releases.find(r=>r.id===rs.relId);if(!rel)return;
+    const projs=rel.projects||[];
+    const trainFilled=projs.filter(p=>(p.resources?.ocm_train||[]).some(r=>(r.name||'').trim())).length;
+    const implFilled=projs.filter(p=>(p.resources?.ocm_impl||[]).some(r=>(r.name||'').trim())).length;
+    const trainPct=projs.length?Math.round(trainFilled/projs.length*100):0;
+    const implPct=projs.length?Math.round(implFilled/projs.length*100):0;
+    const avgPct=Math.round((trainPct+implPct)/2);
+    const statusClass=avgPct>=75?'sev-low':avgPct>=50?'sev-high':'sev-crit';
+    const statusLabel=avgPct>=75?'Balanced':avgPct>=50?'Moderate':'Under-resourced';
+    h+=`<div class="wkl-rel-row">
+      <div class="wkl-rel-name">${esc(rs.relName)}</div>
+      <div class="wkl-rel-bars">
+        <div class="wkl-bar-row">
+          <span class="wkl-bar-label">Training</span>
+          <div class="wkl-bar-wrap"><div class="wkl-bar-fill wkl-bar-fill-train" style="width:${trainPct}%"></div></div>
+          <span class="wkl-rel-pct">${trainPct}%</span>
+        </div>
+        <div class="wkl-bar-row">
+          <span class="wkl-bar-label">Implementation</span>
+          <div class="wkl-bar-wrap"><div class="wkl-bar-fill wkl-bar-fill-impl" style="width:${implPct}%"></div></div>
+          <span class="wkl-rel-pct">${implPct}%</span>
+        </div>
+      </div>
+      <div class="wkl-rel-meta">${rs.totalResources} resource${rs.totalResources!==1?'s':''} · ${rs.projectCount} project${rs.projectCount!==1?'s':''}</div>
+      <div class="wkl-rel-status"><span class="sev-badge ${statusClass}">${statusLabel}</span></div>
+    </div>`;
+  });
+  el.innerHTML=h;
+}
+
+function renderOcmWklGaps(data){
+  const el=document.getElementById('wkl-gaps');if(!el)return;
+  if(!data.projectGaps.length){el.innerHTML='<div class="wkl-empty">All projects have OCM Training and Implementation assigned.</div>';return;}
+  let h='<div class="wkl-gap-grid">';
+  data.projectGaps.forEach(g=>{
+    const bothMissing=g.missingCount===2;
+    h+=`<div class="wkl-gap-card${bothMissing?'':' wkl-gap-partial'}" style="cursor:pointer" onclick="openResourceInProject(${g.relId},${g.projId})">
+      <div class="wkl-gap-card-name">${esc(g.projName)}</div>
+      <div class="wkl-gap-card-rel">${esc(g.relName)}</div>
+      <div class="wkl-gap-roles">${g.missingRoles.map(r=>'<span class="sev-badge sev-crit">No '+esc(r.label)+'</span>').join('')}</div>
+    </div>`;
+  });
+  h+='</div>';
+  el.innerHTML=h;
+}
+
+function renderOcmWklCrossRelease(data){
+  const el=document.getElementById('wkl-cross-rel');if(!el)return;
+  const crossPeople=data.people.filter(p=>p.relIds.size>=2).sort((a,b)=>b.relIds.size-a.relIds.size||a.name.localeCompare(b.name));
+  if(!crossPeople.length){el.innerHTML='<div class="wkl-empty">No OCM resources span multiple releases.</div>';return;}
+  // Get unique releases for columns
+  const relCols=[];const relSet=new Set();
+  releases.forEach(r=>{if(!relSet.has(r.id)){relSet.add(r.id);relCols.push({id:r.id,name:r.name,golive:r.golive});}});
+  let h='<div class="phm-scroll"><table class="wkl-cr-tbl"><thead><tr><th>Resource</th><th>Releases</th>';
+  relCols.forEach(rc=>{h+='<th title="'+esc(rc.name)+'">'+esc(rc.name.length>18?rc.name.substring(0,17)+'…':rc.name)+'</th>';});
+  h+='</tr></thead><tbody>';
+  crossPeople.forEach(person=>{
+    h+='<tr><td class="wkl-cr-name">'+esc(person.name)+'</td>';
+    h+='<td><span class="sat-count-badge '+(person.relIds.size>=3?'sat-high':'sat-mod')+'">'+person.relIds.size+'</span></td>';
+    relCols.forEach(rc=>{
+      const matches=person.assignments.filter(a=>a.relId===rc.id);
+      if(matches.length){
+        const projNames=[...new Set(matches.map(m=>m.projName))];
+        const roles=[...new Set(matches.map(m=>m.roleAbbr))].join(', ');
+        // Check for go-live conflict (releases within 30 days of each other)
+        let conflict=false;
+        if(person.relIds.size>=2&&rc.golive){
+          const thisDate=new Date(rc.golive);
+          person.assignments.filter(a=>a.relId!==rc.id&&a.relGoLive).forEach(a=>{
+            const otherDate=new Date(a.relGoLive);
+            if(Math.abs(thisDate-otherDate)<30*86400000)conflict=true;
+          });
+        }
+        h+='<td class="wkl-cr-projs">'+projNames.map(n=>esc(n)).join(', ')+' <span style="color:var(--ink-35)">('+roles+')</span>'+(conflict?'<span class="wkl-cr-conflict">GO-LIVE OVERLAP</span>':'')+'</td>';
+      }else{
+        h+='<td class="sat-cell-empty" style="color:var(--ink-35)">—</td>';
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
 }
 
 // ════════════════════════════════════════════════════════
