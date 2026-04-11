@@ -632,7 +632,8 @@ function newProject(name,agencies,users){
       deployment:{goliveDateChanges:0,parallelOpsExtended:false,parallelOpsDays:0,supportTicketsWeek1:0,supportTicketsMonth1:0,workaroundRequestsPostGL:0}
     },
     valueCase:{statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''},
-    proofPoints:[]
+    proofPoints:[],
+    craid:[]
   };
 }
 
@@ -1141,6 +1142,7 @@ function showProjTab(id,btn){
   if(id==='postlaunch')renderPPostLaunch();
   if(id==='pulse')renderPPulse();
   if(id==='lifecycle')renderPLifecycle();
+  if(id==='craid')renderPCraid();
 }
 
 // ════════════════════════════════════════════════════════
@@ -1331,7 +1333,7 @@ function renderPortfolio(){
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('sat-sec').style.display=releases.length>=1?'block':'none';
   document.getElementById('wkl-bal-sec').style.display=releases.length>=1?'block':'none';
-  renderSaturationMap();renderOcmWorkloadBalance();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
+  renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
   if(isReadOnly)applyReadOnlyRestrictions();
 }
 
@@ -1723,6 +1725,30 @@ function renderRelKPIs(){
   });
   document.getElementById('r-kpi-rg').textContent=worstScore<101?worstName:'—';
   document.getElementById('r-kpi-rg-s').textContent=worstScore<101?worstScore+'% readiness':'Stakeholder group';
+  // Open Risks KPI
+  const riskEl=document.getElementById('r-kpi-risks');
+  const riskSub=document.getElementById('r-kpi-risks-s');
+  if(riskEl){
+    let openRisks=0,critRisks=0;
+    (r.projects||[]).forEach(p=>{(p.craid||[]).forEach(e=>{
+      if(e.type==='risk'&&!['Closed','Mitigated'].includes(e.status)){openRisks++;if(e.severity==='Critical')critRisks++;}
+    });});
+    riskEl.textContent=openRisks;
+    riskSub.textContent=critRisks?critRisks+' critical':'Across all projects';
+  }
+  // OCM Coverage KPI
+  const ocmEl=document.getElementById('r-kpi-ocm');
+  const ocmSub=document.getElementById('r-kpi-ocm-s');
+  if(ocmEl){
+    const projs=r.projects||[];
+    const trainFilled=projs.filter(p=>(p.resources?.ocm_train||[]).some(x=>(x.name||'').trim())).length;
+    const implFilled=projs.filter(p=>(p.resources?.ocm_impl||[]).some(x=>(x.name||'').trim())).length;
+    const totalSlots=projs.length*2;const filledSlots=trainFilled+implFilled;
+    if(projs.length){
+      ocmEl.textContent=Math.round(filledSlots/totalSlots*100)+'%';
+      ocmSub.textContent=trainFilled+'/'+projs.length+' Train · '+implFilled+'/'+projs.length+' Impl';
+    }else{ocmEl.textContent='—';ocmSub.textContent='No projects';}
+  }
 }
 function renderRelProjCards(){
   const r=getRel();if(!r)return;
@@ -1780,6 +1806,7 @@ function renderRelOverview(){
   projs.forEach(p=>{GATE_DEFS.forEach(gate=>{gate.items.forEach((item,i)=>{if(p.gateState[gate.id+'_'+i]==='red')allFlags.push({gate:gate.label,item:item.text,proj:p.name});});});});
   if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active open issues at this time.</p></div>';}
   else{fp.innerHTML=allFlags.slice(0,5).map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.proj)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
+  renderRelCraidSummary();
 }
 
 // ════════════════════════════════════════════════════════
@@ -4626,6 +4653,345 @@ function renderPGaps(){
   }
   el.innerHTML=h;
 }
+
+// ════════════════════════════════════════════════════════
+// FEATURE: CRAID LOG (Constraints, Risks, Assumptions, Issues, Dependencies)
+// ════════════════════════════════════════════════════════
+const CRAID_TYPES=[
+  {key:'risk',label:'Risk',abbr:'R',color:'#b83232'},
+  {key:'assumption',label:'Assumption',abbr:'A',color:'#2563eb'},
+  {key:'issue',label:'Issue',abbr:'I',color:'#d97706'},
+  {key:'dependency',label:'Dependency',abbr:'D',color:'#7c3aed'},
+  {key:'constraint',label:'Constraint',abbr:'C',color:'#6b7280'}
+];
+const CRAID_STATUSES=['Open','In Progress','Mitigated','Closed','Validated','Invalidated'];
+const CRAID_SEVERITIES=['Critical','High','Medium','Low'];
+const CRAID_PROBABILITIES=['Very Likely','Likely','Possible','Unlikely'];
+const CRAID_CONSTRAINT_TYPES=['Schedule','Budget','Resource','Technical','Regulatory'];
+let _craidFilter={type:'all',status:'all'};
+
+function newCraidEntry(type){
+  return{id:uid(),type:type||'risk',title:'',description:'',status:'Open',severity:'Medium',
+    owner:'',dueDate:'',created:new Date().toISOString(),
+    probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:''};
+}
+
+function craidSummary(p){
+  const items=p.craid||[];
+  const open=items.filter(e=>!['Closed','Mitigated','Validated','Invalidated'].includes(e.status));
+  const r={total:items.length,open:open.length};
+  CRAID_TYPES.forEach(t=>{r[t.key]=open.filter(e=>e.type===t.key).length;r[t.key+'Total']=items.filter(e=>e.type===t.key).length;});
+  r.critical=open.filter(e=>e.severity==='Critical').length;
+  return r;
+}
+
+function addCraidEntry(type){
+  const p=getProj();if(!p)return;
+  if(!p.craid)p.craid=[];
+  const entry=newCraidEntry(type);
+  p.craid.unshift(entry);
+  touch('proj');schedSave();renderPCraid();
+  logAudit('craid_added',entry.type,p.name,{entryType:entry.type});
+}
+function updateCraidField(entryId,field,value){
+  const p=getProj();if(!p)return;
+  const entry=(p.craid||[]).find(e=>e.id===entryId);
+  if(!entry)return;
+  entry[field]=value;
+  touch('proj');schedSave();
+}
+function removeCraidEntry(entryId){
+  const p=getProj();if(!p)return;
+  const idx=(p.craid||[]).findIndex(e=>e.id===entryId);
+  if(idx<0)return;
+  const entry=p.craid[idx];
+  p.craid.splice(idx,1);
+  touch('proj');schedSave();renderPCraid();
+  logAudit('craid_removed',entry.type,p.name,{title:entry.title});
+}
+function setCraidFilter(type,status){
+  if(type!==undefined)_craidFilter.type=type;
+  if(status!==undefined)_craidFilter.status=status;
+  renderPCraid();
+}
+
+function renderPCraid(){
+  const p=getProj();if(!p)return;
+  if(!p.craid)p.craid=[];
+  const el=document.getElementById('ptab-craid');if(!el)return;
+  const s=craidSummary(p);
+  const sevCls=sev=>sev==='Critical'?'sev-crit':sev==='High'?'sev-high':sev==='Medium'?'sev-med':'sev-low';
+  const typeCfg=t=>CRAID_TYPES.find(c=>c.key===t)||CRAID_TYPES[0];
+
+  // Summary strip
+  let h='<div class="sat-alert-strip">';
+  CRAID_TYPES.forEach(t=>{
+    h+='<div class="sat-alert-item" style="cursor:pointer;border-bottom:3px solid '+t.color+'" onclick="setCraidFilter(\''+t.key+'\')">';
+    h+='<span class="sat-alert-val'+(s[t.key]?' sev-crit':'')+'">'+s[t.key]+'</span>';
+    h+='<span class="sat-alert-lbl">'+t.label+'s</span></div>';
+  });
+  h+='</div>';
+
+  // Filter row
+  h+='<div class="craid-filters">';
+  h+='<div class="craid-filter-group">';
+  h+='<button class="craid-fbtn'+(_craidFilter.type==='all'?' active':'')+'" onclick="setCraidFilter(\'all\')">All</button>';
+  CRAID_TYPES.forEach(t=>{
+    h+='<button class="craid-fbtn'+(_craidFilter.type===t.key?' active':'')+'" style="'+ (_craidFilter.type===t.key?'border-color:'+t.color:'')+'" onclick="setCraidFilter(\''+t.key+'\')">'+t.abbr+'</button>';
+  });
+  h+='</div>';
+  h+='<div class="craid-filter-group">';
+  h+='<button class="craid-fbtn'+(_craidFilter.status==='all'?' active':'')+'" onclick="setCraidFilter(undefined,\'all\')">All Status</button>';
+  h+='<button class="craid-fbtn'+(_craidFilter.status==='open'?' active':'')+'" onclick="setCraidFilter(undefined,\'open\')">Open</button>';
+  h+='<button class="craid-fbtn'+(_craidFilter.status==='closed'?' active':'')+'" onclick="setCraidFilter(undefined,\'closed\')">Closed</button>';
+  h+='</div>';
+  h+='<div class="craid-add-group">';
+  CRAID_TYPES.forEach(t=>{
+    h+='<button class="btn-outline craid-add-btn" style="border-color:'+t.color+';color:'+t.color+'" onclick="addCraidEntry(\''+t.key+'\')" title="Add '+t.label+'">+ '+t.label+'</button>';
+  });
+  h+='</div></div>';
+
+  // Filter entries
+  let items=p.craid;
+  if(_craidFilter.type!=='all')items=items.filter(e=>e.type===_craidFilter.type);
+  if(_craidFilter.status==='open')items=items.filter(e=>!['Closed','Mitigated','Validated','Invalidated'].includes(e.status));
+  if(_craidFilter.status==='closed')items=items.filter(e=>['Closed','Mitigated','Validated','Invalidated'].includes(e.status));
+
+  if(!items.length){
+    h+='<div class="wkl-empty">No '+ (_craidFilter.type!=='all'?typeCfg(_craidFilter.type).label.toLowerCase()+'s':'entries')+' found. Use the buttons above to add entries.</div>';
+  }else{
+    items.forEach(entry=>{
+      const tc=typeCfg(entry.type);
+      const isClosed=['Closed','Mitigated','Validated','Invalidated'].includes(entry.status);
+      h+='<div class="craid-entry'+(isClosed?' craid-closed':'')+'" style="border-left-color:'+tc.color+'">';
+      // Header
+      h+='<div class="craid-entry-hdr">';
+      h+='<span class="craid-type-badge" style="background:'+tc.color+'">'+tc.label.toUpperCase()+'</span>';
+      h+='<span class="sev-badge '+sevCls(entry.severity)+'">'+entry.severity+'</span>';
+      h+='<select class="craid-status-sel" onchange="updateCraidField('+entry.id+',\'status\',this.value);renderPCraid()">';
+      CRAID_STATUSES.forEach(st=>{
+        const applicable=entry.type==='risk'?true:entry.type==='assumption'?['Open','Validated','Invalidated','Closed'].includes(st):['Open','In Progress','Closed','Mitigated'].includes(st);
+        if(applicable)h+='<option'+(st===entry.status?' selected':'')+'>'+st+'</option>';
+      });
+      h+='</select>';
+      h+='<button class="btn-del-sm" onclick="removeCraidEntry('+entry.id+')" title="Remove">&times;</button>';
+      h+='</div>';
+      // Title
+      h+='<div class="craid-field"><input class="craid-title-inp" type="text" value="'+esc(entry.title)+'" placeholder="Title..." oninput="updateCraidField('+entry.id+',\'title\',this.value)"></div>';
+      // Description
+      h+='<div class="craid-field"><textarea class="craid-desc-inp" rows="2" placeholder="Description..." oninput="updateCraidField('+entry.id+',\'description\',this.value)">'+esc(entry.description)+'</textarea></div>';
+      // Type-specific fields
+      if(entry.type==='risk'){
+        h+='<div class="craid-row">';
+        h+='<div class="craid-field craid-field-sm"><label>Probability</label><select onchange="updateCraidField('+entry.id+',\'probability\',this.value)"><option value="">—</option>';
+        CRAID_PROBABILITIES.forEach(pr=>{h+='<option'+(pr===entry.probability?' selected':'')+'>'+pr+'</option>';});
+        h+='</select></div>';
+        h+='<div class="craid-field craid-field-sm"><label>Impact</label><select onchange="updateCraidField('+entry.id+',\'impact\',this.value)"><option value="">—</option>';
+        CRAID_SEVERITIES.forEach(sv=>{h+='<option'+(sv===entry.impact?' selected':'')+'>'+sv+'</option>';});
+        h+='</select></div>';
+        h+='<div class="craid-field craid-field-sm"><label>Severity</label><select onchange="updateCraidField('+entry.id+',\'severity\',this.value);renderPCraid()">';
+        CRAID_SEVERITIES.forEach(sv=>{h+='<option'+(sv===entry.severity?' selected':'')+'>'+sv+'</option>';});
+        h+='</select></div>';
+        h+='</div>';
+        h+='<div class="craid-field"><label>Mitigation Plan</label><textarea class="craid-desc-inp" rows="2" placeholder="How will this risk be mitigated?" oninput="updateCraidField('+entry.id+',\'mitigation\',this.value)">'+esc(entry.mitigation)+'</textarea></div>';
+      }
+      if(entry.type==='assumption'){
+        h+='<div class="craid-row">';
+        h+='<div class="craid-field craid-field-sm"><label>Severity</label><select onchange="updateCraidField('+entry.id+',\'severity\',this.value);renderPCraid()">';
+        CRAID_SEVERITIES.forEach(sv=>{h+='<option'+(sv===entry.severity?' selected':'')+'>'+sv+'</option>';});
+        h+='</select></div></div>';
+        h+='<div class="craid-field"><label>Validation Method</label><textarea class="craid-desc-inp" rows="1" placeholder="How will this assumption be validated?" oninput="updateCraidField('+entry.id+',\'validationMethod\',this.value)">'+esc(entry.validationMethod)+'</textarea></div>';
+      }
+      if(entry.type==='dependency'){
+        h+='<div class="craid-row">';
+        h+='<div class="craid-field craid-field-sm"><label>Severity</label><select onchange="updateCraidField('+entry.id+',\'severity\',this.value);renderPCraid()">';
+        CRAID_SEVERITIES.forEach(sv=>{h+='<option'+(sv===entry.severity?' selected':'')+'>'+sv+'</option>';});
+        h+='</select></div></div>';
+        h+='<div class="craid-field"><label>Depends On</label><input class="craid-title-inp" type="text" value="'+esc(entry.dependsOn)+'" placeholder="What does this depend on?" oninput="updateCraidField('+entry.id+',\'dependsOn\',this.value)"></div>';
+      }
+      if(entry.type==='constraint'){
+        h+='<div class="craid-row">';
+        h+='<div class="craid-field craid-field-sm"><label>Type</label><select onchange="updateCraidField('+entry.id+',\'constraintType\',this.value)"><option value="">—</option>';
+        CRAID_CONSTRAINT_TYPES.forEach(ct=>{h+='<option'+(ct===entry.constraintType?' selected':'')+'>'+ct+'</option>';});
+        h+='</select></div>';
+        h+='<div class="craid-field craid-field-sm"><label>Severity</label><select onchange="updateCraidField('+entry.id+',\'severity\',this.value);renderPCraid()">';
+        CRAID_SEVERITIES.forEach(sv=>{h+='<option'+(sv===entry.severity?' selected':'')+'>'+sv+'</option>';});
+        h+='</select></div></div>';
+      }
+      if(entry.type==='issue'){
+        h+='<div class="craid-row">';
+        h+='<div class="craid-field craid-field-sm"><label>Severity</label><select onchange="updateCraidField('+entry.id+',\'severity\',this.value);renderPCraid()">';
+        CRAID_SEVERITIES.forEach(sv=>{h+='<option'+(sv===entry.severity?' selected':'')+'>'+sv+'</option>';});
+        h+='</select></div></div>';
+      }
+      // Owner + Due Date
+      h+='<div class="craid-row">';
+      h+='<div class="craid-field craid-field-sm"><label>Owner</label><input class="craid-title-inp" type="text" value="'+esc(entry.owner)+'" placeholder="Owner" oninput="updateCraidField('+entry.id+',\'owner\',this.value)"></div>';
+      h+='<div class="craid-field craid-field-sm"><label>Due Date</label><input class="craid-title-inp" type="date" value="'+esc(entry.dueDate)+'" oninput="updateCraidField('+entry.id+',\'dueDate\',this.value)"></div>';
+      h+='</div>';
+      h+='</div>';
+    });
+  }
+  el.innerHTML=h;
+}
+
+// CRAID — Navigate to project CRAID tab
+function openCraidInProject(relId,projId){
+  activeRelId=relId;openProject(projId);
+  const btns=document.querySelectorAll('#v-project .nav-btn');
+  btns.forEach(b=>{if(b.textContent.trim()==='CRAID Log')showProjTab('craid',b);});
+}
+
+// CRAID — Release-level rollup
+function renderRelCraidSummary(){
+  const el=document.getElementById('rel-craid-summary');if(!el)return;
+  const r=getRel();if(!r)return;
+  const projs=r.projects||[];
+  const allItems=[];
+  projs.forEach(p=>{(p.craid||[]).forEach(e=>{allItems.push({...e,projName:p.name,projId:p.id});});});
+  const open=allItems.filter(e=>!['Closed','Mitigated','Validated','Invalidated'].includes(e.status));
+  if(!allItems.length){el.innerHTML='';return;}
+
+  let h='<div class="panel" style="margin-top:16px"><div class="ph"><div><div class="pt">CRAID Summary</div><div class="ps-text">Risks, assumptions, issues, dependencies, and constraints across all projects</div></div></div><div class="pb">';
+  // Summary strip
+  h+='<div class="sat-alert-strip">';
+  CRAID_TYPES.forEach(t=>{
+    const cnt=open.filter(e=>e.type===t.key).length;
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid '+t.color+'"><span class="sat-alert-val'+(cnt&&t.key==='risk'?' sev-crit':'')+'">'+cnt+'</span><span class="sat-alert-lbl">Open '+t.label+'s</span></div>';
+  });
+  h+='</div>';
+  // Top risks table
+  const topRisks=open.filter(e=>e.type==='risk').sort((a,b)=>{
+    const si=CRAID_SEVERITIES.indexOf(a.severity)-CRAID_SEVERITIES.indexOf(b.severity);
+    return si!==0?si:a.title.localeCompare(b.title);
+  }).slice(0,5);
+  if(topRisks.length){
+    h+='<div style="margin-top:12px"><div class="wkl-sec-title">Top Open Risks</div>';
+    h+='<table class="wkl-cr-tbl"><thead><tr><th>Project</th><th>Risk</th><th>P × I</th><th>Owner</th><th>Severity</th></tr></thead><tbody>';
+    topRisks.forEach(rk=>{
+      const sevCls=rk.severity==='Critical'?'sev-crit':rk.severity==='High'?'sev-high':'sev-med';
+      h+='<tr style="cursor:pointer" onclick="openCraidInProject('+r.id+','+rk.projId+')">';
+      h+='<td>'+esc(rk.projName)+'</td>';
+      h+='<td><strong>'+esc(rk.title||'Untitled')+'</strong></td>';
+      h+='<td>'+(rk.probability&&rk.impact?esc(rk.probability)+' × '+esc(rk.impact):'—')+'</td>';
+      h+='<td>'+esc(rk.owner||'—')+'</td>';
+      h+='<td><span class="sev-badge '+sevCls+'">'+rk.severity+'</span></td>';
+      h+='</tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='</div></div>';
+  el.innerHTML=h;
+}
+
+// CRAID — Portfolio-level rollup
+function collectPortCraidData(){
+  const allItems=[];
+  releases.forEach(r=>{
+    (r.projects||[]).forEach(p=>{
+      (p.craid||[]).forEach(e=>{allItems.push({...e,projName:p.name,projId:p.id,relName:r.name,relId:r.id});});
+    });
+  });
+  const open=allItems.filter(e=>!['Closed','Mitigated','Validated','Invalidated'].includes(e.status));
+  const summary={total:allItems.length,open:open.length,critical:open.filter(e=>e.severity==='Critical').length};
+  CRAID_TYPES.forEach(t=>{summary[t.key]=open.filter(e=>e.type===t.key).length;});
+  // Per-release breakdown
+  const byRelease=releases.map(r=>{
+    const relItems=[];
+    (r.projects||[]).forEach(p=>{(p.craid||[]).forEach(e=>{relItems.push(e);});});
+    const relOpen=relItems.filter(e=>!['Closed','Mitigated','Validated','Invalidated'].includes(e.status));
+    return{relId:r.id,relName:r.name,total:relItems.length,open:relOpen.length,
+      risks:relOpen.filter(e=>e.type==='risk').length,issues:relOpen.filter(e=>e.type==='issue').length,
+      critical:relOpen.filter(e=>e.severity==='Critical').length,high:relOpen.filter(e=>e.severity==='High').length,
+      medium:relOpen.filter(e=>e.severity==='Medium').length,low:relOpen.filter(e=>e.severity==='Low').length};
+  });
+  // Top open risks
+  const topRisks=open.filter(e=>e.type==='risk').sort((a,b)=>CRAID_SEVERITIES.indexOf(a.severity)-CRAID_SEVERITIES.indexOf(b.severity)).slice(0,10);
+  return{allItems,open,summary,byRelease,topRisks};
+}
+
+function renderPortCraidDashboard(){
+  const sec=document.getElementById('port-craid-sec');if(!sec)return;
+  const data=collectPortCraidData();
+  if(!data.allItems.length){sec.style.display='none';return;}
+  sec.style.display='block';
+  const statEl=document.getElementById('port-craid-stat');
+  if(statEl){
+    const parts=[];
+    if(data.summary.critical)parts.push(data.summary.critical+' critical');
+    if(data.summary.risk)parts.push(data.summary.risk+' open risks');
+    if(data.summary.issue)parts.push(data.summary.issue+' open issues');
+    if(!parts.length)parts.push(data.summary.open+' open items');
+    statEl.textContent=parts.join(' · ');
+  }
+  // Summary strip
+  const sumEl=document.getElementById('port-craid-summary');
+  if(sumEl){
+    let h='<div class="sat-alert-strip">';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid #b83232"><span class="sat-alert-val'+(data.summary.risk?' sev-crit':'')+'">'+data.summary.risk+'</span><span class="sat-alert-lbl">Open Risks</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid #b83232"><span class="sat-alert-val'+(data.summary.critical?' sev-crit':'')+'">'+data.summary.critical+'</span><span class="sat-alert-lbl">Critical</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid #d97706"><span class="sat-alert-val'+(data.summary.issue?' sev-high':'')+'">'+data.summary.issue+'</span><span class="sat-alert-lbl">Open Issues</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid #2563eb"><span class="sat-alert-val">'+data.summary.assumption+'</span><span class="sat-alert-lbl">Assumptions</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid #7c3aed"><span class="sat-alert-val">'+data.summary.dependency+'</span><span class="sat-alert-lbl">Dependencies</span></div>';
+    h+='</div>';
+    sumEl.innerHTML=h;
+  }
+  // Top risks table
+  const trEl=document.getElementById('port-craid-top-risks');
+  if(trEl){
+    if(!data.topRisks.length){trEl.innerHTML='';
+    }else{
+      let h='<div class="wkl-sec-title">Top Open Risks</div><div class="wkl-sec-sub">Highest severity risks across the portfolio</div>';
+      h+='<div class="phm-scroll"><table class="wkl-cr-tbl"><thead><tr><th>Release</th><th>Project</th><th>Risk</th><th>P × I</th><th>Owner</th><th>Due</th><th>Severity</th></tr></thead><tbody>';
+      data.topRisks.forEach(rk=>{
+        const sevCls=rk.severity==='Critical'?'sev-crit':rk.severity==='High'?'sev-high':'sev-med';
+        h+='<tr style="cursor:pointer" onclick="openCraidInProject('+rk.relId+','+rk.projId+')">';
+        h+='<td>'+esc(rk.relName)+'</td><td>'+esc(rk.projName)+'</td>';
+        h+='<td><strong>'+esc(rk.title||'Untitled')+'</strong></td>';
+        h+='<td>'+(rk.probability&&rk.impact?esc(rk.probability)+' × '+esc(rk.impact):'—')+'</td>';
+        h+='<td>'+esc(rk.owner||'—')+'</td>';
+        h+='<td>'+esc(rk.dueDate?fmtDate(rk.dueDate):'—')+'</td>';
+        h+='<td><span class="sev-badge '+sevCls+'">'+rk.severity+'</span></td></tr>';
+      });
+      h+='</tbody></table></div>';
+      trEl.innerHTML=h;
+    }
+  }
+  // By release breakdown
+  const brEl=document.getElementById('port-craid-by-release');
+  if(brEl){
+    const activeRels=data.byRelease.filter(r=>r.total>0);
+    if(!activeRels.length){brEl.innerHTML='';
+    }else{
+      let h='<div class="wkl-sec-title">Risk by Release</div><div class="wkl-sec-sub">Open risk and issue distribution per release</div>';
+      activeRels.forEach(r=>{
+        const total=r.critical+r.high+r.medium+r.low;
+        const critPct=total?Math.round(r.critical/total*100):0;
+        const highPct=total?Math.round(r.high/total*100):0;
+        const medPct=total?Math.round(r.medium/total*100):0;
+        const lowPct=total?Math.round(r.low/total*100):0;
+        h+='<div class="craid-rel-row" style="cursor:pointer" onclick="openRelease('+r.relId+')">';
+        h+='<div class="wkl-rel-name">'+esc(r.relName)+'</div>';
+        h+='<div style="flex:1">';
+        if(total){
+          h+='<div class="craid-sev-bar">';
+          if(critPct)h+='<div class="craid-sev-seg craid-seg-crit" style="width:'+critPct+'%" title="Critical: '+r.critical+'"></div>';
+          if(highPct)h+='<div class="craid-sev-seg craid-seg-high" style="width:'+highPct+'%" title="High: '+r.high+'"></div>';
+          if(medPct)h+='<div class="craid-sev-seg craid-seg-med" style="width:'+medPct+'%" title="Medium: '+r.medium+'"></div>';
+          if(lowPct)h+='<div class="craid-sev-seg craid-seg-low" style="width:'+lowPct+'%" title="Low: '+r.low+'"></div>';
+          h+='</div>';
+        }else{
+          h+='<div class="craid-sev-bar"><div class="craid-sev-seg" style="width:100%;background:var(--bg-deep)"></div></div>';
+        }
+        h+='</div>';
+        h+='<div class="wkl-rel-meta">'+r.risks+' risks · '+r.issues+' issues</div>';
+        h+='</div>';
+      });
+      brEl.innerHTML=h;
+    }
+  }
+}
+
 // ════════════════════════════════════════════════════════
 // FEATURE: CROSS-PORTFOLIO SATURATION INTELLIGENCE
 // ════════════════════════════════════════════════════════
@@ -4724,82 +5090,6 @@ function renderSaturationMap(){
   }
 }
 
-// ════════════════════════════════════════════════════════
-// FEATURE: TRAINING RESOURCE SATURATION
-// ════════════════════════════════════════════════════════
-function renderResourceSaturationMap(){
-  const el=document.getElementById('res-sat-map');if(!el)return;
-  const TRAIN_ROLES=[{key:'ocm_train',label:'OCM Training',abbr:'Train'},{key:'ocm_impl',label:'OCM Implementation',abbr:'Impl'}];
-  // Build person map across all projects, training roles only
-  const personMap={};
-  releases.forEach(r=>{
-    (r.projects||[]).forEach(p=>{
-      TRAIN_ROLES.forEach(role=>{
-        (p.resources?.[role.key]||[]).forEach(res=>{
-          const nm=(res.name||'').trim();if(!nm)return;
-          const norm=nm.toLowerCase();
-          if(!personMap[norm])personMap[norm]={name:nm,assignments:[],projIds:new Set()};
-          personMap[norm].assignments.push({roleKey:role.key,roleLabel:role.label,roleAbbr:role.abbr,projId:p.id,projName:p.name,relName:r.name,relId:r.id});
-          personMap[norm].projIds.add(p.id);
-        });
-      });
-    });
-  });
-  const people=Object.values(personMap).map(p=>({...p,projectCount:p.projIds.size})).sort((a,b)=>b.projectCount-a.projectCount||a.name.localeCompare(b.name));
-  // Summary stat
-  const summaryEl=document.getElementById('res-sat-summary-stat');
-  if(!people.length){
-    if(summaryEl)summaryEl.textContent='No training resources found';
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No training resources assigned. Add OCM Training or OCM Implementation resources to projects to see saturation data.</div>';return;
-  }
-  const high=people.filter(p=>p.projectCount>=3).length;
-  const mod=people.filter(p=>p.projectCount===2).length;
-  if(summaryEl){
-    const parts=[];
-    if(high)parts.push(high+' high saturation');
-    if(mod)parts.push(mod+' moderate');
-    parts.push(people.length+' total resources');
-    summaryEl.textContent=parts.join(' · ');
-  }
-  // Columns = all projects across portfolio
-  const allProjs=[];const projSet=new Set();
-  releases.forEach(r=>(r.projects||[]).forEach(p=>{if(!projSet.has(p.id)){projSet.add(p.id);allProjs.push({id:p.id,name:p.name,relName:r.name,relId:r.id});}}));
-  // Build table
-  let h='<div class="sat-alert-strip">';
-  h+='<div class="sat-alert-item"><span class="sat-alert-val'+(high?' sev-crit':'')+'">'+high+'</span><span class="sat-alert-lbl">High Saturation (3+)</span></div>';
-  h+='<div class="sat-alert-item"><span class="sat-alert-val'+(mod?' sev-high':'')+'">'+mod+'</span><span class="sat-alert-lbl">Moderate (2 projects)</span></div>';
-  h+='<div class="sat-alert-item"><span class="sat-alert-val">'+people.length+'</span><span class="sat-alert-lbl">Total Resources</span></div>';
-  h+='</div>';
-  h+='<div class="phm-scroll"><table class="phm-tbl sat-tbl"><thead><tr><th>Resource</th><th>Projects</th>';
-  allProjs.forEach(pr=>{h+='<th class="sat-proj-th" title="'+esc(pr.relName)+' → '+esc(pr.name)+'">'+esc(pr.name.length>15?pr.name.substring(0,14)+'…':pr.name)+'</th>';});
-  h+='</tr></thead><tbody>';
-  people.forEach(person=>{
-    const satLevel=person.projectCount>=3?'sat-high':person.projectCount===2?'sat-mod':'sat-low';
-    h+='<tr class="'+satLevel+'">';
-    h+='<td class="sat-grp-name">'+esc(person.name)+'</td>';
-    h+='<td class="sat-count"><span class="sat-count-badge '+satLevel+'">'+person.projectCount+'</span></td>';
-    allProjs.forEach(pr=>{
-      const matches=person.assignments.filter(a=>a.projId===pr.id);
-      if(matches.length){
-        const roles=matches.map(m=>m.roleAbbr).join(', ');
-        h+='<td class="sat-cell sat-cell-impact" style="cursor:pointer" title="'+esc(person.name)+' in '+esc(pr.name)+': '+roles+'" onclick="openResourceInProject('+matches[0].relId+','+pr.id+')">'+esc(roles)+'</td>';
-      }else{
-        h+='<td class="sat-cell sat-cell-empty">—</td>';
-      }
-    });
-    h+='</tr>';
-  });
-  h+='</tbody></table></div>';
-  if(high){
-    h+='<div class="sat-warnings">';
-    people.filter(p=>p.projectCount>=3).forEach(person=>{
-      const projNames=[...person.projIds].map(pid=>{const a=person.assignments.find(x=>x.projId===pid);return a?a.projName:'';}).filter(Boolean);
-      h+='<div class="sat-warn-item"><span class="sev-badge sev-crit">SATURATED</span> <strong>'+esc(person.name)+'</strong> is assigned to '+person.projectCount+' projects: '+projNames.map(n=>esc(n)).join(', ')+'</div>';
-    });
-    h+='</div>';
-  }
-  el.innerHTML=h;
-}
 function openResourceInProject(relId,projId){
   activeRelId=relId;openProject(projId);
   // Switch to Resources tab (find the nav button by text)
@@ -4881,7 +5171,8 @@ function renderOcmWklSummary(data){
     <div class="sat-alert-item"><span class="sat-alert-val">${s.totalUnique}</span><span class="sat-alert-lbl">Total OCM Resources</span></div>
     <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over-Allocated (3+)</span></div>
     <div class="sat-alert-item"><span class="sat-alert-val${s.crossRelease?' sev-high':''}">${s.crossRelease}</span><span class="sat-alert-lbl">Cross-Release Overlap</span></div>
-    <div class="sat-alert-item"><span class="sat-alert-val${s.totalGaps?' sev-crit':''}">${s.totalGaps}</span><span class="sat-alert-lbl">Projects w/ Gaps</span></div>
+    <div class="sat-alert-item"${data.projectGaps.length?` style="cursor:pointer" onclick="openRelease(${data.projectGaps[0].relId})" title="Go to ${esc(data.projectGaps[0].relName)}"`:''}>
+      <span class="sat-alert-val${s.totalGaps?' sev-crit':''}">${s.totalGaps}</span><span class="sat-alert-lbl">Projects w/ Gaps</span></div>
   </div>`;
 }
 
@@ -4910,7 +5201,8 @@ function renderOcmWklRoster(data){
     r+='<div class="wkl-roster-tags">';
     projs.forEach(pr=>{
       const roles=pr.roles.join(' + ');
-      r+='<span class="wkl-roster-tag" title="'+esc(pr.relName)+' → '+esc(pr.projName)+'" onclick="openResourceInProject('+pr.relId+','+pr.projId+')">'+esc(pr.projName)+' <span class="wkl-roster-role">'+esc(roles)+'</span></span>';
+      const showRel=releases.length>1;
+      r+='<span class="wkl-roster-tag" title="'+esc(pr.relName)+' → '+esc(pr.projName)+'" onclick="openResourceInProject('+pr.relId+','+pr.projId+')">'+(showRel?'<span class="wkl-roster-rel">'+esc(pr.relName)+'</span> ':'')+esc(pr.projName)+' <span class="wkl-roster-role">'+esc(roles)+'</span></span>';
     });
     r+='</div></div>';
     return r;
@@ -4973,26 +5265,12 @@ function renderOcmWklReleaseComparison(data){
   el.innerHTML=h;
 }
 
-function renderOcmWklGaps(data){
-  const el=document.getElementById('wkl-gaps');if(!el)return;
-  if(!data.projectGaps.length){el.innerHTML='<div class="wkl-empty">All projects have OCM Training and Implementation assigned.</div>';return;}
-  let h='<div class="wkl-gap-grid">';
-  data.projectGaps.forEach(g=>{
-    const bothMissing=g.missingCount===2;
-    h+=`<div class="wkl-gap-card${bothMissing?'':' wkl-gap-partial'}" style="cursor:pointer" onclick="openResourceInProject(${g.relId},${g.projId})">
-      <div class="wkl-gap-card-name">${esc(g.projName)}</div>
-      <div class="wkl-gap-card-rel">${esc(g.relName)}</div>
-      <div class="wkl-gap-roles">${g.missingRoles.map(r=>'<span class="sev-badge sev-crit">No '+esc(r.label)+'</span>').join('')}</div>
-    </div>`;
-  });
-  h+='</div>';
-  el.innerHTML=h;
-}
-
 function renderOcmWklCrossRelease(data){
   const el=document.getElementById('wkl-cross-rel');if(!el)return;
+  const sec=document.getElementById('wkl-cross-rel-sec');
   const crossPeople=data.people.filter(p=>p.relIds.size>=2).sort((a,b)=>b.relIds.size-a.relIds.size||a.name.localeCompare(b.name));
-  if(!crossPeople.length){el.innerHTML='<div class="wkl-empty">No OCM resources span multiple releases.</div>';return;}
+  if(!crossPeople.length){el.innerHTML='';if(sec)sec.style.display='none';return;}
+  if(sec)sec.style.display='';
   // Get unique releases for columns
   const relCols=[];const relSet=new Set();
   releases.forEach(r=>{if(!relSet.has(r.id)){relSet.add(r.id);relCols.push({id:r.id,name:r.name,golive:r.golive});}});
@@ -8122,6 +8400,14 @@ async function loadDemoData(){
   p1a.resources.ocm_impl=[{name:'James Mitchell',contact:''}];
   p1a.resources.pm=[{name:'Asha Patel',contact:''}];
   p1a.resources.func=[{name:'Dr. Emily Wilson',contact:''}];
+  p1a.craid=[
+    {id:uid(),type:'risk',title:'Physician resistance to new documentation workflow',description:'Senior physicians may resist changing established documentation patterns, leading to workarounds that bypass the new system.',status:'Open',severity:'High',owner:'Dr. Rachel Goldman',dueDate:'2026-06-15',created:'2026-04-01T10:00:00Z',probability:'Likely',impact:'High',mitigation:'Conduct physician champion program with 5 early adopters. Offer 1:1 workflow optimization sessions.',dependsOn:'',validationMethod:'',constraintType:''},
+    {id:uid(),type:'risk',title:'Training environment not ready 2 weeks before go-live',description:'IT infrastructure team has flagged potential delays in provisioning the training sandbox environment.',status:'In Progress',severity:'Critical',owner:'Asha Patel',dueDate:'2026-05-30',created:'2026-04-02T09:00:00Z',probability:'Possible',impact:'Critical',mitigation:'Identify backup training environment. Prepare offline simulation materials as contingency.',dependsOn:'',validationMethod:'',constraintType:''},
+    {id:uid(),type:'assumption',title:'Clinical staff available for 2-day training window',description:'Assumes nursing and physician schedules can accommodate 2 consecutive days of training without impacting patient care.',status:'Open',severity:'High',owner:'Sophia Rodriguez',dueDate:'2026-05-15',created:'2026-04-01T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'Confirm with department heads by May 1. Review shift schedules for coverage gaps.',constraintType:''},
+    {id:uid(),type:'issue',title:'EHR vendor delayed API documentation by 3 weeks',description:'The vendor has not delivered the integration API specs needed for custom workflow configuration.',status:'Open',severity:'High',owner:'James Mitchell',dueDate:'2026-05-01',created:'2026-04-05T14:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:''},
+    {id:uid(),type:'dependency',title:'Lab system interface must be live before clinical workflow training',description:'Training scenarios require real-time lab result display. Lab interface go-live is owned by a separate project team.',status:'Open',severity:'Critical',owner:'Asha Patel',dueDate:'2026-06-01',created:'2026-04-03T11:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'Lab System Modernization project (IT Infrastructure team)',validationMethod:'',constraintType:''},
+    {id:uid(),type:'constraint',title:'Go-live cannot occur during Joint Commission survey window',description:'Regulatory constraint: the hospital cannot introduce major system changes during the scheduled Joint Commission review period (July 10-24).',status:'Open',severity:'High',owner:'Dr. Rachel Goldman',dueDate:'',created:'2026-04-01T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:'Regulatory'}
+  ];
   p1a.stakeholders=[{id:uid(),name:'Attending Physicians',factors:{resistance:4,env:3,window:2,complexity:5,saturation:4,leadership:4},objectives:['Document patient encounters in new EHR','Generate clinical quality reports'],kirk:{L1:{method:'In-person workshop',timing:'Pre-go-live'},L2:{method:'Case-based assessment',assessment:'90% accuracy'},L3:{observable:'Documentation compliance',interval:'14-day post go-live'},L4:{outcome:'Zero clinical safety events',metric:'Safety event tracker'}},rein:{owner:'Chief Medical Officer',activities:'Weekly physician council + lunch sessions',intervals:['Week 1','Week 2','Week 3'],escalation:'Escalate if < 80% documentation compliance'}}];
   const p1b=newProject('Nursing Documentation',['HCA Healthcare'],8500);
   p1b.status='In Progress';
@@ -8186,6 +8472,13 @@ async function loadDemoData(){
   p2a.resources.ocm_impl=[{name:'Lisa Anderson',contact:''}];
   p2a.resources.pm=[{name:'David Thompson',contact:''}];
   p2a.resources.func=[{name:'Michelle Lee',contact:''}];
+  p2a.craid=[
+    {id:uid(),type:'risk',title:'Branch staff turnover during transition',description:'Several branches report 15-20% teller turnover, risking knowledge loss mid-implementation.',status:'Open',severity:'Critical',owner:'David Thompson',dueDate:'2026-07-01',created:'2026-04-01T10:00:00Z',probability:'Very Likely',impact:'High',mitigation:'Build rapid onboarding module for new hires. Cross-train 2 backup tellers per branch.',dependsOn:'',validationMethod:'',constraintType:''},
+    {id:uid(),type:'risk',title:'Core banking cutover weekend too short',description:'The 48-hour cutover window may be insufficient if data migration takes longer than planned.',status:'Open',severity:'High',owner:'Lisa Anderson',dueDate:'2026-08-01',created:'2026-04-02T09:00:00Z',probability:'Possible',impact:'Critical',mitigation:'Conduct dry-run migration 4 weeks before go-live. Identify rollback triggers.',dependsOn:'',validationMethod:'',constraintType:''},
+    {id:uid(),type:'assumption',title:'All branches have adequate network bandwidth',description:'Training simulations require stable 50Mbps minimum. Rural branches may fall short.',status:'Open',severity:'Medium',owner:'Robert Harrison',dueDate:'2026-06-01',created:'2026-04-03T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'IT to conduct bandwidth test at all 150 branches by June 1.',constraintType:''},
+    {id:uid(),type:'issue',title:'Compliance training content not yet approved by Legal',description:'Legal review of the anti-fraud training module is 2 weeks behind schedule.',status:'In Progress',severity:'High',owner:'Michelle Lee',dueDate:'2026-05-15',created:'2026-04-05T14:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:''},
+    {id:uid(),type:'constraint',title:'No deployments during Q3 earnings blackout',description:'Finance mandates a change freeze during Q3 earnings preparation (Aug 15-Sep 5).',status:'Open',severity:'Medium',owner:'David Thompson',dueDate:'',created:'2026-04-01T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:'Schedule'}
+  ];
   p2a.stakeholders=[{id:uid(),name:'Branch Tellers',factors:{resistance:3,env:3,window:3,complexity:3,saturation:2,leadership:3},objectives:['Process deposits/withdrawals','Handle wire transfers','Customer authentication verification'],kirk:{L1:{method:'Role-based training modules',timing:'2 weeks pre-go-live'},L2:{method:'Transaction simulation',assessment:'100 test cases'},L3:{observable:'Avg transaction time',interval:'14-day post go-live'},L4:{outcome:'Zero fraudulent transactions',metric:'Risk dashboard'}},rein:{owner:'Branch Managers',activities:'Daily check-ins + super-user support',intervals:['Week 1','Week 2','Week 4'],escalation:'Escalate if transaction errors exceed 0.5%'}}];
   const p2b=newProject('Online Banking',['JPMorgan'],45000);
   p2b.status='Not Started';

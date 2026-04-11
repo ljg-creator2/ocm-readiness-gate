@@ -508,11 +508,26 @@
             <div class="wkl-sec-sub">OCM resource coverage by release</div>
             <div id="wkl-rel-compare"></div>
           </div>
-          <div style="margin-top:24px">
+          <div id="wkl-cross-rel-sec" style="margin-top:24px">
             <div class="wkl-sec-title">Cross-Release OCM Overlap</div>
             <div class="wkl-sec-sub">OCM resources spanning multiple releases</div>
             <div id="wkl-cross-rel"></div>
           </div>
+        </div>
+      </details>
+    </div>
+
+    <div id="port-craid-sec" style="display:none">
+      <details class="port-collapse">
+        <summary class="port-collapse-toggle">
+          <span class="port-collapse-title">Portfolio Risk Dashboard</span>
+          <span class="port-collapse-stat" id="port-craid-stat"></span>
+          <span class="port-collapse-arrow">&#9654;</span>
+        </summary>
+        <div class="port-collapse-body">
+          <div id="port-craid-summary"></div>
+          <div id="port-craid-top-risks" style="margin-top:20px"></div>
+          <div id="port-craid-by-release" style="margin-top:20px"></div>
         </div>
       </details>
     </div>
@@ -689,6 +704,8 @@
         <div class="kc ca"><div class="kc-l">Highest Risk Group</div><div class="kc-v sm" id="r-kpi-rg">—</div><div class="kc-s" id="r-kpi-rg-s">Affected group</div></div>
         <div class="kc cg"><div class="kc-l">Projects Tracked</div><div class="kc-v" id="r-kpi-projs">0</div><div class="kc-s">Total in this release</div></div>
         <div class="kc cb"><div class="kc-l" id="r-kpi-adkar-label">ADKAR Avg</div><div class="kc-v" id="r-kpi-adkar">—</div><div class="kc-s">Across all projects</div></div>
+        <div class="kc" style="border-left:3px solid #b83232"><div class="kc-l">Open Risks</div><div class="kc-v" id="r-kpi-risks">0</div><div class="kc-s" id="r-kpi-risks-s">Across all projects</div></div>
+        <div class="kc" style="border-left:3px solid #7c3aed"><div class="kc-l">OCM Coverage</div><div class="kc-v sm" id="r-kpi-ocm">—</div><div class="kc-s" id="r-kpi-ocm-s">Training &amp; Implementation</div></div>
       </div>
       <!-- Project overview cards -->
       <div class="tab-eye" style="margin-bottom:10px">Projects</div>
@@ -705,6 +722,7 @@
           <div class="ph"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent across all projects</div></div></div>
           <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
         </div>
+        <div id="rel-craid-summary"></div>
       </div>
     </div>
 
@@ -793,6 +811,7 @@
         <button class="nav-btn" onclick="showProjTab('lifecycle',this)">Lifecycle Signals</button>
         <button class="nav-btn" onclick="showProjTab('flags',this)">Open Issues</button>
         <button class="nav-btn" onclick="showProjTab('heatmap',this)">Dependency Map</button>
+        <button class="nav-btn" onclick="showProjTab('craid',this)">CRAID Log</button>
         <button class="nav-btn" onclick="showProjTab('resources',this)">Resources</button>
         <button class="nav-btn" onclick="showProjTab('pulse',this)">Pulse</button>
         <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)" style="display:none">Post-Launch</button>
@@ -1030,6 +1049,16 @@
             <span class="leg-i"><span class="leg-sw" style="background:var(--amber-bg);border:1px solid #E0C97A"></span>Partial</span>
             <span class="leg-i"><span class="leg-sw" style="background:var(--red-bg);border:1px solid #DCA8A8"></span>Blocking</span>
           </div>
+        </div>
+      </div>
+    </div>
+    <!-- CRAID LOG -->
+    <div class="tab-sec" id="psec-craid">
+      <div class="tab-eye">Project Risk Management</div>
+      <div class="tab-head">CRAID Log</div>
+      <div class="panel">
+        <div class="pb" id="ptab-craid">
+          <div class="es"><div class="es-rule"></div><p class="es-txt">No CRAID entries yet. Use the buttons above to log risks, assumptions, issues, dependencies, and constraints.</p></div>
         </div>
       </div>
     </div>
