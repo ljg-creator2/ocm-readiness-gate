@@ -3520,7 +3520,7 @@ function openDocImport(target){
   modal.innerHTML=`<div class="import-modal-box">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div><h2>Import ${targetLabels[target]||target}</h2>
-      <div class="import-sub">Upload a document to auto-populate ${targetLabels[target]||target} data. Supports .xlsx, .csv, .docx, and .txt files.</div></div>
+      <div class="import-sub">Upload a document to auto-populate ${targetLabels[target]||target} data. Supports .xlsx, .csv, .docx, .pdf, .pptx, and .txt files.</div></div>
       <button class="btn-ghost" onclick="document.getElementById('doc-import-modal').classList.remove('open')" style="font-size:22px;padding:0 6px;line-height:1">&times;</button>
     </div>
     <div class="import-drop" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
@@ -3654,21 +3654,42 @@ async function parseDOCX(data){
 async function parsePDF(data){
   if(!window.pdfjsLib){showSuccess('PDF parser is loading. Try again in a moment.');return[];}
   const pdf=await pdfjsLib.getDocument({data}).promise;
+  // For complex PDFs (multi-page tables, change plans), browser-based extraction
+  // struggles with table detection. Extract text and try structured parsing.
   let fullText='';
   for(let i=1;i<=pdf.numPages;i++){
     const page=await pdf.getPage(i);
     const content=await page.getTextContent();
-    const lines=[];let lastY=null;let line='';
-    content.items.forEach(item=>{
-      if(lastY!==null&&Math.abs(item.transform[5]-lastY)>2){lines.push(line);line='';}
-      line+=(line?' ':'')+item.str;
-      lastY=item.transform[5];
+    const vp=page.getViewport({scale:1});
+    // Sort items by position to reconstruct reading order
+    const items=content.items.filter(it=>it.str.trim()).map(it=>({
+      text:it.str,x:Math.round(it.transform[4]),y:Math.round(vp.height-it.transform[5])
+    })).sort((a,b)=>a.y-b.y||a.x-b.x);
+    let lastY=null;let line='';
+    items.forEach(item=>{
+      if(lastY!==null&&Math.abs(item.y-lastY)>5){fullText+=line+'\n';line='';}
+      line+=(line?'\t':'')+item.text;
+      lastY=item.y;
     });
-    if(line)lines.push(line);
-    fullText+=lines.join('\n')+'\n';
+    if(line)fullText+=line+'\n';
   }
-  // Try to detect table structure
-  return parseTXT(fullText);
+  // Try to parse as tab-delimited or structured text
+  const rows=parseTXT(fullText);
+  if(rows.length<2){
+    // PDF tables are too complex for browser extraction
+    // Show guidance to use the converter tool
+    const statusArea=document.getElementById('import-status-area');
+    if(statusArea){
+      statusArea.innerHTML='<div class="import-status error" style="line-height:1.6">'
+        +'<strong>This PDF has complex tables that need server-side extraction.</strong><br>'
+        +'Run this command in your terminal first:<br>'
+        +'<code style="display:block;margin:8px 0;padding:8px;background:rgba(0,0,0,0.15);border-radius:4px;font-size:12px">'
+        +'python3 tools/pdf-to-csv.py "path/to/your-file.pdf"</code>'
+        +'Then import the generated CSV files instead.</div>';
+    }
+    return[];
+  }
+  return rows;
 }
 
 async function parsePPTX(data){
@@ -3760,20 +3781,21 @@ function parseTXT(text){
 // Fuzzy column header matching
 const FIELD_ALIASES={
   // Impact fields
-  name:['name','group','stakeholder','audience','team','department','population','group name','stakeholder group','stakeholder name'],
+  name:['name','group','stakeholder','audience','team','department','population','group name','stakeholder group','stakeholder name','topic description','topic','change/ topic description','change/topic description','change/ topic'],
   level:['level','impact','impact level','severity','priority','impact rating'],
-  currentState:['current','current state','as-is','as is','current process','from'],
-  futureState:['future','future state','to-be','to be','target state','to','desired state'],
+  currentState:['current','current state','as-is','as is','current process','from','business need'],
+  futureState:['future','future state','to-be','to be','target state','to','desired state','users impact'],
   changeTypes:['change type','change types','type','types','impact type','impact area','area'],
   // Gap fields
-  description:['description','gap','gap description','issue','finding','detail','details','gap detail'],
+  description:['description','gap','gap description','issue','finding','detail','details','gap detail','identified gaps','identified gap'],
   severity:['severity','priority','level','risk','rating','criticality','risk level'],
-  trainingImpact:['training','training impact','impact','adoption impact','recommendation','mitigation','remediation'],
+  trainingImpact:['training','training impact','impact','adoption impact','recommendation','mitigation','remediation','system impact'],
   status:['status','state','progress','resolution'],
   // Stakeholder fields (for adoption scoring)
-  role:['role','title','position','job title','function'],
+  role:['role','title','position','job title','function','interests'],
   influence:['influence','power','authority'],
-  sentiment:['sentiment','attitude','disposition','readiness']
+  sentiment:['sentiment','attitude','disposition','readiness'],
+  needs:['needs','expectations','requirements']
 };
 
 function fuzzyMatch(header,fieldAliases){
@@ -3900,6 +3922,25 @@ function commitImport(){
     const modal=document.getElementById('doc-import-modal');
     if(modal)modal.classList.remove('open');
   },1200);
+}
+
+function bulkClear(target){
+  const labels={impact:'impact groups',gaps:'gaps',stakeholders:'stakeholder groups'};
+  const label=labels[target]||target;
+  const p=getProj();if(!p)return;
+  if(!confirm('Clear all '+label+'? This cannot be undone.'))return;
+  if(target==='impact'){
+    if(p.impactAssessment)p.impactAssessment.groups=[];
+    renderPImpact();
+  }else if(target==='gaps'){
+    if(p.gapAnalysis)p.gapAnalysis.gaps=[];
+    renderPGaps();
+  }else if(target==='stakeholders'){
+    p.stakeholders=[];
+    renderPSH();renderPKPIs();
+  }
+  touch('proj');schedSave();
+  showSuccess('All '+label+' cleared.');
 }
 
 function normalizeLevel(val){
@@ -4032,7 +4073,7 @@ function renderValueCase(p){
       <span class="exp-arr"><i class="ph ph-caret-down"></i></span>
     </button>
     <div class="exp-body" id="vc-body" style="padding:0 20px 20px">
-    <div class="ph" style="padding:0;margin-bottom:16px">
+    <div class="panel-hd" style="padding:0;margin-bottom:16px">
       <div></div>
       ${vr!==null?`<div class="value-score" style="color:${vrColor}">${vr}% Value Realized</div>`:''}
     </div>
@@ -4100,7 +4141,7 @@ function renderProofPoints(p){
       <span class="exp-arr"><i class="ph ph-caret-down"></i></span>
     </button>
     <div class="exp-body" id="pp-body" style="padding:0 20px 20px">
-    <div class="ph" style="padding:0;margin-bottom:16px">
+    <div class="panel-hd" style="padding:0;margin-bottom:16px">
       <div class="ps-text">Hard evidence that connects raw observations to gate decisions — making your readiness assessment defensible to leadership.</div>
       <button class="btn-gold" onclick="openAddProofPoint()">+ Add</button>
     </div>
@@ -4174,7 +4215,7 @@ function renderPLifecycle(){
 
   <div class="lc-phase-grid">
     <div class="panel lc-phase">
-      <div class="ph"><div><div class="pt">Requirements Phase</div><div class="ps-text">Signals from the requirements and scoping stage</div></div></div>
+      <div class="panel-hd"><div><div class="pt">Requirements Phase</div><div class="ps-text">Signals from the requirements and scoping stage</div></div></div>
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">Requirements completed on schedule?</div>
@@ -4204,7 +4245,7 @@ function renderPLifecycle(){
     </div>
 
     <div class="panel lc-phase">
-      <div class="ph"><div><div class="pt">Design Phase</div><div class="ps-text">Signals from design reviews and stakeholder engagement</div></div></div>
+      <div class="panel-hd"><div><div class="pt">Design Phase</div><div class="ps-text">Signals from design reviews and stakeholder engagement</div></div></div>
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">Design reviews delayed?</div>
@@ -4231,7 +4272,7 @@ function renderPLifecycle(){
     </div>
 
     <div class="panel lc-phase">
-      <div class="ph"><div><div class="pt">Testing / QA Phase</div><div class="ps-text">Quality and participation signals from testing</div></div></div>
+      <div class="panel-hd"><div><div class="pt">Testing / QA Phase</div><div class="ps-text">Quality and participation signals from testing</div></div></div>
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">QA defects found</div>
@@ -4267,7 +4308,7 @@ function renderPLifecycle(){
     </div>
 
     <div class="panel lc-phase">
-      <div class="ph"><div><div class="pt">Training Schedule</div><div class="ps-text">Schedule stability and readiness signals for end-user training</div></div></div>
+      <div class="panel-hd"><div><div class="pt">Training Schedule</div><div class="ps-text">Schedule stability and readiness signals for end-user training</div></div></div>
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">Training start date changes</div>
@@ -4306,7 +4347,7 @@ function renderPLifecycle(){
     </div>
 
     <div class="panel lc-phase">
-      <div class="ph"><div><div class="pt">Deployment / Go-Live</div><div class="ps-text">Post-deployment adoption signals</div></div></div>
+      <div class="panel-hd"><div><div class="pt">Deployment / Go-Live</div><div class="ps-text">Post-deployment adoption signals</div></div></div>
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">Number of go-live date changes</div>
@@ -5231,6 +5272,7 @@ function renderPGaps(){
   h+='</div>';
   h+='<div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn-gold" onclick="addGap()">+ Add Gap</button>';
   h+='<button class="btn-outline" onclick="openDocImport(\'gaps\')" title="Import from document">&#x1F4C4; Import</button>';
+  h+='<button class="btn-outline" onclick="bulkClear(\'gaps\')" title="Clear all gaps" style="color:var(--red-bright);border-color:var(--red-bright)"><i class="ph ph-trash"></i> Clear All</button>';
   h+='<span style="font-size:10px;color:var(--ink-60);font-style:italic">Gaps received from implementation team — focus on training/adoption impact</span></div>';
   if(gaps.length===0){
     h+='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No gaps recorded yet. Click "+ Add Gap" to log gaps from the implementation team\'s analysis.</div>';
@@ -5451,7 +5493,7 @@ function renderRelCraidSummary(){
   const open=allItems.filter(e=>!['Closed','Mitigated','Validated','Invalidated'].includes(e.status));
   if(!allItems.length){el.innerHTML='';return;}
 
-  let h='<div class="panel" style="margin-top:16px"><div class="ph"><div><div class="pt">CRAID Summary</div><div class="ps-text">Risks, assumptions, issues, dependencies, and constraints across all projects</div></div></div><div class="pb">';
+  let h='<div class="panel" style="margin-top:16px"><div class="panel-hd"><div><div class="pt">CRAID Summary</div><div class="ps-text">Risks, assumptions, issues, dependencies, and constraints across all projects</div></div></div><div class="pb">';
   // Summary strip
   h+='<div class="sat-alert-strip">';
   CRAID_TYPES.forEach(t=>{

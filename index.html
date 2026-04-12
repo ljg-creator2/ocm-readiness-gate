@@ -476,7 +476,7 @@
       <div class="trend-kpi-row" id="trend-kpis"></div>
       <!-- Auto-generated insights — top 2 shown, rest toggleable -->
       <div class="panel" style="margin-bottom:20px">
-        <div class="ph"><div><div class="pt">Key Insights</div><div class="ps-text">Auto-generated observations based on weekly snapshot data</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Key Insights</div><div class="ps-text">Auto-generated observations based on weekly snapshot data</div></div></div>
         <div class="pb">
           <div id="trend-insights" class="trend-insights"></div>
           <div id="trend-insights-overflow" class="trend-insights" style="display:none"></div>
@@ -505,7 +505,7 @@
     </div>
     <div id="tl-sec" style="display:none;margin-bottom:24px">
       <div class="panel">
-        <div class="ph"><div><div class="pt">Release Timeline</div><div class="ps-text">Each bar spans from today to go-live. Color reflects current release status. Click any release to open it.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Release Timeline</div><div class="ps-text">Each bar spans from today to go-live. Color reflects current release status. Click any release to open it.</div></div></div>
         <div class="pb">
           <div class="tl-wrap"><div class="tl-canvas" id="tl-canvas"></div></div>
           <div class="tl-leg">
@@ -798,11 +798,11 @@
       <!-- Active flags preview -->
       <div class="two-col" style="margin-top:20px">
         <div class="panel">
-          <div class="ph"><div><div class="pt">Readiness by Project</div><div class="ps-text">Completion percentage per project</div></div></div>
+          <div class="panel-hd"><div><div class="pt">Readiness by Project</div><div class="ps-text">Completion percentage per project</div></div></div>
           <div class="pb" id="rel-ov-gates"><div class="es"><div class="es-rule"></div><p class="es-txt">Mark gate items within each project to see scores here.</p></div></div>
         </div>
         <div class="panel">
-          <div class="ph"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent across all projects</div></div></div>
+          <div class="panel-hd"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent across all projects</div></div></div>
           <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
         </div>
         <div id="rel-craid-summary"></div>
@@ -1030,11 +1030,11 @@
       <!-- PROOF POINTS -->
       <div id="p-proof-points-wrap"></div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent items requiring action</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent items requiring action</div></div></div>
         <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
       </div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Assigned Resources</div><div class="ps-text">Edit full resource details in the Resources tab</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Assigned Resources</div><div class="ps-text">Edit full resource details in the Resources tab</div></div></div>
         <div class="pb"><div class="res-qv" id="p-res-qv"><div class="es" style="padding:16px"><div class="es-rule"></div><p class="es-txt">No resources assigned. Add assignments in the Resources tab.</p></div></div></div>
       </div>
     </div>
@@ -1043,11 +1043,12 @@
       <div class="tab-eye">Change Impact</div>
       <div class="tab-head">Change Impact Assessment</div>
       <div class="panel">
-        <div class="ph">
+        <div class="panel-hd">
           <div><div class="pt">Impacted Groups &amp; Readiness Actions</div>
           <div class="ps-text">Map stakeholder groups to impact levels, change types, and transition states.</div></div>
           <button class="btn-navy" onclick="addImpactGroup()">+ Add Group</button>
           <button class="btn-outline" onclick="openDocImport('impact')" title="Import from document"><i class="ph ph-file-text"></i> Import</button>
+          <button class="btn-outline" onclick="bulkClear('impact')" title="Clear all impact groups" style="color:var(--red-bright);border-color:var(--red-bright)"><i class="ph ph-trash"></i> Clear All</button>
         </div>
         <div class="pb" id="p-impact-panel">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Add impacted groups to begin the impact assessment.</p></div>
@@ -1069,7 +1070,7 @@
       <div class="tab-eye" id="assess-eye">ADKAR Model</div>
       <div class="tab-head" id="assess-head">ADKAR Readiness Assessment</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt" id="assess-pt">Change Readiness by Area</div><div class="ps-text">Score each area 1–5. Notes capture observations from your engagement activities.</div></div>
+        <div class="panel-hd"><div><div class="pt" id="assess-pt">Change Readiness by Area</div><div class="ps-text">Score each area 1–5. Notes capture observations from your engagement activities.</div></div>
           <div class="ph-actions" id="adkar-actions"><button class="btn-sm" onclick="enterGuidedAdkar()"><i class="ph ph-compass"></i> Guided Assessment</button><button class="btn-sm btn-ghost" onclick="renderAdkarJourneyRef()" title="Show the ADKAR Journey overview"><i class="ph ph-info"></i></button></div>
         </div>
         <div class="pb np">
@@ -1088,12 +1089,13 @@
       <div class="tab-eye">Adoption Intelligence</div>
       <div class="tab-head">Adoption Likelihood, Learning Objectives &amp; Measurement</div>
       <div class="panel">
-        <div class="ph">
+        <div class="panel-hd">
           <div><div class="pt">Stakeholder Group Assessment</div><div class="ps-text">Score each factor, define learning objectives, establish measurement, and document reinforcement planning.</div></div>
           <div class="adopt-tb" style="margin:0">
             <input type="text" id="p-sh-inp" aria-label="Stakeholder group name" placeholder="Group name..." onkeydown="if(event.key==='Enter')addPSH()">
             <button class="btn-navy" onclick="addPSH()">Add Group</button>
             <button class="btn-outline" onclick="openDocImport('stakeholders')" title="Import from document"><i class="ph ph-file-text"></i> Import</button>
+            <button class="btn-outline" onclick="bulkClear('stakeholders')" title="Clear all stakeholder groups" style="color:var(--red-bright);border-color:var(--red-bright)"><i class="ph ph-trash"></i> Clear All</button>
           </div>
         </div>
         <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">Add the groups of people affected by this change to begin tracking their readiness.</p></div></div></div>
@@ -1104,7 +1106,7 @@
       <div class="tab-eye">Adoption Intelligence</div>
       <div class="tab-head">Adoption Risk Heat Map</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Per-Group Risk by Adoption Factor</div><div class="ps-text">Includes measurement readiness and reinforcement readiness.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Per-Group Risk by Adoption Factor</div><div class="ps-text">Includes measurement readiness and reinforcement readiness.</div></div></div>
         <div class="pb" id="p-ahm-panel"><div class="es"><div class="es-rule"></div><p class="es-txt">Score affected groups in the Adoption Scoring tab to populate this map.</p></div></div>
       </div>
     </div>
@@ -1125,7 +1127,7 @@
       <div class="tab-eye">Workstream Intelligence</div>
       <div class="tab-head">Upstream Dependency Heat Map</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Readiness Dependencies by Gate and Workstream</div><div class="ps-text">Click any cell to cycle status. Shift-click to add a note.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Readiness Dependencies by Gate and Workstream</div><div class="ps-text">Click any cell to cycle status. Shift-click to add a note.</div></div></div>
         <div class="pb">
           <div class="hm-scroll"><table class="hm-tbl" id="p-dep-hm"></table></div>
           <div class="hm-leg">
@@ -1153,7 +1155,7 @@
       <div class="tab-eye">Issues &amp; Risks</div>
       <div class="tab-head">Open Issues</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Items Needing Attention</div><div class="ps-text">Generated automatically when checklist items are marked incomplete. Owners are pulled from the release team.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Items Needing Attention</div><div class="ps-text">Generated automatically when checklist items are marked incomplete. Owners are pulled from the release team.</div></div></div>
         <div class="pb" id="p-flags-panel"></div>
       </div>
     </div>
@@ -1162,7 +1164,7 @@
       <div class="tab-eye">Team Assignment</div>
       <div class="tab-head">Project Resources</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Project Team</div><div class="ps-text">Project-level resources override release defaults for this project's risk flags.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Project Team</div><div class="ps-text">Project-level resources override release defaults for this project's risk flags.</div></div></div>
         <div class="pb">
           <div class="res-grid" id="p-res-grid"></div>
           <div class="res-note">Leave fields blank to inherit from the release-level team assignment. Fill in here to override for this specific project.</div>
@@ -1174,7 +1176,7 @@
       <div class="tab-eye">Stakeholder Feedback</div>
       <div class="tab-head">Pulse Survey</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Readiness Pulse Check</div><div class="ps-text">Generate anonymous survey links per stakeholder group. Responses map to your assessment framework dimensions, comparing your team's assessment against actual stakeholder feedback.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Readiness Pulse Check</div><div class="ps-text">Generate anonymous survey links per stakeholder group. Responses map to your assessment framework dimensions, comparing your team's assessment against actual stakeholder feedback.</div></div></div>
         <div class="pb" id="ptab-pulse">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups first, then send pulse surveys to measure population readiness.</p></div>
         </div>
@@ -1185,7 +1187,7 @@
       <div class="tab-eye">Post-Deployment</div>
       <div class="tab-head">Post-Launch Adoption Tracker</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt">Post-Go-Live Monitoring</div><div class="ps-text">Track adoption metrics at 30, 60, and 90-day intervals per stakeholder group. Compare predicted readiness against actual adoption outcomes.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Post-Go-Live Monitoring</div><div class="ps-text">Track adoption metrics at 30, 60, and 90-day intervals per stakeholder group. Compare predicted readiness against actual adoption outcomes.</div></div></div>
         <div class="pb" id="ptab-postlaunch">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Post-launch tracking activates after the project's go-live date.</p></div>
         </div>
