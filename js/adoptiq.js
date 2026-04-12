@@ -639,7 +639,7 @@ function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   theme=t;
   localStorage.setItem('ocm_theme',t);
-  ['','-r','-p'].forEach(s=>{
+  ['','-r','-p','-lp'].forEach(s=>{
     const ic=document.getElementById('theme-icon'+s);
     const lb=document.getElementById('theme-lbl'+s);
     if(ic)ic.innerHTML=t==='dark'?'<i class="ph ph-moon"></i>':'<i class="ph ph-sun"></i>';
@@ -5454,11 +5454,12 @@ function renderPortCraidDashboard(){
   const sumEl=document.getElementById('port-craid-summary');
   if(sumEl){
     let h='<div class="sat-alert-strip">';
-    h+='<div class="sat-alert-item" style="border-bottom:3px solid #b83232"><span class="sat-alert-val'+(data.summary.risk?' sev-crit':'')+'">'+data.summary.risk+'</span><span class="sat-alert-lbl">Open Risks</span></div>';
-    h+='<div class="sat-alert-item" style="border-bottom:3px solid #b83232"><span class="sat-alert-val'+(data.summary.critical?' sev-crit':'')+'">'+data.summary.critical+'</span><span class="sat-alert-lbl">Critical</span></div>';
-    h+='<div class="sat-alert-item" style="border-bottom:3px solid #d97706"><span class="sat-alert-val'+(data.summary.issue?' sev-high':'')+'">'+data.summary.issue+'</span><span class="sat-alert-lbl">Open Issues</span></div>';
-    h+='<div class="sat-alert-item" style="border-bottom:3px solid #2563eb"><span class="sat-alert-val">'+data.summary.assumption+'</span><span class="sat-alert-lbl">Assumptions</span></div>';
-    h+='<div class="sat-alert-item" style="border-bottom:3px solid #7c3aed"><span class="sat-alert-val">'+data.summary.dependency+'</span><span class="sat-alert-lbl">Dependencies</span></div>';
+    // UAT-120: brand color compliance — use CSS variables instead of hardcoded hex
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid var(--red-bright)"><span class="sat-alert-val'+(data.summary.risk?' sev-crit':'')+'">'+data.summary.risk+'</span><span class="sat-alert-lbl">Open Risks</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid var(--red-bright)"><span class="sat-alert-val'+(data.summary.critical?' sev-crit':'')+'">'+data.summary.critical+'</span><span class="sat-alert-lbl">Critical</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid var(--amber-bright)"><span class="sat-alert-val'+(data.summary.issue?' sev-high':'')+'">'+data.summary.issue+'</span><span class="sat-alert-lbl">Open Issues</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid var(--blue-bright)"><span class="sat-alert-val">'+data.summary.assumption+'</span><span class="sat-alert-lbl">Assumptions</span></div>';
+    h+='<div class="sat-alert-item" style="border-bottom:3px solid var(--purple)"><span class="sat-alert-val">'+data.summary.dependency+'</span><span class="sat-alert-lbl">Dependencies</span></div>';
     h+='</div>';
     sumEl.innerHTML=h;
   }
@@ -5906,7 +5907,7 @@ async function runSaturationForecast(){
     feedSaturationToRecommendations(result);
   }catch(err){
     console.error('Saturation forecast error:',err);
-    el.innerHTML='<div class="sf-empty-state"><div style="color:#b83232;font-size:12px;margin-bottom:12px">Analysis failed: '+esc(err.message)+'</div><button class="sf-analyze-btn" onclick="runSaturationForecast()">Retry</button></div>';
+    el.innerHTML='<div class="sf-empty-state"><div style="color:var(--red-bright);font-size:12px;margin-bottom:12px">Analysis failed: '+esc(err.message)+'</div><button class="sf-analyze-btn" onclick="runSaturationForecast()">Retry</button></div>';
   }
 }
 
@@ -5933,7 +5934,7 @@ function renderSFForecastResult(result){
   h+='<div class="sf-risk-strip">';
   h+='<div class="sf-risk-item"><span class="sf-risk-val" style="color:'+satColor+'">'+esc(risk.overallSaturation||'—')+'</span><span class="sf-risk-lbl">Portfolio Saturation</span></div>';
   h+='<div class="sf-risk-item"><span class="sf-risk-val">'+esc(risk.peakPeriod||'—')+'</span><span class="sf-risk-lbl">Peak Period</span></div>';
-  h+='<div class="sf-risk-item"><span class="sf-risk-val" style="color:#b83232">'+(risk.criticalGroups||0)+'</span><span class="sf-risk-lbl">Critical Groups</span></div>';
+  h+='<div class="sf-risk-item"><span class="sf-risk-val" style="color:var(--red-bright)">'+(risk.criticalGroups||0)+'</span><span class="sf-risk-lbl">Critical Groups</span></div>';
   h+='<div style="flex:1;min-width:200px;font-size:12px;color:var(--ink);line-height:1.5;align-self:center">'+esc(risk.summary||'')+'</div>';
   h+='</div>';
 
@@ -6080,7 +6081,7 @@ async function runWhatIfComparison(){
       const existingControls=el.querySelector('.sf-whatif-controls');
       if(!existingControls)renderWhatIfControls();
       const errDiv=document.createElement('div');
-      errDiv.style.cssText='color:#b83232;font-size:12px;margin-top:12px';
+      errDiv.style.cssText='color:var(--red-bright);font-size:12px;margin-top:12px';
       errDiv.textContent='Analysis failed: '+err.message;
       el.appendChild(errDiv);
     }
@@ -6122,7 +6123,7 @@ function renderWhatIfResult(result,allProjs){
   // Comparison metrics
   h+='<div class="sf-wi-metrics">';
   h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val">'+(comp.originalPeakLoad?Math.round(comp.originalPeakLoad*100)+'%':'—')+'</span><span class="sf-wi-metric-lbl">Original Peak Load</span></div>';
-  h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val" style="color:'+(comp.adjustedPeakLoad<comp.originalPeakLoad?'#16a34a':'#b83232')+'">'+(comp.adjustedPeakLoad?Math.round(comp.adjustedPeakLoad*100)+'%':'—')+'</span><span class="sf-wi-metric-lbl">Adjusted Peak Load</span></div>';
+  h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val" style="color:'+(comp.adjustedPeakLoad<comp.originalPeakLoad?'var(--green-vivid)':'var(--red-bright)')+'">'+(comp.adjustedPeakLoad?Math.round(comp.adjustedPeakLoad*100)+'%':'—')+'</span><span class="sf-wi-metric-lbl">Adjusted Peak Load</span></div>';
   h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val" style="color:var(--gold)">'+esc(comp.improvement||'—')+'</span><span class="sf-wi-metric-lbl">Improvement</span></div>';
   h+='<div class="sf-wi-metric"><span class="sf-wi-metric-val">'+comp.originalCriticalMonths+' → '+comp.adjustedCriticalMonths+'</span><span class="sf-wi-metric-lbl">Critical Months</span></div>';
   h+='</div>';
@@ -6171,7 +6172,7 @@ async function runSequencingAnalysis(){
     renderSequencingResult(result);
   }catch(err){
     console.error('Sequencing error:',err);
-    el.innerHTML='<div class="sf-empty-state"><div style="color:#b83232;font-size:12px;margin-bottom:12px">Analysis failed: '+esc(err.message)+'</div><button class="sf-analyze-btn" onclick="runSequencingAnalysis()">Retry</button></div>';
+    el.innerHTML='<div class="sf-empty-state"><div style="color:var(--red-bright);font-size:12px;margin-bottom:12px">Analysis failed: '+esc(err.message)+'</div><button class="sf-analyze-btn" onclick="runSequencingAnalysis()">Retry</button></div>';
   }
 }
 
@@ -6775,7 +6776,7 @@ async function refreshPulseInsights(){
     if(btn){btn.textContent='Re-analyze';}
   }catch(err){
     console.error('Pulse insights error:',err);
-    body.innerHTML='<div style="text-align:center;padding:20px;color:#b83232;font-size:11px">Analysis failed: '+esc(err.message)+'</div>';
+    body.innerHTML='<div style="text-align:center;padding:20px;color:var(--red-bright);font-size:11px">Analysis failed: '+esc(err.message)+'</div>';
   }finally{
     if(btn)btn.disabled=false;
   }
