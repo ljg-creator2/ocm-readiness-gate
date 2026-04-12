@@ -3526,9 +3526,9 @@ function openDocImport(target){
     <div class="import-drop" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
       <div class="import-drop-icon">📄</div>
       <div class="import-drop-text">Drag &amp; drop your file here or <strong>browse</strong></div>
-      <div class="import-drop-formats">.xlsx &nbsp; .csv &nbsp; .docx &nbsp; .txt</div>
+      <div class="import-drop-formats">.xlsx &nbsp; .csv &nbsp; .docx &nbsp; .pdf &nbsp; .pptx &nbsp; .txt</div>
     </div>
-    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.docx,.txt" style="display:none" onchange="handleImportFile(this.files[0])">
+    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.docx,.pdf,.pptx,.txt" style="display:none" onchange="handleImportFile(this.files[0])">
     <div id="import-preview-area"></div>
     <div id="import-status-area"></div>
   </div>`;
@@ -3560,11 +3560,17 @@ async function handleImportFile(file){
     }else if(ext==='docx'){
       const data=await file.arrayBuffer();
       rows=await parseDOCX(data);
+    }else if(ext==='pdf'){
+      const data=await file.arrayBuffer();
+      rows=await parsePDF(data);
+    }else if(ext==='pptx'){
+      const data=await file.arrayBuffer();
+      rows=await parsePPTX(data);
     }else if(ext==='txt'){
       const text=await file.text();
       rows=parseTXT(text);
     }else{
-      statusArea.innerHTML='<div class="import-status error">Unsupported file format. Please use .xlsx, .csv, .docx, or .txt</div>';
+      statusArea.innerHTML='<div class="import-status error">Unsupported file format. Please use .xlsx, .csv, .docx, .pdf, .pptx, or .txt</div>';
       return;
     }
     if(!rows.length){
@@ -3643,6 +3649,73 @@ async function parseDOCX(data){
   // Fallback: try to parse structured text (bullet lists, etc.)
   const textLines=div.textContent.split(/\n/).filter(l=>l.trim());
   return parseTXT(textLines.join('\n'));
+}
+
+async function parsePDF(data){
+  if(!window.pdfjsLib){showSuccess('PDF parser is loading. Try again in a moment.');return[];}
+  const pdf=await pdfjsLib.getDocument({data}).promise;
+  let fullText='';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const content=await page.getTextContent();
+    const lines=[];let lastY=null;let line='';
+    content.items.forEach(item=>{
+      if(lastY!==null&&Math.abs(item.transform[5]-lastY)>2){lines.push(line);line='';}
+      line+=(line?' ':'')+item.str;
+      lastY=item.transform[5];
+    });
+    if(line)lines.push(line);
+    fullText+=lines.join('\n')+'\n';
+  }
+  // Try to detect table structure
+  return parseTXT(fullText);
+}
+
+async function parsePPTX(data){
+  if(!window.JSZip){showSuccess('Presentation parser is loading. Try again in a moment.');return[];}
+  const zip=await JSZip.loadAsync(data);
+  let allText='';
+  // Extract text from each slide
+  const slideFiles=Object.keys(zip.files).filter(f=>f.match(/^ppt\/slides\/slide\d+\.xml$/)).sort();
+  for(const sf of slideFiles){
+    const xml=await zip.files[sf].async('text');
+    // Parse XML to extract text from <a:t> tags
+    const parser=new DOMParser();
+    const doc=parser.parseFromString(xml,'application/xml');
+    const textNodes=doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','t');
+    const slideTexts=[];
+    Array.from(textNodes).forEach(n=>{if(n.textContent.trim())slideTexts.push(n.textContent.trim());});
+    allText+=slideTexts.join('\n')+'\n';
+  }
+  // Also check for tables in slides
+  for(const sf of slideFiles){
+    const xml=await zip.files[sf].async('text');
+    const parser=new DOMParser();
+    const doc=parser.parseFromString(xml,'application/xml');
+    const tblNodes=doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','tbl');
+    if(tblNodes.length){
+      // Extract table rows
+      const rows=[];
+      Array.from(tblNodes).forEach(tbl=>{
+        const trNodes=tbl.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','tr');
+        Array.from(trNodes).forEach(tr=>{
+          const cells=tr.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','t');
+          const row=Array.from(cells).map(c=>c.textContent.trim());
+          rows.push(row);
+        });
+      });
+      if(rows.length>=2){
+        const headers=rows[0];
+        return rows.slice(1).map(r=>{
+          const obj={};
+          headers.forEach((h,i)=>{obj[h]=r[i]||'';});
+          return obj;
+        }).filter(obj=>Object.values(obj).some(v=>v));
+      }
+    }
+  }
+  // Fallback to text parsing
+  return parseTXT(allText);
 }
 
 function parseTXT(text){
