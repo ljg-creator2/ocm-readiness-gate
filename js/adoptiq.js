@@ -646,7 +646,7 @@ function applyTheme(t){
     if(lb)lb.textContent=t==='dark'?'Dark':'Light';
   });
 }
-function toggleTheme(){applyTheme(theme==='light'?'dark':'light');setTimeout(()=>{if(releases.length){renderPortfolioCharts();renderTrendCharts();}const p=getProj();if(p)renderProjCharts();},300);}
+function toggleTheme(){const newTheme=theme==='light'?'dark':'light';applyTheme(newTheme);showSuccess(newTheme==='dark'?'Dark mode on.':'Back to light mode.');setTimeout(()=>{if(releases.length){renderPortfolioCharts();renderTrendCharts();}const p=getProj();if(p)renderProjCharts();},300);}
 applyTheme(theme);
 
 // ════════════════════════════════════════════════════════
@@ -696,6 +696,8 @@ function applyViewRole(role){
   if(currentViewRole==='exec_sponsor'||currentViewRole==='client_viewer'){
     showView('v-portfolio');renderPortfolio();
   }
+  const roleNames={admin:'Admin',staff:'Staff',exec_sponsor:'Executive Sponsor',client_viewer:'Client Viewer',editor:'Editor',viewer:'Viewer'};
+  showSuccess('Viewing as '+(roleNames[role]||role)+'.');
 }
 
 // ════════════════════════════════════════════════════════
@@ -731,18 +733,18 @@ async function saveData(){
       try{
         const{error}=await _supabase.from('user_data').upsert({user_id:currentUserId,releases:releases,updated_at:new Date().toISOString()});
         if(error){
-          console.error('Supabase save:',error);
+          console.error('Supabase save failed');
           if(attempt<MAX_SAVE_RETRIES){showSaveIndicator('Retrying\u2026');await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));continue;}
-          showSaveIndicator('Connection issue \u2014 saved locally',true);return;
+          showSaveIndicator('Couldn\u2019t save that change. Check your connection and try again.',true);return;
         }
         saved=true;break;
       }catch(netErr){
-        console.error('Network error:',netErr);
+        console.error('Network save failed');
         if(attempt<MAX_SAVE_RETRIES){showSaveIndicator('Retrying\u2026');await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));continue;}
-        showSaveIndicator('Connection issue \u2014 saved locally',true);return;
+        showSaveIndicator('Couldn\u2019t save that change. Check your connection and try again.',true);return;
       }
     }
-    if(!saved){showSaveIndicator('Connection issue \u2014 saved locally',true);return;}
+    if(!saved){showSaveIndicator('Couldn\u2019t save that change. Check your connection and try again.',true);return;}
   }
   showSaveIndicator('Saved');
   showSuccess('Saved.');
@@ -1387,7 +1389,7 @@ function createRelease(){
   if(!name){document.getElementById('new-r-name').classList.add('err');document.getElementById('err-r-name').classList.add('show');return;}
   const nr=newRelease(name,[...modalRelAgencies],document.getElementById('new-r-golive').value,document.getElementById('new-r-phase').value);
   releases.push(nr);logAudit('release_created','release',name,{agencies:nr.agencies});
-  closeModal('add-rel-modal');saveData();renderPortfolio();
+  closeModal('add-rel-modal');saveData();renderPortfolio();showSuccess('Release created. Start adding projects to build out the picture.');
 }
 
 // Delete Release
@@ -1416,7 +1418,7 @@ function addProject(){
   document.getElementById('new-p-name').value='';
   document.getElementById('new-p-users').value='';
   newProjAgencies=[];renderNewProjChips();
-  touch('rel');schedSave();renderRelView();
+  touch('rel');schedSave();renderRelView();showSuccess('Project added to this release.');
 }
 function openDelProject(pid,name){
   delProjTarget=pid;
@@ -1474,6 +1476,7 @@ function renderNewProjChips(){
 // PORTFOLIO RENDER
 // ════════════════════════════════════════════════════════
 function renderPortfolio(){
+  showSaveIndicator('Pulling your portfolio together\u2026');
   showOnboardingCallout('role-switcher','#v-portfolio .top-bar .top-right','See AdoptIQ through your stakeholder\u2019s eyes.','Switch roles to preview exactly what Executives, Client Viewers, and Team members can see and do.','Got it');
   _rollupCache.clear();
   const total=releases.length;
@@ -1539,8 +1542,10 @@ function renderPortfolio(){
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('people-cap-sec').style.display=releases.length>=1?'block':'none';
-  renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
-  if(isReadOnly)applyReadOnlyRestrictions();
+  requestAnimationFrame(()=>{
+    renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
+    if(isReadOnly)applyReadOnlyRestrictions();
+  });
 }
 
 // ════════════════════════════════════════════════════════
@@ -1699,8 +1704,8 @@ async function askAdoptIQ(){
     const result=await response.json();
     renderAiqAnswer(question,result);
   }catch(err){
-    console.error('Ask AdoptIQ error:',err);
-    area.innerHTML=`<div class="aiq-response"><div class="aiq-response__header"><div class="aiq-response__tag">${esc(question)}</div><button class="aiq-panel__close" onclick="closeAiqAnswer()"><i class="ph ph-x"></i></button></div><div class="aiq-response__body"><div style="color:#b83232;font-size:12px">AIQ is temporarily unavailable. Your data is intact \u2014 try again in a moment.</div></div></div>`;
+    console.error('AIQ request failed');
+    area.innerHTML=`<div class="aiq-response"><div class="aiq-response__header"><div class="aiq-response__tag">${esc(question)}</div><button class="aiq-panel__close" onclick="closeAiqAnswer()"><i class="ph ph-x"></i></button></div><div class="aiq-response__body"><div style="color:var(--red);font-size:12px">AIQ is temporarily unavailable. Your data is intact \u2014 try again in a moment.</div></div></div>`;
   }finally{
     clearTimeout(_aiqT1);clearTimeout(_aiqT2);
     if(btn){btn.disabled=false;btn.textContent='Ask AIQ';}
@@ -2075,6 +2080,7 @@ function checkNavOverflow(){
 window.addEventListener('resize',checkNavOverflow);
 
 function renderPGates(){
+  showSaveIndicator('Assembling your gate status\u2026');
   const p=getProj();if(!p)return;
   const c=document.getElementById('p-gates-container');c.innerHTML='';
   GATE_DEFS.forEach(gate=>{
@@ -2104,6 +2110,9 @@ function setPGate(gid,idx,color){
   const p=getProj();if(!p)return;
   const k=gid+'_'+idx;p.gateState[k]=p.gateState[k]===color?null:color;
   renderPGates();renderPKPIs();touch('proj');schedSave();
+  const gate=GATE_DEFS.find(g=>g.id===gid);
+  if(gate&&gate.items.every((_,i)=>p.gateState[gid+'_'+i]))showSuccess('Gate assessment recorded. Ready for the next one.');
+  else showSuccess('Gate item updated.');
 }
 
 const HMS=['Not Started','Complete','Partial','Blocking','N/A'];
@@ -2158,6 +2167,7 @@ function renderPFlags(){
 }
 
 function renderPAdkar(){
+  showSaveIndicator('Calculating readiness dimensions\u2026');
   const p=getProj();if(!p)return;
   const dims=getActiveDims();
   const fw=getFramework();
@@ -2194,7 +2204,7 @@ function updatePAdkar(k,v){
   const p=getProj();if(!p)return;p.adkarScores[k]=parseInt(v);
   const ve=document.getElementById('pav-'+k);const be=document.getElementById('pab-'+k);
   if(ve)ve.textContent=v;if(be){be.style.width=(parseInt(v)/5*100)+'%';be.style.background=adkarColor(parseInt(v));}
-  updatePAdkarSummary();renderPKPIs();touch('proj');schedSave();
+  updatePAdkarSummary();renderPKPIs();touch('proj');schedSave();showSuccess('ADKAR score saved.');
 }
 function updatePAdkarNote(k,v){const p=getProj();if(!p)return;p.adkarNotes[k]=v;touch('proj');schedSave();}
 function updatePAdkarSummary(){
@@ -2210,6 +2220,7 @@ function updatePAdkarSummary(){
     :'Critical readiness deficit. Recommend formal escalation to executive sponsor before proceeding.';
   const kpi=document.getElementById('p-kpi-adkar');if(kpi)kpi.textContent=avg+'/5';
   const kpiL=document.getElementById('p-kpi-adkar-label');if(kpiL)kpiL.textContent=fwShort()+' Score';
+  if(dims.every(d=>p.adkarScores[d.key]&&p.adkarScores[d.key]>0))showSuccess('All five dimensions scored. Readiness picture is complete.');
 }
 
 // ═══ ADKAR Guided Assessment Mode ═══
@@ -3598,7 +3609,7 @@ function splitCSVLine(line){
 }
 
 function parseXLSX(data){
-  if(!window.XLSX){alert('Excel parser is loading \u2014 try again in a moment.');return[];}
+  if(!window.XLSX){showSuccess('Excel parser is loading. Try again in a moment.');return[];}
   const wb=XLSX.read(data,{type:'array'});
   const ws=wb.Sheets[wb.SheetNames[0]];
   const json=XLSX.utils.sheet_to_json(ws,{defval:''});
@@ -3606,7 +3617,7 @@ function parseXLSX(data){
 }
 
 async function parseDOCX(data){
-  if(!window.mammoth){alert('Document parser is loading \u2014 try again in a moment.');return[];}
+  if(!window.mammoth){showSuccess('Document parser is loading. Try again in a moment.');return[];}
   const result=await mammoth.convertToHtml({arrayBuffer:data});
   const html=result.value;
   // Extract tables from HTML
@@ -3762,7 +3773,7 @@ function toggleAllImportRows(checked){_importParsed.forEach(item=>item._selected
 function commitImport(){
   const p=getProj();if(!p)return;
   const selected=_importParsed.filter(item=>item._selected);
-  if(!selected.length){alert('No rows selected for import.');return;}
+  if(!selected.length){showSuccess('Select at least one row to import.');return;}
   const mergeMode=document.querySelector('input[name="import-merge"]:checked')?.value||'append';
 
   if(_importTarget==='impact'){
@@ -4063,7 +4074,7 @@ function saveProofPoint(){
   const tags=PROOF_DIMS.filter(d=>{const el=document.getElementById('pp-tag-'+d.replace(/\s/g,'-'));return el&&el.checked;});
   p.proofPoints.push({id:uid(),what,when,proves,source,dimensionTags:tags});
   document.getElementById('add-pp-modal')?.remove();
-  renderProofPoints(p);touch('proj');schedSave();
+  renderProofPoints(p);touch('proj');schedSave();showSuccess('Evidence attached.');
 }
 function removeProofPoint(i){const p=getProj();if(!p||!p.proofPoints)return;p.proofPoints.splice(i,1);renderProofPoints(p);touch('proj');schedSave();}
 
@@ -4320,6 +4331,7 @@ function renderProjCharts(){
 }
 
 function renderPortfolioCharts(){
+  showSaveIndicator('Rendering trend data\u2026');
   if(!releases.length){document.getElementById('exec-dash').style.display='none';return;}
   document.getElementById('exec-dash').style.display='block';
 
@@ -6391,7 +6403,7 @@ function updateDimLabel(idx,field,value){
 }
 function addFrameworkDim(){
   const b=getBrand();const fw=getFramework();
-  if(fw.dims.length>=10){alert('Maximum 10 dimensions');return;}
+  if(fw.dims.length>=10){showSuccess('Maximum 10 dimensions reached.');return;}
   const nk='d'+(fw.dims.length+1);
   fw.dims.push({key:nk,letter:'?',word:'New Dimension',desc:'Description'});
   b.frameworkId='custom';b.customDims=fw.dims;
@@ -7035,7 +7047,7 @@ function pdfCheckPage(doc,y,w,h,pg,needed){
 }
 
 function exportProjectPDF(){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   migrateResources(p);
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -7124,11 +7136,11 @@ function exportProjectPDF(){
     y=doc.lastAutoTable.finalY+6;
   }
   pdfFooter(doc,w,h,pg[0]);
-  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);showSuccess('Report exported. Open it in a new tab to review.');}
 }
 
 function exportReleasePDF(){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const r=getRel();if(!r)return;
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
   const w=doc.internal.pageSize.getWidth(),h=doc.internal.pageSize.getHeight();
@@ -7171,7 +7183,7 @@ function exportReleasePDF(){
     y+=3;
   });
   pdfFooter(doc,w,h,pg[0]);
-  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);showSuccess('Report exported. Open it in a new tab to review.');}
 }
 function getProjFlags(p){
   const flags=[];
@@ -7186,7 +7198,7 @@ function getProjFlags(p){
 // CLIENT HANDOFF PDF
 // ════════════════════════════════════════════════════════
 function exportHandoffPDF(){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   try{
   const brand=getBrand();
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -7321,7 +7333,7 @@ function exportHandoffPDF(){
   const blob=doc.output('blob');
   const url=URL.createObjectURL(blob);
   window.open(url,'_blank');
-  }catch(e){console.error('Handoff PDF error:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
+  }catch(e){console.error('Handoff PDF export failed');showSuccess('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 // ════════════════════════════════════════════════════════
@@ -7582,7 +7594,7 @@ function _trainingModality(sh){
 }
 
 function genStakeholderAnalysis(aiNarrative,audience){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -7781,13 +7793,13 @@ function genStakeholderAnalysis(aiNarrative,audience){
   y=doc.lastAutoTable.finalY+10;
 
   pdfFooter(doc,w,h,pg[0]);
-  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);showSuccess('Report exported. Open it in a new tab to review.');}
   toggleGenMenu();
-  }catch(e){console.error('Stakeholder Analysis PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
+  }catch(e){console.error('Stakeholder Analysis PDF export failed');showSuccess('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genTrainingPlan(aiNarrative,audience){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -8001,13 +8013,13 @@ function genTrainingPlan(aiNarrative,audience){
   }
 
   pdfFooter(doc,w,h,pg[0]);
-  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);showSuccess('Report exported. Open it in a new tab to review.');}
   toggleGenMenu();
-  }catch(e){console.error('Training Plan PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
+  }catch(e){console.error('Training Plan PDF export failed');showSuccess('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genCommsPlan(aiNarrative,audience){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -8184,13 +8196,13 @@ function genCommsPlan(aiNarrative,audience){
   });
 
   pdfFooter(doc,w,h,pg[0]);
-  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);showSuccess('Report exported. Open it in a new tab to review.');}
   toggleGenMenu();
-  }catch(e){console.error('Comms Plan PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
+  }catch(e){console.error('Comms Plan PDF export failed');showSuccess('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genResistancePlan(aiNarrative,audience){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -8432,13 +8444,13 @@ function genResistancePlan(aiNarrative,audience){
   }
 
   pdfFooter(doc,w,h,pg[0]);
-  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);showSuccess('Report exported. Open it in a new tab to review.');}
   toggleGenMenu();
-  }catch(e){console.error('Resistance Plan PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
+  }catch(e){console.error('Resistance Plan PDF export failed');showSuccess('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genReadinessRec(aiNarrative,audience){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -8730,15 +8742,15 @@ function genReadinessRec(aiNarrative,audience){
   }
 
   pdfFooter(doc,w,h,pg[0]);
-  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
+  {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);showSuccess('Report exported. Open it in a new tab to review.');}
   toggleGenMenu();
-  }catch(e){console.error('Readiness Rec PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
+  }catch(e){console.error('Readiness Rec PDF export failed');showSuccess('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genFullPackage(){
-  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
+  if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
-  alert('Generating all 5 deliverables (without AI narratives). Each will open in a separate tab.');
+  showSuccess('Generating all 5 deliverables. Each will open in a separate tab.');
   toggleGenMenu();
   setTimeout(()=>genStakeholderAnalysis(null,null),100);
   setTimeout(()=>genTrainingPlan(null,null),300);
@@ -8773,10 +8785,10 @@ function exitDemo(){
 async function ensureTeam(releaseId){
   try{
     const{data,error:selErr}=await _supabase.from('teams').select('id').eq('release_id',releaseId).eq('owner_id',currentUserId).maybeSingle();
-    if(selErr){console.warn('Teams table not found. Run sql/phase4_teams.sql in Supabase.',selErr.message);return null;}
+    if(selErr){console.warn('Teams table not found. Run sql/phase4_teams.sql in Supabase.');return null;}
     if(data)return data.id;
     const{data:newTeam,error}=await _supabase.from('teams').insert({release_id:releaseId,owner_id:currentUserId}).select('id').single();
-    if(error){console.error('Create team:',error);return null;}
+    if(error){console.error('Team creation failed');return null;}
     return newTeam.id;
   }catch(e){console.warn('Team feature unavailable:',e);return null;}
 }
@@ -8863,7 +8875,7 @@ async function checkPendingInvites(){
 async function acceptInvite(inviteId,teamId,role){
   // Add as team member
   const{error:mErr}=await _supabase.from('team_members').insert({team_id:teamId,user_id:currentUserId,role});
-  if(mErr){console.error('Accept invite:',mErr);return;}
+  if(mErr){console.error('Invite accept failed');return;}
   // Mark invite accepted
   await _supabase.from('team_invites').update({accepted_at:new Date().toISOString()}).eq('id',inviteId);
   checkPendingInvites();
@@ -9488,7 +9500,7 @@ async function generateShareLink(){
   }).select('token').single();
   if(error){
     errEl.textContent='Could not create share link. Run sql/phase5_sharing.sql in Supabase first.';
-    console.error('Share link error:',error);return;
+    console.error('Share link creation failed');return;
   }
   const url=window.location.origin+'/?share='+data.token;
   document.getElementById('share-link-url').value=url;

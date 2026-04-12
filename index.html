@@ -3,15 +3,93 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="AdoptIQ — Enterprise OCM readiness gate platform. Track training dependencies, ADKAR assessment, stakeholder adoption, and SDLC gate readiness across your portfolio.">
-<title>AdoptIQ — Adoption Intelligence Platform</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta http-equiv="content-language" content="en-US">
+
+<!-- Primary SEO -->
+<title>AdoptIQ | OCM Readiness Platform for Enterprise Change</title>
+<meta name="description" content="AdoptIQ is the OCM readiness platform trusted by enterprise consultants. Track ADKAR adoption, manage change gates, and measure organizational readiness in real time.">
+<meta name="keywords" content="OCM readiness, change management software, ADKAR tracking, organizational change management platform, change adoption dashboard">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+<meta name="author" content="Providence Consulting Firm">
+<meta name="copyright" content="Copyright 2026 Providence Consulting Firm. All rights reserved.">
+<meta name="theme-color" content="#0b1c3f">
+<link rel="canonical" href="https://amazing-babka-79af7a.netlify.app/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="AdoptIQ | OCM Readiness Platform for Enterprise Change">
+<meta property="og:description" content="The platform built specifically for OCM professionals. Real-time ADKAR tracking, gate readiness dashboards, and organizational change analytics.">
+<meta property="og:url" content="https://amazing-babka-79af7a.netlify.app/">
+<meta property="og:image" content="https://amazing-babka-79af7a.netlify.app/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="AdoptIQ OCM Readiness Dashboard">
+<meta property="og:site_name" content="AdoptIQ">
+<meta property="og:locale" content="en_US">
+<meta property="linkedin:title" content="AdoptIQ | OCM Readiness Platform">
+<meta property="linkedin:description" content="Enterprise-grade OCM readiness platform trusted by consulting firms.">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AdoptIQ | OCM Readiness Platform for Enterprise Change">
+<meta name="twitter:description" content="Track ADKAR adoption, manage change gates, and measure organizational readiness. Built for OCM consultants who need real-time insights.">
+<meta name="twitter:image" content="https://amazing-babka-79af7a.netlify.app/og-image.png">
+<meta name="twitter:site" content="@ProvidenceConsult">
+<meta name="twitter:creator" content="@ProvidenceConsult">
+
+<!-- Apple / Mobile -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="AdoptIQ">
+<meta name="format-detection" content="telephone=no">
+
+<!-- JSON-LD: SoftwareApplication -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "AdoptIQ",
+  "description": "Enterprise OCM readiness platform for tracking organizational change management and ADKAR adoption across the organization.",
+  "url": "https://amazing-babka-79af7a.netlify.app/",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "softwareVersion": "1.0.0",
+  "author": { "@type": "Organization", "name": "Providence Consulting Firm", "url": "https://amazing-babka-79af7a.netlify.app/" },
+  "publisher": { "@type": "Organization", "name": "Providence Consulting Firm", "url": "https://amazing-babka-79af7a.netlify.app/" },
+  "datePublished": "2026-01-01T00:00:00Z",
+  "dateModified": "2026-04-12T00:00:00Z",
+  "inLanguage": "en-US",
+  "isAccessibleForFree": false,
+  "featureList": ["ADKAR dimension tracking and scoring","Organizational change gate management","Real-time readiness dashboards","Stakeholder readiness heatmaps","Portfolio-wide change tracking","AIQ analyst recommendations","PDF export for executive reports","Multi-release project comparison"]
+}
+</script>
+
+<!-- JSON-LD: Organization -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Providence Consulting Firm",
+  "url": "https://amazing-babka-79af7a.netlify.app/",
+  "description": "Providence Consulting Firm provides enterprise-grade OCM readiness solutions for large organizations managing complex change initiatives.",
+  "address": { "@type": "PostalAddress", "addressCountry": "US" },
+  "sameAs": ["https://www.linkedin.com/company/providence-consulting-firm","https://twitter.com/ProvidenceConsult"]
+}
+</script>
+
+<!-- Preconnect for performance -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://unpkg.com">
+
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>A</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
 <link rel="stylesheet" href="css/adoptiq.css">
@@ -30,7 +108,7 @@
       <div class="lp-nav-right">
         <a href="#lp-features" class="lp-nav-link">Features</a>
         <a href="#lp-how" class="lp-nav-link">How It Works</a>
-        <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme"><i class="ph ph-moon"></i></button>
+        <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle light/dark theme"><i class="ph ph-moon"></i></button>
         <button class="lp-nav-signin" onclick="landingToLogin()">Sign In</button>
       </div>
     </div>
@@ -189,11 +267,11 @@
     <div id="login-signin">
       <div class="login-field">
         <label for="signin-email">Email</label>
-        <input id="signin-email" type="email" placeholder="you@agency.gov" autocomplete="email">
+        <input id="signin-email" type="email" placeholder="you@agency.gov" autocomplete="email" aria-label="Email address">
       </div>
       <div class="login-field">
         <label for="signin-pw">Password</label>
-        <input id="signin-pw" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()">
+        <input id="signin-pw" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()" aria-label="Password">
       </div>
       <button class="btn-gold" style="width:100%" onclick="signIn()">Sign In</button>
       <div style="text-align:center;margin-top:12px;font-size:11px">
@@ -214,16 +292,16 @@
     <div id="login-signup" style="display:none">
       <div class="login-field">
         <label for="signup-email">Email</label>
-        <input id="signup-email" type="email" placeholder="you@agency.gov" autocomplete="email">
+        <input id="signup-email" type="email" placeholder="you@agency.gov" autocomplete="email" aria-label="Email address">
       </div>
       <div class="login-field">
         <label for="signup-pw">Password</label>
-        <input id="signup-pw" type="password" placeholder="Min 12 chars, uppercase, number, special char" autocomplete="new-password" oninput="checkPasswordStrength()" onkeydown="if(event.key==='Enter')createAccount()">
+        <input id="signup-pw" type="password" placeholder="Min 12 chars, uppercase, number, special char" autocomplete="new-password" oninput="checkPasswordStrength()" onkeydown="if(event.key==='Enter')createAccount()" aria-label="Password">
         <div id="pw-strength" style="font-size:11px;color:var(--amber);margin-top:4px;min-height:16px"></div>
       </div>
       <div class="login-field">
         <label for="signup-confirm">Confirm Password</label>
-        <input id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')createAccount()">
+        <input id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')createAccount()" aria-label="Confirm password">
       </div>
       <button class="btn-gold" style="width:100%" onclick="createAccount()">Create Account</button>
       <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
@@ -237,7 +315,7 @@
       <p style="font-size:12px;color:var(--ink-60);margin-bottom:16px">Enter your email to receive a password reset link.</p>
       <div class="login-field">
         <label for="forgot-email">Email</label>
-        <input id="forgot-email" type="email" placeholder="you@agency.gov" autocomplete="email" onkeydown="if(event.key==='Enter')sendPasswordReset()">
+        <input id="forgot-email" type="email" placeholder="you@agency.gov" autocomplete="email" onkeydown="if(event.key==='Enter')sendPasswordReset()" aria-label="Email address">
       </div>
       <button class="btn-gold" style="width:100%" onclick="sendPasswordReset()">Send Reset Link</button>
       <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
@@ -331,7 +409,7 @@
   </div>
   <div class="aiq-messages" id="aiq-answer-area" style="display:none"></div>
   <!-- Mobile NLQ FAB -->
-  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ"><i class="ph ph-sparkle"></i></button>
+  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ" aria-label="Open AIQ Analyst"><i class="ph ph-sparkle"></i></button>
 
   <div class="port-body" id="main-content">
     <div id="what-data-tells"></div>
@@ -714,8 +792,8 @@
         <div class="kc ca"><div class="kc-l">Highest Risk Group</div><div class="kc-v sm" id="r-kpi-rg">—</div><div class="kc-s" id="r-kpi-rg-s">Affected group</div></div>
         <div class="kc cg"><div class="kc-l">Projects Tracked</div><div class="kc-v" id="r-kpi-projs">0</div><div class="kc-s">Total in this release</div></div>
         <div class="kc cb"><div class="kc-l" id="r-kpi-adkar-label">ADKAR Avg</div><div class="kc-v" id="r-kpi-adkar">—</div><div class="kc-s">Across all projects</div></div>
-        <div class="kc" style="border-left:3px solid #b83232"><div class="kc-l">Open Risks</div><div class="kc-v" id="r-kpi-risks">0</div><div class="kc-s" id="r-kpi-risks-s">Across all projects</div></div>
-        <div class="kc" style="border-left:3px solid #7c3aed"><div class="kc-l">OCM Coverage</div><div class="kc-v sm" id="r-kpi-ocm">—</div><div class="kc-s" id="r-kpi-ocm-s">Training &amp; Implementation</div></div>
+        <div class="kc" style="border-left:3px solid var(--red)"><div class="kc-l">Open Risks</div><div class="kc-v" id="r-kpi-risks">0</div><div class="kc-s" id="r-kpi-risks-s">Across all projects</div></div>
+        <div class="kc" style="border-left:3px solid var(--blue)"><div class="kc-l">OCM Coverage</div><div class="kc-v sm" id="r-kpi-ocm">—</div><div class="kc-s" id="r-kpi-ocm-s">Training &amp; Implementation</div></div>
       </div>
       <!-- Project overview cards -->
       <div class="tab-eye" style="margin-bottom:10px">Projects</div>
@@ -749,11 +827,11 @@
         <div class="add-proj-fields">
           <div class="form-field">
             <label for="new-p-name">Project Name</label>
-            <input class="form-inp" type="text" id="new-p-name" placeholder="e.g. ABAWD P2">
+            <input class="form-inp" type="text" id="new-p-name" placeholder="e.g. ABAWD P2" aria-label="Project name">
           </div>
           <div class="form-field">
             <label for="new-p-users">Estimated End Users</label>
-            <input class="form-inp" type="number" id="new-p-users" placeholder="0" min="0" style="width:120px">
+            <input class="form-inp" type="number" id="new-p-users" placeholder="0" min="0" style="width:120px" aria-label="Number of users affected">
           </div>
           <button class="btn-gold" onclick="addProject()" style="margin-bottom:0;align-self:end">Add Project</button>
         </div>
@@ -1139,7 +1217,7 @@
     <div class="modal-sub">Each release contains its own projects, each with independent gate trackers, readiness assessments, and adoption scoring.</div>
     <div class="modal-field">
       <label for="new-r-name">Release Name</label>
-      <input class="modal-inp" type="text" id="new-r-name" placeholder="e.g., Online Banking 2.0">
+      <input class="modal-inp" type="text" id="new-r-name" placeholder="e.g., Online Banking 2.0" aria-label="Release name">
       <div class="field-err" id="err-r-name">Release name is required.</div>
     </div>
     <div class="modal-field">
@@ -1153,7 +1231,7 @@
     <div class="modal-row">
       <div class="modal-field">
         <label for="new-r-golive">Go-Live Date</label>
-        <input class="modal-inp" type="date" id="new-r-golive">
+        <input class="modal-inp" type="date" id="new-r-golive" aria-label="Go-live date">
       </div>
       <div class="modal-field">
         <label for="new-r-phase">SDLC Phase</label>
@@ -1218,11 +1296,11 @@
     <div class="profile-email" id="profile-email"></div>
     <div class="profile-field">
       <label for="profile-name">Full Name</label>
-      <input id="profile-name" type="text" placeholder="Jane Doe">
+      <input id="profile-name" type="text" placeholder="Jane Doe" aria-label="Full name">
     </div>
     <div class="profile-field">
       <label for="profile-org">Organization</label>
-      <input id="profile-org" type="text" placeholder="Agency or company name">
+      <input id="profile-org" type="text" placeholder="Agency or company name" aria-label="Organization">
     </div>
     <div class="profile-field">
       <label for="profile-role">Role</label>
@@ -1254,7 +1332,7 @@
     <div class="profile-section-title">Methodology Branding <span style="font-size:9px;font-weight:400;color:var(--ink-60);letter-spacing:0">(Administrator only)</span></div>
     <div class="profile-field">
       <label for="brand-firm">Firm / Company Name</label>
-      <input id="brand-firm" type="text" class="modal-inp" placeholder="Your firm name">
+      <input id="brand-firm" type="text" class="modal-inp" placeholder="Your firm name" aria-label="Firm name">
     </div>
     <div class="profile-field">
       <label for="brand-subtitle">Subtitle / Tagline</label>
@@ -1310,12 +1388,12 @@
     <div class="profile-section-title">Change Password</div>
     <div class="profile-field">
       <label for="profile-new-pw">New Password</label>
-      <input id="profile-new-pw" type="password" placeholder="Leave blank to keep current" oninput="checkProfilePwStrength()">
+      <input id="profile-new-pw" type="password" placeholder="Leave blank to keep current" oninput="checkProfilePwStrength()" aria-label="New password">
       <div id="profile-pw-strength" style="font-size:11px;color:var(--amber);margin-top:4px;min-height:16px"></div>
     </div>
     <div class="profile-field">
       <label for="profile-confirm-pw">Confirm New Password</label>
-      <input id="profile-confirm-pw" type="password" placeholder="Confirm new password">
+      <input id="profile-confirm-pw" type="password" placeholder="Confirm new password" aria-label="Confirm new password">
     </div>
     <div class="modal-acts">
       <button class="btn-ghost" onclick="closeModal('profile-modal')">Cancel</button>
@@ -1344,7 +1422,7 @@
     <div class="modal-sub">Share this release with a team member. They'll receive access after signing in.</div>
     <div class="modal-field">
       <label class="modal-lbl" for="invite-email">Email Address</label>
-      <input class="modal-inp" type="email" id="invite-email" placeholder="colleague@agency.gov">
+      <input class="modal-inp" type="email" id="invite-email" placeholder="colleague@agency.gov" aria-label="Invite email address">
     </div>
     <div class="modal-field">
       <label class="modal-lbl" for="invite-role">Role</label>
