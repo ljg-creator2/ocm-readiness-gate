@@ -6,6 +6,55 @@ const SUPABASE_URL='https://yufehucjvviwanbulcok.supabase.co';
 const SUPABASE_ANON_KEY='sb_publishable_6YS9ifWHEU53f-H9svKJpg_paNqSFam';
 const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
+// ════════════════════════════════════════════════════════
+// CHART.JS PCF SKIN — branded defaults, not Chart.js stock
+// ════════════════════════════════════════════════════════
+const PCF_COLORS=['#0b1c3f','#c75c1f','#2f7b2e','#e5cc94','#a59d5f','#2a4a80'];
+if(typeof Chart!=='undefined'){
+  Chart.defaults.font.family='DM Sans, sans-serif';
+  Chart.defaults.font.size=11;
+  Chart.defaults.color='#8a96a3';
+  Chart.defaults.scale.grid.color='rgba(11,28,63,0.06)';
+  Chart.defaults.scale.border={display:false};
+  Chart.defaults.plugins.tooltip.backgroundColor='#021d2e';
+  Chart.defaults.plugins.tooltip.titleColor='#f3f1ed';
+  Chart.defaults.plugins.tooltip.bodyColor='#c8c4bc';
+  Chart.defaults.plugins.tooltip.borderWidth=0;
+  Chart.defaults.plugins.tooltip.padding=10;
+  Chart.defaults.plugins.tooltip.cornerRadius=4;
+  Chart.defaults.plugins.legend.labels.usePointStyle=true;
+  Chart.defaults.plugins.legend.labels.boxWidth=8;
+}
+
+// ═══ Density Toggle ═══
+function setDensity(level){
+  document.body.setAttribute('data-density',level);
+  localStorage.setItem('adoptiq-density',level);
+  document.querySelectorAll('.density-btn').forEach(btn=>{
+    btn.classList.toggle('density-btn--active',btn.textContent.trim().toLowerCase()===level);
+  });
+}
+(function(){const saved=localStorage.getItem('adoptiq-density')||'comfortable';setDensity(saved);})();
+
+// ═══ First-Run Onboarding Callouts ═══
+function showOnboardingCallout(key,containerSelector,headline,body,ctaLabel){
+  const seen=JSON.parse(localStorage.getItem('adoptiq-onboarding')||'{}');
+  if(seen[key])return;
+  const container=document.querySelector(containerSelector);
+  if(!container)return;
+  if(container.querySelector('.onboarding-callout'))return;
+  const callout=document.createElement('div');
+  callout.className='onboarding-callout';
+  callout.innerHTML='<h4>'+headline+'</h4><p>'+body+'</p><button class="btn-sm" onclick="dismissOnboarding(this,\''+key+'\')">'+ctaLabel+'</button>';
+  container.prepend(callout);
+}
+function dismissOnboarding(btn,key){
+  if(btn&&btn.parentElement)btn.parentElement.remove();
+  const s=JSON.parse(localStorage.getItem('adoptiq-onboarding')||'{}');
+  s[key]=true;
+  localStorage.setItem('adoptiq-onboarding',JSON.stringify(s));
+}
+
 function showLanding(){document.getElementById('v-landing').classList.add('active');document.getElementById('v-login').classList.remove('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
 function hideLanding(){document.getElementById('v-landing').classList.remove('active');}
 function showLogin(){hideLanding();document.getElementById('v-login').classList.add('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
@@ -27,14 +76,14 @@ function openBookingModal(){
       <input type="hidden" name="form-name" value="walkthrough-request">
       <div class="lp-booking-fields">
         <div class="lp-booking-row">
-          <div class="lp-booking-field"><label>First Name *</label><input type="text" name="firstName" required placeholder="Jane"></div>
-          <div class="lp-booking-field"><label>Last Name *</label><input type="text" name="lastName" required placeholder="Smith"></div>
+          <div class="lp-booking-field"><label>First Name *</label><input type="text" name="firstName" required placeholder="First name" autocomplete="given-name" aria-label="First name"></div>
+          <div class="lp-booking-field"><label>Last Name *</label><input type="text" name="lastName" required placeholder="Last name" autocomplete="family-name" aria-label="Last name"></div>
         </div>
-        <div class="lp-booking-field"><label>Work Email *</label><input type="email" name="email" required placeholder="jane@agency.gov"></div>
-        <div class="lp-booking-field"><label>Organization *</label><input type="text" name="organization" required placeholder="Your agency, firm, or company"></div>
-        <div class="lp-booking-field"><label>Role</label><input type="text" name="role" placeholder="e.g. OCM Lead, Program Manager, Director"></div>
+        <div class="lp-booking-field"><label>Work Email *</label><input type="email" name="email" required placeholder="you@organization.com" autocomplete="email" aria-label="Work email"></div>
+        <div class="lp-booking-field"><label>Organization *</label><input type="text" name="organization" required placeholder="Organization name" autocomplete="organization" aria-label="Organization"></div>
+        <div class="lp-booking-field"><label>Role</label><input type="text" name="role" placeholder="Your role or title" autocomplete="organization-title" aria-label="Role"></div>
         <div class="lp-booking-field"><label>What are you looking to solve?</label>
-          <textarea name="message" rows="3" placeholder="Tell us about your change management challenges or what you'd like to see in the walkthrough..."></textarea></div>
+          <textarea name="message" rows="3" placeholder="Tell us about your change initiative..."></textarea></div>
         <div class="lp-booking-field"><label>Preferred Contact Method</label>
           <div class="lp-booking-prefs">
             <label class="lp-booking-pref"><input type="radio" name="contactMethod" value="email" checked> Email</label>
@@ -46,7 +95,7 @@ function openBookingModal(){
       <p class="lp-booking-note">We typically respond within 1–3 business days.</p>
     </form>
     <div id="booking-success" style="display:none" class="lp-booking-success">
-      <div class="lp-booking-check">&#10003;</div>
+      <div class="lp-booking-check"><i class="ph ph-check-circle"></i></div>
       <h3>Request Received</h3>
       <p>Thank you. We'll be in touch within 1–3 business days to schedule your walkthrough.</p>
       <button class="lp-btn-secondary" onclick="document.getElementById('booking-modal').remove()" style="margin-top:20px">Close</button>
@@ -299,7 +348,7 @@ async function saveProfile(){
     if(pwError){msgEl.style.color='var(--red)';msgEl.textContent=pwError.message;return;}
   }
 
-  msgEl.style.color='var(--green)';msgEl.textContent='Profile saved successfully.';
+  msgEl.style.color='var(--green)';msgEl.textContent='Profile saved.';
   updateAvatars();
   await saveAlertPrefs();
   setTimeout(()=>{closeModal('profile-modal');},1200);
@@ -422,12 +471,132 @@ const AF=[
 ];
 const FD={1:'Critical risk indicator',2:'High risk indicator',3:'Moderate — monitor',4:'Acceptable — sustain',5:'Low risk — strength'};
 const ADKAR_DIMS=[
-  {key:'A1',letter:'A',word:'Awareness',desc:'Awareness of the need for change'},
-  {key:'D',letter:'D',word:'Desire',desc:'Desire to support and participate'},
-  {key:'K',letter:'K',word:'Knowledge',desc:'Knowledge of how to change'},
-  {key:'Ab',letter:'A',word:'Ability',desc:'Ability to implement required skills and behaviors'},
-  {key:'R',letter:'R',word:'Reinforcement',desc:'Reinforcement to sustain the change'},
+  {key:'A1',letter:'A',word:'Awareness',desc:'Does the organization understand why this change is happening? Without a credible \u201cwhy,\u201d resistance starts here.'},
+  {key:'D',letter:'D',word:'Desire',desc:'Do people want to support this change \u2014 or are they tolerating it? Desire can\u2019t be mandated; it has to be earned.'},
+  {key:'K',letter:'K',word:'Knowledge',desc:'Do people know how to change? Training and communication gaps surface here. High desire without knowledge stalls execution.'},
+  {key:'Ab',letter:'A',word:'Ability',desc:'Can people actually perform the new behaviors? Ability is where theory meets practice. Low ability means the change isn\u2019t real yet.'},
+  {key:'R',letter:'R',word:'Reinforcement',desc:'Are the right behaviors being recognized and sustained? Without reinforcement, change regresses. This is what makes it stick.'},
 ];
+
+// ═══ ADKAR Guided Scoring Content ═══
+const ADKAR_GUIDED={
+  d1:{
+    question:'Does this group understand why this change is happening and what happens if it doesn\u2019t?',
+    fieldPrompt:'In your conversations with this group, can people tell you \u2014 in their own words \u2014 why this change is happening and what\u2019s driving it from the top?\n\nNot just the project name. The reason.',
+    coachingTip:'Tip: \u201CWe\u2019re going to a new system\u201D is not Awareness.\n\u201CWe\u2019re moving to a new system because the current one can\u2019t support the growth we\u2019re targeting and leadership made the call in Q1\u201D \u2014 that\u2019s Awareness.\n\nIf people know the what but not the why, score this no higher than a 2.',
+    anchors:[
+      {score:1,label:'No signal',desc:'People don\u2019t know this change is happening, or they\u2019ve heard a rumor with no substance'},
+      {score:2,label:'Name only',desc:'People know the project name or that \u201Csomething is changing\u201D but can\u2019t say why'},
+      {score:3,label:'Partial',desc:'Some people can explain the why, others can\u2019t. Messaging has reached parts of the group'},
+      {score:4,label:'Solid',desc:'Most people can explain the reason for the change in their own words, consistently'},
+      {score:5,label:'Anchored',desc:'The group can articulate the why, the urgency, and the consequence of not changing'}
+    ],
+    barrier:'If people don\u2019t understand why this change is happening, Desire is almost meaningless \u2014 you can\u2019t want something you don\u2019t understand.\n\nFix Awareness first before drawing conclusions from any other score.',
+    intervention:[
+      'Find the communication gap \u2014 ask a few people: \u201CWhat have you heard about this initiative?\u201D',
+      'Get a leader visible \u2014 awareness moves fastest from a trusted leader, not a project team.',
+      'Make the \u201Cwhy\u201D impossible to miss \u2014 one-pagers, digital signage, manager talking points.',
+      'Address the \u201Cwhat happens if we don\u2019t\u201D question \u2014 consequence, not just benefit.'
+    ],
+    clientLang:'Right now, most of the team knows something is coming, but they can\u2019t tell you why it matters or why it\u2019s happening now. Before we build momentum, we need the leadership message to land. That\u2019s the first thing we address.'
+  },
+  d2:{
+    question:'Does this group want to support this change \u2014 or are they tolerating it?',
+    fieldPrompt:'When you talk to people in this group, do they seem invested in making this work? Or do they seem like they\u2019re waiting to see what happens?\n\nDesire isn\u2019t enthusiasm. It\u2019s active willingness to participate and not block.',
+    coachingTip:'Tip: Desire cannot be mandated \u2014 and it can\u2019t be faked for long.\nSomeone who says \u201Cyes\u201D in a meeting and does nothing afterward has low Desire. Watch behavior, not words.\n\nAlso: Desire is personal. Different subgroups within the same team can have very different scores. When in doubt, segment.',
+    anchors:[
+      {score:1,label:'Active resistance',desc:'People are openly opposed, pushing back publicly, or trying to block the change'},
+      {score:2,label:'Passive resistance',desc:'People are compliant in meetings but disengaged, skeptical, or quietly undermining'},
+      {score:3,label:'Neutral',desc:'People will participate if asked but are not invested; change feels like something happening to them'},
+      {score:4,label:'Supportive',desc:'People are willing and generally positive; they ask questions and show up'},
+      {score:5,label:'Advocates',desc:'People actively champion the change, bring others along, and hold peers accountable'}
+    ],
+    barrier:'You can train people who don\u2019t want to change. You cannot make that training stick.\n\nResistance \u2014 whether active or passive \u2014 is the most common reason change initiatives fail after go-live.',
+    intervention:[
+      'Find out what\u2019s behind the resistance \u2014 ask: \u201CWhat concerns do you have about this change?\u201D',
+      'Address WIIFM directly \u2014 what does this change mean for someone\u2019s day-to-day work?',
+      'Remove structural blockers \u2014 sometimes resistance is a real problem the project team missed.',
+      'Find your advocates \u2014 peer influence moves Desire more than consultant influence.',
+      'Give your sponsor work to do \u2014 sponsor visibility signals the organization is serious.'
+    ],
+    clientLang:'The team understands this is happening, but right now they don\u2019t feel ownership over it. Before we go further with training or process changes, we need to address some concerns that are creating friction. That\u2019s a conversation, not a communication.'
+  },
+  d3:{
+    question:'Does this group know how to make this change \u2014 in practice, not in theory?',
+    fieldPrompt:'If the system went live tomorrow, could people do their jobs?\nNot \u201Cdid they attend training.\u201D Not \u201Cwere they sent the user guide.\u201D\n\nCould they actually do it?',
+    coachingTip:'Tip: Training completion rate is not a Knowledge score. Attendance is an input. Retention and application are the output.\n\nAsk a few people to walk you through how they would complete a common task in the new process. What they can and can\u2019t do tells you more than any completion dashboard.',
+    anchors:[
+      {score:1,label:'No knowledge',desc:'No training has occurred; people have no exposure to new processes or systems'},
+      {score:2,label:'Awareness of training',desc:'Training exists or is planned, but hasn\u2019t been delivered or wasn\u2019t retained'},
+      {score:3,label:'Basic knowledge',desc:'People have been trained and can recall the general process, but need significant support'},
+      {score:4,label:'Operational knowledge',desc:'Most people can perform key tasks with minimal support; some edge cases need help'},
+      {score:5,label:'Embedded knowledge',desc:'People can perform all tasks independently and can help train others'}
+    ],
+    barrier:'High Desire with low Knowledge is one of the most frustrating states for employees \u2014 they want to do the right thing but don\u2019t know how.\n\nThat frustration converts to disengagement fast if it isn\u2019t addressed.',
+    intervention:[
+      'Audit what training has actually happened \u2014 not what was planned, what was retained.',
+      'Build role-specific job aids \u2014 break it down by role, not generic manuals.',
+      'Create practice opportunities before go-live \u2014 sandbox environments, simulations.',
+      'Identify floor support resources \u2014 who can someone ask a question on day one?',
+      'Schedule reinforcement training \u2014 one session is never enough.'
+    ],
+    clientLang:'People are willing to make this work, but right now the training hasn\u2019t built the confidence they need to perform independently. We need to add role-specific practice time and make sure floor support is in place for the first two weeks after go-live.'
+  },
+  d4:{
+    question:'Can this group actually perform the new behaviors \u2014 not just describe them?',
+    fieldPrompt:'Is the gap between knowing and doing closed?\n\nKnowledge is what\u2019s in someone\u2019s head. Ability is what they can do with their hands, in their actual work environment, under real conditions.',
+    coachingTip:'Tip: Ability is where process failures and system barriers live. Sometimes people know exactly what to do \u2014 and can\u2019t do it because the system won\u2019t let them, their manager won\u2019t approve it, or the new process contradicts an old policy.\n\nWhen Ability is low, ask: \u201CIs this a skill gap or a barrier?\u201D The interventions are very different.',
+    anchors:[
+      {score:1,label:'Cannot perform',desc:'People have not attempted the new behavior or system; no demonstrated capability'},
+      {score:2,label:'Attempted, struggling',desc:'People have tried but are making errors, reverting to old behavior, or asking for constant help'},
+      {score:3,label:'Performing with support',desc:'People can complete tasks but need help with exceptions, edge cases, or less common scenarios'},
+      {score:4,label:'Performing independently',desc:'Most people handle their daily work without support; exceptions are manageable'},
+      {score:5,label:'Proficient',desc:'People perform fluently, handle edge cases confidently, and can coach peers'}
+    ],
+    barrier:'This is the gap between training and performance. Until people can do the work, adoption is not real \u2014 regardless of what any other metric shows.',
+    intervention:[
+      'Separate skill gaps from system barriers \u2014 \u201CIs this a can\u2019t-do or a won\u2019t-let-me?\u201D',
+      'Address process barriers immediately \u2014 broken workflows, missing access, conflicting policies.',
+      'Add on-the-job coaching \u2014 a coach sitting next to someone while they work.',
+      'Extend your support window \u2014 don\u2019t declare success until people can work without help.',
+      'Track error rates and help desk volume \u2014 leading indicators of Ability.'
+    ],
+    clientLang:'We\u2019ve done the training, and people understand what\u2019s expected \u2014 but there\u2019s still a gap between knowing and doing. Some of that is skill, and some of it is friction in the process itself. We need two or three more weeks of floor support and we need to get three process issues resolved before we can call this adoption.'
+  },
+  d5:{
+    question:'Are the right behaviors being recognized, sustained, and protected \u2014 or is the organization quietly reverting?',
+    fieldPrompt:'Is this change holding?\n\nThree months from now, will people still be using the new process \u2014 or will they have drifted back to what\u2019s comfortable?\n\nReinforcement is what separates a change that sticks from one that gets \u201Cpiloted forever.\u201D',
+    coachingTip:'Tip: Reinforcement is often skipped because it happens after go-live, and most project teams have moved on.\n\nThis is the most common cause of change failure that nobody talks about. The go-live was a success. Six months later, nobody uses the new process. That\u2019s a Reinforcement failure.',
+    anchors:[
+      {score:1,label:'No reinforcement',desc:'No recognition, accountability, or follow-through; reversion to old behavior is visible'},
+      {score:2,label:'Informal only',desc:'Individual managers may be reinforcing, but no organizational mechanism exists'},
+      {score:3,label:'Partial',desc:'Some formal reinforcement exists (recognition, metrics), but not consistently applied'},
+      {score:4,label:'Consistent',desc:'Formal recognition, accountability, and performance metrics are in place and applied'},
+      {score:5,label:'Embedded',desc:'New behaviors are the norm; old behaviors are visibly corrected; change is part of the culture'}
+    ],
+    barrier:'Without reinforcement, the change will regress. People will default to what\u2019s comfortable \u2014 not because they\u2019re resistant, but because no one told them the new way actually matters.',
+    intervention:[
+      'Build recognition into existing rhythms \u2014 meetings, newsletters, performance reviews.',
+      'Connect behavior to performance metrics \u2014 if it\u2019s not measured, it won\u2019t hold.',
+      'Create accountability without blame \u2014 \u201CWe\u2019re doing it the new way now\u201D is accountability.',
+      'Run a 90-day pulse check \u2014 survey the group, surface data, act on it publicly.',
+      'Celebrate early adopters \u2014 tell their story, signal what \u201Cgood\u201D looks like.'
+    ],
+    clientLang:'The change went live and people are using it \u2014 but we\u2019re at the most vulnerable point. Without formal recognition and accountability in place, groups tend to drift back. We want to build reinforcement into your normal operating rhythms before we step back.'
+  }
+};
+
+const ADKAR_GUIDED_INTERP=[
+  {min:4.5,max:5.0,label:'Ready',cls:'guided-ready',text:'This group is positioned well. Shift to Reinforcement monitoring.'},
+  {min:3.5,max:4.4,label:'On track',cls:'guided-ontrack',text:'Solid foundation. Address any dimension below 3 before go-live.'},
+  {min:2.5,max:3.4,label:'At risk',cls:'guided-atrisk',text:'Real gaps exist. Targeted interventions needed before go-live is advisable.'},
+  {min:1.5,max:2.4,label:'High risk',cls:'guided-highrisk',text:'Significant readiness gaps. Go-live timeline should be reviewed with sponsor.'},
+  {min:1.0,max:1.4,label:'Not ready',cls:'guided-notready',text:'This group is not prepared. A go-live decision requires sponsor awareness and deliberate mitigation.'}
+];
+
+const ADKAR_DIM_ORDER=['d1','d2','d3','d4','d5'];
+const ADKAR_DIM_NAMES={d1:'Awareness',d2:'Desire',d3:'Knowledge',d4:'Ability',d5:'Reinforcement'};
+
 const RES_ROLES=[
   {key:'ocm_train',label:'OCM Training'},
   {key:'ocm_impl',label:'OCM Implementation'},
@@ -473,7 +642,7 @@ function applyTheme(t){
   ['','-r','-p'].forEach(s=>{
     const ic=document.getElementById('theme-icon'+s);
     const lb=document.getElementById('theme-lbl'+s);
-    if(ic)ic.textContent=t==='dark'?'☽':'☀';
+    if(ic)ic.innerHTML=t==='dark'?'<i class="ph ph-moon"></i>':'<i class="ph ph-sun"></i>';
     if(lb)lb.textContent=t==='dark'?'Dark':'Light';
   });
 }
@@ -544,6 +713,14 @@ function showSaveIndicator(text,isWarning){
   saveIndTimer=setTimeout(()=>{['save-ind','save-ind-r','save-ind-p'].forEach(id=>{const el=document.getElementById(id);if(el){el.classList.remove('vis');el.classList.remove('save-warn');}});},delay);
 }
 
+function showSuccess(message){
+  const toast=document.createElement('div');
+  toast.className='toast toast--success';
+  toast.textContent=message||'Saved';
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(),3000);
+}
+
 const MAX_SAVE_RETRIES=2;
 async function saveData(){
   try{localStorage.setItem(storageKey(),JSON.stringify(releases));}catch(e){}
@@ -556,18 +733,19 @@ async function saveData(){
         if(error){
           console.error('Supabase save:',error);
           if(attempt<MAX_SAVE_RETRIES){showSaveIndicator('Retrying\u2026');await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));continue;}
-          showSaveIndicator('Offline — saved locally',true);return;
+          showSaveIndicator('Connection issue \u2014 saved locally',true);return;
         }
         saved=true;break;
       }catch(netErr){
         console.error('Network error:',netErr);
         if(attempt<MAX_SAVE_RETRIES){showSaveIndicator('Retrying\u2026');await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));continue;}
-        showSaveIndicator('Offline — saved locally',true);return;
+        showSaveIndicator('Connection issue \u2014 saved locally',true);return;
       }
     }
-    if(!saved){showSaveIndicator('Offline — saved locally',true);return;}
+    if(!saved){showSaveIndicator('Connection issue \u2014 saved locally',true);return;}
   }
   showSaveIndicator('Saved');
+  showSuccess('Saved.');
 }
 
 async function loadData(){
@@ -748,10 +926,10 @@ function calcBenchmarks(){
 }
 function benchmarkPosition(value,q){
   if(!q)return null;
-  if(value>=q.q3)return{label:'Top Quartile',cls:'top',icon:'▲'};
-  if(value>=q.median)return{label:'Above Median',cls:'above',icon:'►'};
-  if(value>=q.q1)return{label:'Below Median',cls:'below',icon:'►'};
-  return{label:'Bottom Quartile',cls:'bottom',icon:'▼'};
+  if(value>=q.q3)return{label:'Top Quartile',cls:'top',icon:'<i class="ph ph-arrow-up"></i>'};
+  if(value>=q.median)return{label:'Above Median',cls:'above',icon:'<i class="ph ph-caret-right"></i>'};
+  if(value>=q.q1)return{label:'Below Median',cls:'below',icon:'<i class="ph ph-caret-right"></i>'};
+  return{label:'Bottom Quartile',cls:'bottom',icon:'<i class="ph ph-arrow-down"></i>'};
 }
 function adoptScore(f){if(!f||typeof f!=='object')return 0;const v=Object.values(f);if(!v.length)return 0;return Math.round(v.reduce((a,b)=>a+(+b||0),0)/v.length/5*100);}
 function adoptTier(s){if(s>=80)return{tier:'Low Risk',cls:'low'};if(s>=60)return{tier:'Moderate Risk',cls:'mod'};if(s>=40)return{tier:'High Risk',cls:'high'};return{tier:'Critical Risk',cls:'crit'};}
@@ -1074,7 +1252,9 @@ function hmCellCls(val,thr){if(val===null)return'n';if(val>=thr[0])return'g';if(
 // ════════════════════════════════════════════════════════
 function showView(id){
   ['v-portfolio','v-release','v-project'].forEach(v=>{
-    document.getElementById(v).classList.toggle('active',v===id);
+    const el=document.getElementById(v);
+    el.classList.toggle('active',v===id);
+    if(v===id){el.classList.remove('view-fade-in');void el.offsetWidth;el.classList.add('view-fade-in');}
   });
 }
 function goPortfolio(){activeRelId=null;activeProjId=null;showView('v-portfolio');renderPortfolio();announceToSR('Portfolio view loaded');const fab=document.getElementById('smart-fab');if(fab)fab.style.display='none';}
@@ -1143,6 +1323,8 @@ function showProjTab(id,btn){
   if(id==='pulse')renderPPulse();
   if(id==='lifecycle')renderPLifecycle();
   if(id==='craid')renderPCraid();
+  if(id==='gates')showOnboardingCallout('gate-tracker','#psec-gates','Gates are your checkpoints.','Each gate represents a critical transition in your SDLC. Work through the items, mark your status, and attach evidence. When a gate is complete, request sign-off to move forward with confidence.','Start Assessment');
+  if(id==='adkar')showOnboardingCallout('adkar','#psec-adkar','ADKAR tells you where readiness is real.','Score each dimension from 1\u20135 based on what you\u2019re observing \u2014 not what you hope is true. Low scores aren\u2019t failures; they\u2019re where your attention needs to go.','Record Scores');
 }
 
 // ════════════════════════════════════════════════════════
@@ -1150,9 +1332,33 @@ function showProjTab(id,btn){
 // ════════════════════════════════════════════════════════
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
+let _gPending=false;
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape')document.querySelectorAll('.modal-ov.open').forEach(m=>m.classList.remove('open'));
+  const tag=document.activeElement?.tagName;
+  const inField=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||document.activeElement?.isContentEditable;
+  if(e.key==='Escape'){document.querySelectorAll('.modal-ov.open').forEach(m=>m.classList.remove('open'));closeCommandPalette();if(document.body.classList.contains('focus-mode'))document.body.classList.remove('focus-mode');_gPending=false;return;}
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openCommandPalette();_gPending=false;return;}
+  if(inField){_gPending=false;return;}
+  if((e.key==='f'||e.key==='F')&&!e.metaKey&&!e.ctrlKey){document.body.classList.toggle('focus-mode');_gPending=false;return;}
+  if(e.key==='?'){e.preventDefault();openCommandPalette();_gPending=false;return;}
+  if(e.key==='g'||e.key==='G'){_gPending=true;setTimeout(()=>{_gPending=false;},800);return;}
+  if(_gPending&&(e.key==='p'||e.key==='P')){e.preventDefault();_gPending=false;goPortfolio();return;}
+  if(_gPending&&(e.key==='r'||e.key==='R')){e.preventDefault();_gPending=false;if(activeRelId)openRelease(activeRelId);return;}
+  _gPending=false;
 });
+
+function openCommandPalette(){
+  let ov=document.querySelector('.cmd-palette-ov');
+  if(!ov){
+    ov=document.createElement('div');ov.className='cmd-palette-ov';
+    ov.innerHTML='<div class="cmd-palette"><input class="cmd-palette-inp" placeholder="Search releases, projects, actions\u2026"><div class="cmd-palette-list"><div class="cmd-palette-empty">Start typing to search\u2026</div></div></div>';
+    ov.addEventListener('click',function(e){if(e.target===this)closeCommandPalette();});
+    document.body.appendChild(ov);
+  }
+  ov.classList.add('open');
+  const inp=ov.querySelector('.cmd-palette-inp');if(inp){inp.value='';inp.focus();}
+}
+function closeCommandPalette(){const ov=document.querySelector('.cmd-palette-ov');if(ov)ov.classList.remove('open');}
 document.querySelectorAll('.modal-ov').forEach(m=>{m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
 
 // Add Release
@@ -1268,6 +1474,7 @@ function renderNewProjChips(){
 // PORTFOLIO RENDER
 // ════════════════════════════════════════════════════════
 function renderPortfolio(){
+  showOnboardingCallout('role-switcher','#v-portfolio .top-bar .top-right','See AdoptIQ through your stakeholder\u2019s eyes.','Switch roles to preview exactly what Executives, Client Viewers, and Team members can see and do.','Got it');
   _rollupCache.clear();
   const total=releases.length;
   document.getElementById('ps-total').textContent=total;
@@ -1289,20 +1496,20 @@ function renderPortfolio(){
   if(!releases.length){
     wrap.innerHTML=`<div class="hero-empty">
       <div class="hero-badge">ADOPTION INTELLIGENCE PLATFORM</div>
-      <div class="hero-h">Enterprise-Grade Change Readiness,<br>Measured and Managed</div>
-      <div class="hero-sub">AdoptIQ integrates ADKAR, Kirkpatrick, and SDLC gate methodology into a single command center — giving OCM leaders the visibility to drive adoption at scale.</div>
+      <div class="hero-h">Your portfolio is ready<br>when you are.</div>
+      <div class="hero-sub">Add your first release to start tracking change readiness across your organization. AdoptIQ integrates ADKAR, Kirkpatrick, and SDLC gate methodology into a single command center.</div>
       <div class="hero-features">
-        <div class="hero-feat"><div class="hero-feat-icon">&#9632;</div><div><div class="hero-feat-t">4-Readiness Tracker</div><div class="hero-feat-d">Map training dependencies across the full SDLC lifecycle</div></div></div>
-        <div class="hero-feat"><div class="hero-feat-icon">&#9650;</div><div><div class="hero-feat-t">${fwName()} Assessment Engine</div><div class="hero-feat-d">Score readiness dimensions across your chosen change framework</div></div></div>
-        <div class="hero-feat"><div class="hero-feat-icon">&#9679;</div><div><div class="hero-feat-t">Adoption Risk Scoring</div><div class="hero-feat-d">Quantify stakeholder readiness with 6-factor analysis</div></div></div>
-        <div class="hero-feat"><div class="hero-feat-icon">&#9733;</div><div><div class="hero-feat-t">Kirkpatrick Measurement</div><div class="hero-feat-d">L1–L4 evaluation framework built into every stakeholder group</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-squares-four"></i></div><div><div class="hero-feat-t">4-Readiness Tracker</div><div class="hero-feat-d">Map training dependencies across the full SDLC lifecycle</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-chart-line-up"></i></div><div><div class="hero-feat-t">${fwName()} Assessment Engine</div><div class="hero-feat-d">Score readiness dimensions across your chosen change framework</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-shield-warning"></i></div><div><div class="hero-feat-t">Adoption Risk Scoring</div><div class="hero-feat-d">Quantify stakeholder readiness with 6-factor analysis</div></div></div>
+        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-star"></i></div><div><div class="hero-feat-t">Kirkpatrick Measurement</div><div class="hero-feat-d">L1–L4 evaluation framework built into every stakeholder group</div></div></div>
       </div>
-      <button class="btn-gold" onclick="openAddRelease()" style="padding:14px 32px;font-size:13px">+ Create Your First Release</button>
+      <button class="btn-gold" onclick="openAddRelease()" style="padding:14px 32px;font-size:13px">Add Your First Release</button>
       <div class="hero-cred">Providence Consulting Firm &middot; CPTM &middot; ATD Master Trainer &middot; ADKAR-Aligned</div>
     </div>`;
     document.getElementById('tl-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
   }
-  wrap.innerHTML=`<div class="card-grid">${releases.map(r=>{
+  wrap.innerHTML=`<div class="card-grid stagger-children">${releases.map(r=>{
     const rl=relRollup(r);const d=daysTo(r.golive);const modStr=fmtMod(r.modified);
     const rg=relRAG(r);
     const tp=(r.projects||[]).filter(p=>p.trainingRequired).length;
@@ -1331,8 +1538,7 @@ function renderPortfolio(){
     </div>`;
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
-  document.getElementById('sat-sec').style.display=releases.length>=1?'block':'none';
-  document.getElementById('wkl-bal-sec').style.display=releases.length>=1?'block':'none';
+  document.getElementById('people-cap-sec').style.display=releases.length>=1?'block':'none';
   renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
   if(isReadOnly)applyReadOnlyRestrictions();
 }
@@ -1350,6 +1556,7 @@ function toggleAiqMobile(){
   bar.classList.toggle('mobile-open');
   if(bar.classList.contains('mobile-open')){
     setTimeout(()=>document.getElementById('aiq-input')?.focus(),100);
+    showOnboardingCallout('aiq','.aiq-messages','AIQ reads your actual release data.','Try asking: \u201CWhich release has the lowest readiness?\u201D or \u201CWhat are the biggest risks this quarter?\u201D','Got it');
   }
 }
 
@@ -1470,9 +1677,12 @@ async function askAdoptIQ(){
 
   // Show loading
   area.style.display='block';
-  area.innerHTML=`<div class="aiq-answer"><div class="aiq-answer-hdr"><div class="aiq-answer-q">${esc(question)}</div></div><div class="aiq-loading"><div class="spinner"></div><div class="aiq-loading-text">Analyzing your portfolio…</div></div></div>`;
-  if(btn){btn.disabled=true;btn.textContent='…';}
+  area.innerHTML=`<div class="aiq-response"><div class="aiq-response__header"><div class="aiq-response__tag">${esc(question)}</div></div><div class="aiq-loading"><div class="spinner"></div><div class="aiq-loading-text">Analyzing your release data\u2026</div></div></div>`;
+  if(btn){btn.disabled=true;btn.textContent='\u2026';}
   input.select();
+  const _aiqLoadEl=area.querySelector('.aiq-loading-text');
+  const _aiqT1=setTimeout(()=>{if(_aiqLoadEl)_aiqLoadEl.textContent='Cross-referencing ADKAR scores and gate status\u2026';},2000);
+  const _aiqT2=setTimeout(()=>{if(_aiqLoadEl)_aiqLoadEl.textContent='Almost there \u2014 this one\u2019s worth the wait.';},5000);
 
   // Close mobile bar
   const bar=document.getElementById('aiq-bar');
@@ -1490,9 +1700,10 @@ async function askAdoptIQ(){
     renderAiqAnswer(question,result);
   }catch(err){
     console.error('Ask AdoptIQ error:',err);
-    area.innerHTML=`<div class="aiq-answer"><div class="aiq-answer-hdr"><div class="aiq-answer-q">${esc(question)}</div><button class="aiq-answer-close" onclick="closeAiqAnswer()">✕</button></div><div class="aiq-answer-body"><div style="color:#b83232;font-size:12px">Sorry, I couldn't analyze that right now. ${esc(err.message)}</div></div></div>`;
+    area.innerHTML=`<div class="aiq-response"><div class="aiq-response__header"><div class="aiq-response__tag">${esc(question)}</div><button class="aiq-panel__close" onclick="closeAiqAnswer()"><i class="ph ph-x"></i></button></div><div class="aiq-response__body"><div style="color:#b83232;font-size:12px">AIQ is temporarily unavailable. Your data is intact \u2014 try again in a moment.</div></div></div>`;
   }finally{
-    if(btn){btn.disabled=false;btn.textContent='Ask';}
+    clearTimeout(_aiqT1);clearTimeout(_aiqT2);
+    if(btn){btn.disabled=false;btn.textContent='Ask AIQ';}
     renderAiqChips();
   }
 }
@@ -1505,13 +1716,13 @@ function closeAiqAnswer(){
 function renderAiqAnswer(question,result){
   const area=document.getElementById('aiq-answer-area');
   if(!area)return;
-  let h='<div class="aiq-answer">';
-  h+='<div class="aiq-answer-hdr"><div class="aiq-answer-q">'+esc(question)+'</div><button class="aiq-answer-close" onclick="closeAiqAnswer()">✕</button></div>';
-  h+='<div class="aiq-answer-body">';
+  let h='<div class="aiq-response">';
+  h+='<div class="aiq-response__header"><div class="aiq-response__tag">'+esc(question)+'</div><button class="aiq-panel__close" onclick="closeAiqAnswer()"><i class="ph ph-x"></i></button></div>';
+  h+='<div class="aiq-response__body">';
 
   // Answer text
   if(result.answer_text){
-    h+='<div class="aiq-answer-text">'+esc(result.answer_text)+'</div>';
+    h+='<div class="aiq-response__text">'+esc(result.answer_text)+'</div>';
   }
 
   // Data points as metrics
@@ -1755,7 +1966,7 @@ function renderRelProjCards(){
   const grid1=document.getElementById('rel-proj-cards');
   const grid2=document.getElementById('rel-proj-list');
   if(!r.projects||!r.projects.length){
-    const em='<div class="es"><div class="es-rule"></div><p class="es-txt">No projects added yet. Click Add Project to begin.</p></div>';
+    const em='<div class="es"><div class="es-rule"></div><h4 class="es-hd">No projects tied to this release yet.</h4><p class="es-txt">Projects define the work stream. Add at least one to begin tracking milestones and stakeholder impact.</p></div>';
     grid1.innerHTML=em;grid2.innerHTML=em;return;
   }
   const cards=r.projects.map(p=>{
@@ -1793,7 +2004,7 @@ function renderRelOverview(){
   // Gate bars per project
   const gp=document.getElementById('rel-ov-gates');
   const projs=(r.projects||[]);
-  if(!projs.length){gp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add projects to see readiness here.</p></div>';}
+  if(!projs.length){gp.innerHTML='<div class="es"><div class="es-rule"></div><h4 class="es-hd">This gate hasn\u2019t been assessed.</h4><p class="es-txt">Gate assessments confirm your team is ready to advance. Add projects to begin tracking readiness.</p></div>';}
   else{gp.innerHTML=projs.map(p=>{
     const gs=projGateScore(p);const col=gs===null?'var(--bg-dark)':gs>=80?'var(--green)':gs>=50?'var(--gold)':'var(--red)';
     return`<div class="ov-row"><div class="ov-name">${esc(p.name)}</div>
@@ -1804,7 +2015,7 @@ function renderRelOverview(){
   const fp=document.getElementById('rel-ov-flags');
   const allFlags=[];
   projs.forEach(p=>{GATE_DEFS.forEach(gate=>{gate.items.forEach((item,i)=>{if(p.gateState[gate.id+'_'+i]==='red')allFlags.push({gate:gate.label,item:item.text,proj:p.name});});});});
-  if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active open issues at this time.</p></div>';}
+  if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active flags. Portfolio is on track.</p></div>';}
   else{fp.innerHTML=allFlags.slice(0,5).map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.proj)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
   renderRelCraidSummary();
 }
@@ -1896,6 +2107,7 @@ function setPGate(gid,idx,color){
 }
 
 const HMS=['Not Started','Complete','Partial','Blocking','N/A'];
+const HMS_TIPS={'Not Started':'No progress on this item yet.','Complete':'All criteria for this item are met and documented.','Partial':'Some criteria are met. Note what\u2019s outstanding before requesting sign-off.','Blocking':'This item hasn\u2019t been addressed. Resolve it before advancing the gate.','N/A':'This item doesn\u2019t apply to this release. Document the reason.'};
 function renderPDepHM(){
   const p=getProj();if(!p)return;
   const t=document.getElementById('p-dep-hm');
@@ -1905,7 +2117,7 @@ function renderPDepHM(){
     WS.forEach((_,wi)=>{
       const k=`${gi}_${wi}`,s=p.depHM[k]||0;
       const nd=p.depNotes[k]?'<span class="note-dot"></span>':'';
-      h+=`<td><div class="hm-cw"><div class="hm-cell" data-s="${s}" onclick="cyclePHMCell('${k}')" tabindex="0" onkeydown="if(event.key==='Enter')cyclePHMCell('${k}')">${nd}${HMS[s]}</div></div></td>`;
+      h+=`<td><div class="hm-cw"><div class="hm-cell" data-s="${s}" title="${HMS_TIPS[HMS[s]]||''}" onclick="cyclePHMCell('${k}')" tabindex="0" onkeydown="if(event.key==='Enter')cyclePHMCell('${k}')">${nd}${HMS[s]}</div></div></td>`;
     });h+='</tr>';
   });h+='</tbody>';t.innerHTML=h;
 }
@@ -1953,6 +2165,11 @@ function renderPAdkar(){
   const head=document.getElementById('assess-head');if(head)head.textContent=fw.name+' Readiness Assessment';
   const pt=document.getElementById('assess-pt');if(pt)pt.textContent=fw.name+' Readiness by Dimension';
   const navBtn=document.getElementById('nav-adkar-btn');if(navBtn)navBtn.textContent=fw.name.split(' ')[0];
+  // Show/hide guided assessment button (ADKAR only)
+  const adkarActions=document.getElementById('adkar-actions');
+  if(adkarActions)adkarActions.style.display=isAdkarFramework()?'':'none';
+  // Clear guided container if not active
+  if(!_guidedActive){const gc=document.getElementById('guided-adkar-container');if(gc)gc.innerHTML='';}
   // Migrate legacy scores if needed
   const migrated=migrateScores(p.adkarScores);
   if(migrated!==p.adkarScores){p.adkarScores=migrated;}
@@ -1963,7 +2180,7 @@ function renderPAdkar(){
   const grid=document.getElementById('p-adkar-grid');
   grid.style.gridTemplateColumns='repeat('+Math.min(dims.length,5)+',1fr)';
   grid.innerHTML=dims.map(d=>`
-    <div class="ak-col"><div class="ak-hd"><div class="ak-ltr">${esc(d.letter)}</div><div class="ak-wrd">${esc(d.word)}</div></div>
+    <div class="ak-col"><div class="ak-hd" title="${esc(d.desc)}"><div class="ak-ltr">${esc(d.letter)}</div><div class="ak-wrd">${esc(d.word)}</div></div>
     <div class="ak-bd"><label>Readiness Score</label>
     <div class="ak-sr"><input type="range" class="ak-sl" min="1" max="5" value="${p.adkarScores[d.key]||3}" oninput="updatePAdkar('${d.key}',this.value)">
     <div class="ak-vl" id="pav-${d.key}">${p.adkarScores[d.key]||3}</div></div>
@@ -1995,6 +2212,303 @@ function updatePAdkarSummary(){
   const kpiL=document.getElementById('p-kpi-adkar-label');if(kpiL)kpiL.textContent=fwShort()+' Score';
 }
 
+// ═══ ADKAR Guided Assessment Mode ═══
+let _guidedStep=0;
+let _guidedActive=false;
+
+function isAdkarFramework(){
+  const b=getBrand();
+  const fwId=b.frameworkId||'adkar';
+  return fwId==='adkar';
+}
+
+function enterGuidedAdkar(){
+  if(!isAdkarFramework())return;
+  _guidedActive=true;
+  _guidedStep=0;
+  const container=document.getElementById('guided-adkar-container');
+  const grid=document.getElementById('p-adkar-grid');
+  const sum=document.querySelector('#psec-adkar .ak-sum');
+  const panelBody=document.querySelector('#psec-adkar .pb.np');
+  if(grid)grid.style.display='none';
+  if(sum)sum.style.display='none';
+  if(!container){
+    const div=document.createElement('div');
+    div.id='guided-adkar-container';
+    if(panelBody)panelBody.prepend(div);
+  }
+  // Show ADKAR Journey framing on first use
+  const seen=JSON.parse(localStorage.getItem('adoptiq-onboarding')||'{}');
+  if(!seen['adkar-journey']){
+    renderAdkarJourney();
+  } else {
+    renderGuidedStep();
+  }
+}
+
+function exitGuidedAdkar(){
+  _guidedActive=false;
+  const container=document.getElementById('guided-adkar-container');
+  const grid=document.getElementById('p-adkar-grid');
+  const sum=document.querySelector('#psec-adkar .ak-sum');
+  if(container)container.remove();
+  if(grid)grid.style.display='';
+  if(sum)sum.style.display='';
+  renderPAdkar();
+}
+
+function renderAdkarJourney(){
+  const container=document.getElementById('guided-adkar-container');
+  if(!container)return;
+  container.innerHTML=`
+    <div class="guided-journey">
+      <div class="guided-journey-text">
+        <p>Every person going through a change moves through five stages \u2014 in order.</p>
+        <p>Your job isn\u2019t to push people through them.<br>Your job is to find out where they\u2019re stuck, and remove what\u2019s blocking them.</p>
+        <p><strong>ADKAR tells you where to look.</strong></p>
+      </div>
+      <div class="guided-journey-chain">
+        <div class="guided-chain-step"><div class="guided-chain-q">WHY is it happening?</div><div class="guided-chain-dim">Awareness</div></div>
+        <div class="guided-chain-arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="guided-chain-step"><div class="guided-chain-q">Do they WANT it?</div><div class="guided-chain-dim">Desire</div></div>
+        <div class="guided-chain-arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="guided-chain-step"><div class="guided-chain-q">Do they know HOW?</div><div class="guided-chain-dim">Knowledge</div></div>
+        <div class="guided-chain-arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="guided-chain-step"><div class="guided-chain-q">CAN they do it?</div><div class="guided-chain-dim">Ability</div></div>
+        <div class="guided-chain-arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="guided-chain-step"><div class="guided-chain-q">Will it STICK?</div><div class="guided-chain-dim">Reinforcement</div></div>
+      </div>
+      <div class="guided-journey-note">Can\u2019t skip. Can\u2019t reverse. Low score here \u2192 everything to the right is unreliable.</div>
+      <div class="guided-journey-actions">
+        <button class="btn-sm" onclick="dismissOnboarding(null,'adkar-journey');renderGuidedStep();">Begin Assessment</button>
+        <button class="btn-sm btn-ghost" onclick="dismissOnboarding(null,'adkar-journey');exitGuidedAdkar();">Skip \u2014 I know ADKAR</button>
+      </div>
+    </div>`;
+}
+
+function renderGuidedStep(){
+  const container=document.getElementById('guided-adkar-container');
+  if(!container)return;
+  const p=getProj();if(!p)return;
+  const dimKey=ADKAR_DIM_ORDER[_guidedStep];
+  const g=ADKAR_GUIDED[dimKey];
+  if(!g)return;
+  const dims=getActiveDims();
+  const dim=dims.find(d=>d.key===dimKey)||dims[_guidedStep];
+  if(!dim)return;
+  const currentScore=p.adkarScores[dimKey]||0;
+  const isLast=_guidedStep===4;
+  const nextDimName=!isLast?ADKAR_DIM_NAMES[ADKAR_DIM_ORDER[_guidedStep+1]]:'';
+
+  container.innerHTML=`
+    <div class="guided-panel">
+      <div class="guided-progress">
+        ${ADKAR_DIM_ORDER.map((dk,i)=>`<div class="guided-dot${i<_guidedStep?' done':i===_guidedStep?' active':''}">
+          <div class="guided-dot-num">${i+1}</div>
+          <div class="guided-dot-label">${ADKAR_DIM_NAMES[dk]}</div>
+        </div>${i<4?'<div class="guided-dot-line'+(i<_guidedStep?' done':'')+'"></div>':''}`).join('')}
+      </div>
+
+      <div class="guided-header">
+        <div class="guided-dim-badge">${esc(dim.letter)}</div>
+        <div>
+          <div class="guided-dim-word">${esc(dim.word)}</div>
+          <div class="guided-step-label">Step ${_guidedStep+1} of 5</div>
+        </div>
+      </div>
+
+      <blockquote class="guided-question">${esc(g.question)}</blockquote>
+
+      <div class="guided-field-prompt">
+        <div class="guided-prompt-label">Before you score</div>
+        <p>${esc(g.fieldPrompt).replace(/\n/g,'<br>')}</p>
+      </div>
+
+      <details class="guided-coaching">
+        <summary><i class="ph ph-lightbulb"></i> Coaching tip for new consultants</summary>
+        <div class="guided-coaching-body">${esc(g.coachingTip).replace(/\n/g,'<br>')}</div>
+      </details>
+
+      <div class="guided-anchors">
+        <div class="guided-anchors-label">Select your score</div>
+        ${g.anchors.map(a=>`<button class="guided-anchor${currentScore===a.score?' selected':''}" onclick="setGuidedScore('${dimKey}',${a.score})">
+          <div class="guided-anchor-score">${a.score}</div>
+          <div class="guided-anchor-info">
+            <div class="guided-anchor-label">${esc(a.label)}</div>
+            <div class="guided-anchor-desc">${esc(a.desc)}</div>
+          </div>
+        </button>`).join('')}
+      </div>
+
+      ${currentScore>0&&currentScore<3?`<div class="guided-barrier">
+        <div class="guided-barrier-hd"><i class="ph ph-warning-circle"></i> ${esc(dim.word)} is your barrier</div>
+        <p>${esc(g.barrier).replace(/\n/g,'<br>')}</p>
+      </div>`:''}
+
+      <div class="guided-notes-section">
+        <label class="guided-notes-label">Qualitative Notes <span>(optional)</span></label>
+        <textarea class="guided-notes" placeholder="What are you observing in this group?" oninput="updatePAdkarNote('${dimKey}',this.value)">${esc(p.adkarNotes[dimKey]||'')}</textarea>
+      </div>
+
+      <div class="guided-nav">
+        ${_guidedStep>0?'<button class="btn-sm btn-ghost" onclick="guidedBack()"><i class="ph ph-arrow-left"></i> Back</button>':'<div></div>'}
+        <button class="btn-sm"${currentScore===0?' disabled':''} onclick="${isLast?'renderGuidedSummary()':'guidedNext()'}">
+          ${isLast?'View Summary':'Next: '+nextDimName+' <i class="ph ph-arrow-right"></i>'}
+        </button>
+      </div>
+    </div>`;
+}
+
+function setGuidedScore(dimKey,score){
+  const p=getProj();if(!p)return;
+  p.adkarScores[dimKey]=score;
+  touch('proj');schedSave();
+  renderGuidedStep();
+}
+
+function guidedNext(){
+  if(_guidedStep<4){_guidedStep++;renderGuidedStep();}
+}
+function guidedBack(){
+  if(_guidedStep>0){_guidedStep--;renderGuidedStep();}
+}
+
+function renderAdkarJourneyRef(){
+  if(!isAdkarFramework())return;
+  _guidedActive=true;
+  const container=document.getElementById('guided-adkar-container');
+  const grid=document.getElementById('p-adkar-grid');
+  const sum=document.querySelector('#psec-adkar .ak-sum');
+  if(grid)grid.style.display='none';
+  if(sum)sum.style.display='none';
+  renderAdkarJourney();
+}
+
+function renderGuidedSummary(){
+  const container=document.getElementById('guided-adkar-container');
+  if(!container)return;
+  const p=getProj();if(!p)return;
+  const dims=getActiveDims();
+  const scores=ADKAR_DIM_ORDER.map(dk=>p.adkarScores[dk]||3);
+  const avg=+(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1);
+
+  // Find barrier (lowest score, earliest in sequence if tied)
+  let barrierIdx=0;let barrierScore=scores[0];
+  scores.forEach((s,i)=>{if(s<barrierScore){barrierScore=s;barrierIdx=i;}});
+  const barrierKey=ADKAR_DIM_ORDER[barrierIdx];
+  const barrierG=ADKAR_GUIDED[barrierKey];
+
+  // Find interpretation
+  const interp=ADKAR_GUIDED_INTERP.find(r=>avg>=r.min)||ADKAR_GUIDED_INTERP[ADKAR_GUIDED_INTERP.length-1];
+
+  // Sequential dependency warnings
+  const seqWarnings=[];
+  for(let i=0;i<4;i++){
+    if(scores[i]<scores[i+1]){
+      seqWarnings.push({upstream:ADKAR_DIM_NAMES[ADKAR_DIM_ORDER[i]],downstream:ADKAR_DIM_NAMES[ADKAR_DIM_ORDER[i+1]],upIdx:i});
+    }
+  }
+
+  // Dimensions below 3 with interventions
+  const lowDims=ADKAR_DIM_ORDER.filter(dk=>(p.adkarScores[dk]||3)<3).map(dk=>({
+    key:dk,name:ADKAR_DIM_NAMES[dk],score:p.adkarScores[dk],
+    intervention:ADKAR_GUIDED[dk].intervention[0]
+  }));
+
+  // Radar chart data (simple SVG)
+  const radarPoints=scores.map((s,i)=>{
+    const angle=(Math.PI*2*i/5)-(Math.PI/2);
+    const r=s/5*90;
+    return{x:100+r*Math.cos(angle),y:100+r*Math.sin(angle)};
+  });
+  const radarPoly=radarPoints.map(p=>p.x+','+p.y).join(' ');
+  const radarGrid=[1,2,3,4,5].map(level=>{
+    const pts=Array.from({length:5},(_,i)=>{
+      const angle=(Math.PI*2*i/5)-(Math.PI/2);
+      const r=level/5*90;
+      return(100+r*Math.cos(angle))+','+(100+r*Math.sin(angle));
+    }).join(' ');
+    return`<polygon points="${pts}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+  }).join('');
+  const radarLabels=ADKAR_DIM_ORDER.map((dk,i)=>{
+    const angle=(Math.PI*2*i/5)-(Math.PI/2);
+    const r=110;
+    const x=100+r*Math.cos(angle);const y=100+r*Math.sin(angle);
+    return`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="rgba(255,255,255,0.6)" font-size="9" font-family="var(--font-body)">${ADKAR_DIM_NAMES[dk].charAt(0)}</text>`;
+  }).join('');
+
+  container.innerHTML=`
+    <div class="guided-panel guided-summary">
+      <div class="guided-summary-hd">
+        <div>
+          <div class="guided-summary-title">ADKAR Readiness Summary</div>
+          <div class="guided-summary-sub">${esc(p.name||'Project')}</div>
+        </div>
+        <div class="guided-summary-score">
+          <div class="guided-summary-avg">${avg}</div>
+          <div class="guided-summary-max">/5</div>
+        </div>
+      </div>
+
+      <div class="guided-summary-interp ${interp.cls}">
+        <div class="guided-interp-label">${esc(interp.label)}</div>
+        <div class="guided-interp-text">${esc(interp.text)}</div>
+      </div>
+
+      <div class="guided-summary-body">
+        <div class="guided-radar-wrap">
+          <svg viewBox="0 0 200 200" class="guided-radar">
+            ${radarGrid}
+            <polygon points="${radarPoly}" fill="rgba(229,204,148,0.2)" stroke="var(--gold)" stroke-width="2"/>
+            ${radarPoints.map((pt,i)=>`<circle cx="${pt.x}" cy="${pt.y}" r="4" fill="${scores[i]<3?'var(--color-amber,#d97706)':'var(--gold)'}" stroke="var(--nav-bg)" stroke-width="2"/>`).join('')}
+            ${radarLabels}
+          </svg>
+          <div class="guided-radar-legend">
+            ${ADKAR_DIM_ORDER.map((dk,i)=>`<div class="guided-radar-item${i===barrierIdx?' barrier':''}">
+              <span class="guided-radar-ltr">${ADKAR_DIM_NAMES[dk].charAt(0)}</span>
+              <span class="guided-radar-name">${ADKAR_DIM_NAMES[dk]}</span>
+              <span class="guided-radar-score">${scores[i]}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+
+        <div class="guided-barrier-summary">
+          <div class="guided-barrier-hd"><i class="ph ph-warning-circle"></i> Barrier: ${esc(ADKAR_DIM_NAMES[barrierKey])}</div>
+          <p>${esc(barrierG.barrier.split('\n')[0])}</p>
+          <p class="guided-barrier-action">Address this first. Until ${esc(ADKAR_DIM_NAMES[barrierKey])} improves, downstream scores will not hold.</p>
+        </div>
+
+        ${seqWarnings.length?`<div class="guided-seq-warnings">
+          ${seqWarnings.map(w=>`<div class="guided-seq-warn">
+            <i class="ph ph-warning-circle"></i>
+            <div><strong>${esc(w.upstream)}</strong> is scored lower than <strong>${esc(w.downstream)}</strong>. ADKAR is sequential \u2014 ${esc(w.downstream)} cannot be reliable without a solid ${esc(w.upstream)}.
+            <button class="guided-review-btn" onclick="_guidedStep=${w.upIdx};renderGuidedStep();">Review ${esc(w.upstream)} score</button></div>
+          </div>`).join('')}
+        </div>`:''}
+
+        ${lowDims.length?`<div class="guided-interventions">
+          <div class="guided-interventions-hd">Recommended Interventions</div>
+          ${lowDims.map(d=>`<div class="guided-intervention-item">
+            <div class="guided-intervention-dim">${esc(d.name)} <span class="guided-intervention-score">${d.score}/5</span></div>
+            <div class="guided-intervention-text">${esc(d.intervention)}</div>
+          </div>`).join('')}
+        </div>`:''}
+
+        <div class="guided-client-lang">
+          <div class="guided-client-lang-hd"><i class="ph ph-quotes"></i> Client-Facing Language</div>
+          <blockquote>${esc(barrierG.clientLang)}</blockquote>
+        </div>
+      </div>
+
+      <div class="guided-nav">
+        <button class="btn-sm btn-ghost" onclick="_guidedStep=4;renderGuidedStep();"><i class="ph ph-arrow-left"></i> Back to Reinforcement</button>
+        <button class="btn-sm" onclick="exitGuidedAdkar();">Done \u2014 Return to Overview</button>
+      </div>
+    </div>`;
+
+  updatePAdkarSummary();
+}
+
 function addPSH(){
   const p=getProj();if(!p)return;
   const inp=document.getElementById('p-sh-inp');const name=inp.value.trim();if(!name)return;
@@ -2009,7 +2523,7 @@ function addPSH(){
 function removePSH(id){const p=getProj();if(!p)return;p.stakeholders=p.stakeholders.filter(s=>s.id!==id);renderPSH();renderPKPIs();touch('proj');schedSave();}
 function renderPSH(){
   const p=getProj();if(!p)return;const wrap=document.getElementById('p-sh-wrap');
-  if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups to begin scoring readiness.</p></div>';renderPAHM();return;}
+  if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
   const adkarR=p.adkarScores['R'];
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
   wrap.innerHTML=p.stakeholders.map(sh=>{
@@ -2027,7 +2541,7 @@ function renderPSH(){
     <div class="exp-secs">
       <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('plo-${sh.id}',this)" aria-expanded="false">
         <div class="exp-tog-l">Learning Objectives<span class="exp-badge ${loc>0?'ready':'needed'}">${loc>0?loc+' Defined':'Not Started'}</span></div>
-        <span class="exp-arr" id="parr-lo-${sh.id}">&#9660;</span></button>
+        <span class="exp-arr" id="parr-lo-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
         <div class="exp-body" id="plo-${sh.id}">
           <div class="lo-hint">Write in performance terms: the learner will be able to [verb] [skill/behavior] [condition/standard].</div>
           <ul class="lo-list">${sh.objectives.map((o,i)=>`<li class="lo-item"><span class="lo-num">0${i+1}</span>
@@ -2038,7 +2552,7 @@ function renderPSH(){
       </div>
       <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('pkirk-${sh.id}',this)" aria-expanded="false">
         <div class="exp-tog-l">Measurement Framework — Kirkpatrick<span class="exp-badge ${kr}">${badgeLabel(kr)}</span></div>
-        <span class="exp-arr" id="parr-kirk-${sh.id}">&#9660;</span></button>
+        <span class="exp-arr" id="parr-kirk-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
         <div class="exp-body" id="pkirk-${sh.id}">
           <div class="kirk-grid">
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L1</div><div><div class="kirk-name">Reaction</div><div class="kirk-desc-txt">Learner feedback and satisfaction</div></div></div>
@@ -2064,7 +2578,7 @@ function renderPSH(){
       </div>
       <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('prein-${sh.id}',this)" aria-expanded="false">
         <div class="exp-tog-l">Reinforcement Plan — ${fwShort()} Alignment<span class="exp-badge ${rr}">${badgeLabel(rr)}</span></div>
-        <span class="exp-arr" id="parr-rein-${sh.id}">&#9660;</span></button>
+        <span class="exp-arr" id="parr-rein-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
         <div class="exp-body" id="prein-${sh.id}">
           <div class="rein-grid">
             <div class="rein-field"><label>Reinforcement Owner</label><input class="rein-inp" placeholder="e.g. Direct supervisor, change champion" value="${esc(sh.rein.owner)}" oninput="updatePRein(${sh.id},'owner',this.value)"></div>
@@ -2104,7 +2618,7 @@ function renderTrustSection(sh){
   });
   return`<div class="exp-sec"><button class="exp-tog" onclick="toggleExp('ptrust-${sh.id}',this)" aria-expanded="false">
     <div class="exp-tog-l">Emotional Readiness &amp; Trust<span class="exp-badge" style="background:${trustColors[trust]||'var(--ink-60)'};color:#fff">${trustLabels[trust]||'Level '+trust}</span></div>
-    <span class="exp-arr" id="parr-trust-${sh.id}">&#9660;</span></button>
+    <span class="exp-arr" id="parr-trust-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
     <div class="exp-body" id="ptrust-${sh.id}">
       <div class="trust-section">
         <div class="trust-score-row">
@@ -2140,10 +2654,10 @@ function renderTrustSection(sh){
         </div>
         <div class="trust-field" style="margin-top:16px"><label>Anxiety Indicators</label>
           <div class="anxiety-grid">
-            <div class="anxiety-row"><span>"What does this mean?" frequency</span><input class="inp-sm" type="number" min="0" value="${ai.whatDoesThisMeanFreq||0}" oninput="updateSHAnxiety(${sh.id},'whatDoesThisMeanFreq',+this.value)">${(ai.whatDoesThisMeanFreq||0)>5?'<span class="anxiety-warn">⚠ High</span>':''}</div>
-            <div class="anxiety-row"><span>Extra review cycle requests</span><input class="inp-sm" type="number" min="0" value="${ai.extraReviewCycles||0}" oninput="updateSHAnxiety(${sh.id},'extraReviewCycles',+this.value)">${(ai.extraReviewCycles||0)>2?'<span class="anxiety-warn">⚠ High</span>':''}</div>
-            <div class="anxiety-row"><span>Escalations to leadership</span><input class="inp-sm" type="number" min="0" value="${ai.escalations||0}" oninput="updateSHAnxiety(${sh.id},'escalations',+this.value)">${(ai.escalations||0)>1?'<span class="anxiety-warn">⚠ High</span>':''}</div>
-            <div class="anxiety-row"><span>Attendance/participation drop-off</span><label class="toggle-label"><input type="checkbox" ${ai.attendanceDrop?'checked':''} onchange="updateSHAnxiety(${sh.id},'attendanceDrop',this.checked)"><span class="toggle-pill"></span></label>${ai.attendanceDrop?'<span class="anxiety-warn">⚠ Active</span>':''}</div>
+            <div class="anxiety-row"><span>"What does this mean?" frequency</span><input class="inp-sm" type="number" min="0" value="${ai.whatDoesThisMeanFreq||0}" oninput="updateSHAnxiety(${sh.id},'whatDoesThisMeanFreq',+this.value)">${(ai.whatDoesThisMeanFreq||0)>5?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
+            <div class="anxiety-row"><span>Extra review cycle requests</span><input class="inp-sm" type="number" min="0" value="${ai.extraReviewCycles||0}" oninput="updateSHAnxiety(${sh.id},'extraReviewCycles',+this.value)">${(ai.extraReviewCycles||0)>2?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
+            <div class="anxiety-row"><span>Escalations to leadership</span><input class="inp-sm" type="number" min="0" value="${ai.escalations||0}" oninput="updateSHAnxiety(${sh.id},'escalations',+this.value)">${(ai.escalations||0)>1?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
+            <div class="anxiety-row"><span>Attendance/participation drop-off</span><label class="toggle-label"><input type="checkbox" ${ai.attendanceDrop?'checked':''} onchange="updateSHAnxiety(${sh.id},'attendanceDrop',this.checked)"><span class="toggle-pill"></span></label>${ai.attendanceDrop?'<span class="anxiety-warn"><i class="ph ph-warning"></i> Active</span>':''}</div>
           </div>
         </div>
         <div class="trust-field" style="margin-top:16px">
@@ -2153,7 +2667,7 @@ function renderTrustSection(sh){
             <span class="tp-impact-icon ${tp.trustImpact==='Increased'?'ti-up':tp.trustImpact==='Decreased'?'ti-down':'ti-neutral'}">${tp.trustImpact==='Increased'?'↑':tp.trustImpact==='Decreased'?'↓':'→'}</span>
             <div class="tp-detail"><div class="tp-desc">${esc(tp.description)}</div><div class="tp-meta">${tp.type} · ${fmtDate(tp.date)} · <span style="color:${tp.trustImpact==='Increased'?'var(--green)':tp.trustImpact==='Decreased'?'var(--red)':'var(--ink-60)'}">${tp.trustImpact}</span></div></div>
             <button class="btn-rm-sm" onclick="removeTouchpoint(${sh.id},${i})">&times;</button>
-          </div>`).join('')||'<div class="es-txt" style="font-size:12px;padding:8px 0">No touchpoints logged yet.</div>'}
+          </div>`).join('')||'<div class="es-txt" style="font-size:12px;padding:8px 0">No engagement touchpoints recorded. Log stakeholder interactions to track adoption momentum.</div>'}
           </div>
         </div>
       </div>
@@ -2269,7 +2783,7 @@ function toggleExp(id,btn){const body=document.getElementById(id);const arr=btn.
 
 function renderPAHM(){
   const p=getProj();if(!p)return;const pan=document.getElementById('p-ahm-panel');
-  if(!p.stakeholders.length){pan.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Score stakeholder groups in the Adoption Scoring tab to populate this map.</p></div>';return;}
+  if(!p.stakeholders.length){pan.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Score stakeholder groups in the Adoption Scoring tab to see where readiness is real and where it\u2019s assumed.</p></div>';return;}
   const cols=[...AF.map(f=>f.label),'Measurement','Reinforcement','Adoption Score'];
   let h='<div style="overflow-x:auto"><table class="ahm-tbl"><thead><tr><th class="ahm-rh">Group</th>';cols.forEach(c=>{h+=`<th>${c}</th>`;});h+='</tr></thead><tbody>';
   p.stakeholders.forEach(sh=>{
@@ -2304,7 +2818,7 @@ function renderPResources(){
   // Quick-view on overview tab
   const allRes=RES_ROLES.filter(role=>(p.resources[role.key]||[]).some(e=>e.name));
   const qv=document.getElementById('p-res-qv');
-  if(!allRes.length){qv.innerHTML='<div class="es" style="padding:16px"><div class="es-rule"></div><p class="es-txt">No resources assigned. Add assignments in the Resources tab.</p></div>';return;}
+  if(!allRes.length){qv.innerHTML='<div class="es" style="padding:16px"><div class="es-rule"></div><p class="es-txt">No resources assigned yet. Add team assignments in the Resources tab to track capacity and workload.</p></div>';return;}
   qv.innerHTML=allRes.map(role=>{
     const arr=p.resources[role.key].filter(e=>e.name);
     return arr.map(entry=>`<div class="res-qv-card">
@@ -2418,7 +2932,7 @@ function openScoreExplainer(){
         <span class="dc-leg"><span class="dc-dot dc-observed"></span>Observed ${conf.observed}%</span>
         <span class="dc-leg"><span class="dc-dot dc-estimated"></span>Estimated ${conf.estimated}%</span>
       </div>
-      ${conf.estimated>50?`<div class="score-conf-warn">⚠ More than half of this score relies on estimated inputs. Add lifecycle signals, trust assessments, or pulse surveys to increase confidence.</div>`:''}
+      ${conf.estimated>50?`<div class="score-conf-warn"><i class="ph ph-warning"></i> More than half of this score relies on estimated inputs. Add lifecycle signals, trust assessments, or pulse surveys to increase confidence.</div>`:''}
     </div>
 
     <h3>Formula Breakdown</h3>
@@ -2717,7 +3231,7 @@ function renderTrajectoryFromData(cached){
     driversEl.style.display='grid';
     driversEl.innerHTML=prediction.drivers.map((d,i)=>{
       const dir=d.direction||'neutral';
-      const icon=dir==='positive'?'▲':dir==='negative'?'▼':'►';
+      const icon=dir==='positive'?'<i class="ph ph-arrow-up"></i>':dir==='negative'?'<i class="ph ph-arrow-down"></i>':'<i class="ph ph-caret-right"></i>';
       return`<div class="traj-driver">
         <div class="traj-driver-rank ${dir}">${icon} Factor ${i+1} — ${dir.charAt(0).toUpperCase()+dir.slice(1)}</div>
         <div class="traj-driver-name">${esc(d.name)}</div>
@@ -2732,7 +3246,7 @@ function renderTrajectoryFromData(cached){
     if(prediction.atRiskWarning){
       const w=prediction.atRiskWarning;
       bannerEl.style.display='block';
-      bannerEl.innerHTML=`<strong>⚠ Trajectory Alert:</strong> Based on current trends, this project is projected to score <strong>${w.score}%</strong> at <strong>${esc(w.gate)}</strong>. Consider intervention in <strong>${esc(w.dimension)}</strong>: ${esc(w.recommendation)}`;
+      bannerEl.innerHTML=`<strong><i class="ph ph-warning"></i> Trajectory Alert:</strong> Based on current trends, this project is projected to score <strong>${w.score}%</strong> at <strong>${esc(w.gate)}</strong>. Consider intervention in <strong>${esc(w.dimension)}</strong>: ${esc(w.recommendation)}`;
     }else{
       bannerEl.style.display='none';
     }
@@ -3084,7 +3598,7 @@ function splitCSVLine(line){
 }
 
 function parseXLSX(data){
-  if(!window.XLSX){alert('Excel parser is still loading.');return[];}
+  if(!window.XLSX){alert('Excel parser is loading \u2014 try again in a moment.');return[];}
   const wb=XLSX.read(data,{type:'array'});
   const ws=wb.Sheets[wb.SheetNames[0]];
   const json=XLSX.utils.sheet_to_json(ws,{defval:''});
@@ -3092,7 +3606,7 @@ function parseXLSX(data){
 }
 
 async function parseDOCX(data){
-  if(!window.mammoth){alert('Document parser is still loading.');return[];}
+  if(!window.mammoth){alert('Document parser is loading \u2014 try again in a moment.');return[];}
   const result=await mammoth.convertToHtml({arrayBuffer:data});
   const html=result.value;
   // Extract tables from HTML
@@ -3328,7 +3842,7 @@ function renderPOverview(){
   renderValueCase(p);
   renderProofPoints(p);
   const fp=document.getElementById('p-ov-flags');const flags=getPFlags().slice(0,4);
-  if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active open issues at this time.</p></div>';}
+  if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active flags. Portfolio is on track.</p></div>';}
   else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.sub)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
   renderPResources();
   renderProjCharts();
@@ -3375,7 +3889,7 @@ function renderDataConfidenceBar(p){
       <div class="dc-seg dc-observed" style="width:${conf.observed}%" title="Observed: practitioner-assessed with documented evidence"></div>
       <div class="dc-seg dc-estimated" style="width:${conf.estimated}%" title="Estimated: subjective judgment without supporting evidence"></div>
     </div>
-    ${conf.estimated>50?`<div class="data-conf-note">⚠ More than half of this score relies on estimated inputs. Add lifecycle signals, trust assessments, or pulse surveys to increase confidence.</div>`:''}
+    ${conf.estimated>50?`<div class="data-conf-note"><i class="ph ph-warning"></i> More than half of this score relies on estimated inputs. Add lifecycle signals, trust assessments, or pulse surveys to increase confidence.</div>`:''}
     ${sw?`<div class="so-what-line">${esc(sw)}</div>`:''}
   </div>`;
 }
@@ -3431,7 +3945,7 @@ function renderValueCase(p){
         <span class="exp-badge" style="font-weight:400;font-size:11px;color:var(--ink-60);margin-left:8px">What this project is supposed to deliver — and whether it did</span>
         ${vr!==null?`<span class="exp-badge" style="background:${vrColor};color:#fff">${vr}% Realized</span>`:''}
       </div>
-      <span class="exp-arr">&#9660;</span>
+      <span class="exp-arr"><i class="ph ph-caret-down"></i></span>
     </button>
     <div class="exp-body" id="vc-body" style="padding:0 20px 20px">
     <div class="ph" style="padding:0;margin-bottom:16px">
@@ -3463,14 +3977,14 @@ function renderValueCase(p){
             <div class="vc-real-track"><div class="vc-real-fill" style="width:${vr}%;background:${vrColor}"></div></div>
             <div class="vc-real-val" style="color:${vrColor}">${vr}%</div>
           </div>`:''}
-        </div>`:'<div class="vc-col"><div class="vc-pending"><div class="vc-pending-icon">&#128337;</div><div class="vc-pending-txt">Actual Outcomes</div><div class="vc-pending-sub">This section unlocks after the go-live date to capture whether this project delivered its expected value.</div></div></div>'}
+        </div>`:'<div class="vc-col"><div class="vc-pending"><div class="vc-pending-icon"><i class="ph ph-clock"></i></div><div class="vc-pending-txt">Actual Outcomes</div><div class="vc-pending-sub">This section unlocks after the go-live date to capture whether this project delivered its expected value.</div></div></div>'}
       </div>
     </div>
     </div>
   </div>`;
 }
 function renderVCCriteria(vc,postGL){
-  if(!vc.successCriteria||!vc.successCriteria.length)return'<div class="vc-criteria-empty">No success criteria defined yet.</div>';
+  if(!vc.successCriteria||!vc.successCriteria.length)return'<div class="vc-criteria-empty">No success criteria defined. Add measurable criteria to track whether this project delivers its expected value.</div>';
   const statuses=['Yes','Partially','No'];
   const statusColors={Yes:'var(--green)',Partially:'var(--amber)',No:'var(--red)'};
   return vc.successCriteria.map((c,i)=>`<div class="vc-criterion-row">
@@ -3499,7 +4013,7 @@ function renderProofPoints(p){
         <span class="exp-sec-title">Proof Points</span>
         ${pts.length?`<span class="exp-badge ready">${pts.length} logged</span>`:'<span class="exp-badge needed">None yet</span>'}
       </div>
-      <span class="exp-arr">&#9660;</span>
+      <span class="exp-arr"><i class="ph ph-caret-down"></i></span>
     </button>
     <div class="exp-body" id="pp-body" style="padding:0 20px 20px">
     <div class="ph" style="padding:0;margin-bottom:16px">
@@ -3878,9 +4392,9 @@ function renderExecAttention(){
     const sc=adoptScore(sh.factors);if(sc<40)items.push({sev:'warn',label:`${esc(r.name)} › ${esc(p.name)}`,sub:`${esc(sh.name)} at ${sc}% readiness`});
   });});});
 
-  if(!items.length){el.innerHTML='<div class="es" style="padding:30px"><p class="es-txt" style="color:var(--green);font-weight:600">&#10003; No critical items. Portfolio is healthy.</p></div>';return;}
+  if(!items.length){el.innerHTML='<div class="es" style="padding:30px"><p class="es-txt" style="color:var(--green);font-weight:600"><i class="ph ph-check-circle"></i> No critical items. Portfolio is healthy.</p></div>';return;}
   el.innerHTML=items.slice(0,8).map(it=>`<div class="exec-attn-item">
-    <div class="exec-attn-icon ${it.sev}">${it.sev==='crit'?'!':'⚠'}</div>
+    <div class="exec-attn-icon ${it.sev}">${it.sev==='crit'?'!':'<i class="ph ph-warning"></i>'}</div>
     <div class="exec-attn-txt"><div class="exec-attn-label">${it.label}</div><div class="exec-attn-sub">${it.sub}</div></div>
   </div>`).join('');
 }
@@ -3924,8 +4438,8 @@ function renderExecTopRisks(){
     });
   });
   risks.sort((a,b)=>b.sev-a.sev);
-  if(!risks.length){el.innerHTML='<div class="es" style="padding:20px"><p class="es-txt" style="color:var(--green);font-weight:600">No critical risks identified.</p></div>';return;}
-  el.innerHTML=risks.slice(0,5).map(r=>`<div class="exec-attn-item"><div class="exec-attn-icon ${r.sev>=2?'crit':'warn'}">${r.sev>=2?'!':'⚠'}</div><div class="exec-attn-txt"><div class="exec-attn-sub">${r.text}</div></div></div>`).join('');
+  if(!risks.length){el.innerHTML='<div class="es" style="padding:20px"><p class="es-txt" style="color:var(--green);font-weight:600">No critical risks identified. Portfolio risk posture is healthy.</p></div>';return;}
+  el.innerHTML=risks.slice(0,5).map(r=>`<div class="exec-attn-item"><div class="exec-attn-icon ${r.sev>=2?'crit':'warn'}">${r.sev>=2?'!':'<i class="ph ph-warning"></i>'}</div><div class="exec-attn-txt"><div class="exec-attn-sub">${r.text}</div></div></div>`).join('');
 }
 
 function renderExecAgencyHM(){
@@ -4138,7 +4652,7 @@ function renderComplexityHeatmap(){
   const el=document.getElementById('exec-complexity-hm');if(!el)return;
   const allProjects=[];
   releases.forEach(r=>r.projects.forEach(p=>allProjects.push({p,r})));
-  if(!allProjects.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add projects to see complexity analysis.</p></div>';return;}
+  if(!allProjects.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add projects to see complexity analysis. Complexity scoring helps you anticipate change fatigue and resource pressure.</p></div>';return;}
   const rated=allProjects.map(({p,r})=>{
     const cx=calcComplexity(p);
     const as=calcCompositeScore(p);
@@ -4167,7 +4681,7 @@ function renderValueRealization(){
   const el=document.getElementById('exec-value-realization');if(!el)return;
   const postGL=[];
   releases.forEach(r=>r.projects.forEach(p=>{if(isPostGoLive(p))postGL.push({p,r});}));
-  if(!postGL.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Value realization data appears here for projects past their go-live date.</p></div>';return;}
+  if(!postGL.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Value realization unlocks after go-live. This is where you\u2019ll measure whether the change delivered what was promised.</p></div>';return;}
   let delivered=0,partial=0,notDelivered=0,notAssessed=0;
   const items=postGL.map(({p,r})=>{
     const vr=calcValueRealization(p.valueCase);
@@ -4256,9 +4770,9 @@ function renderRecommendations(){
       if(rec)recs.push({gate:`${gate.label} — ${gate.sub}`,item:item.text,action:rec.action,sev:s});
     }
   });});
-  if(!recs.length){el.innerHTML='<div class="es" style="padding:30px"><p class="es-txt" style="color:var(--green);font-weight:600">&#10003; All gate items are complete. No actions required.</p></div>';return;}
+  if(!recs.length){el.innerHTML='<div class="es" style="padding:30px"><p class="es-txt" style="color:var(--green);font-weight:600"><i class="ph ph-check-circle"></i> All gate items are complete. No actions required.</p></div>';return;}
   el.innerHTML=recs.slice(0,6).map(r=>`<div class="rec-item">
-    <div class="rec-icon ${r.sev}">${r.sev==='red'?'!':'⚠'}</div>
+    <div class="rec-icon ${r.sev}">${r.sev==='red'?'!':'<i class="ph ph-warning"></i>'}</div>
     <div class="rec-txt"><div class="rec-gate">${esc(r.gate)}: ${esc(r.item)}</div>
     <div class="rec-action"><strong>Action:</strong> ${esc(r.action)}</div></div>
   </div>`).join('')+(recs.length>6?`<div style="text-align:center;padding:8px;font-size:11px;color:var(--ink-60)">+${recs.length-6} more — view all in the Gates tab</div>`:'');
@@ -4452,7 +4966,7 @@ function renderSmartRecsFromData(cached,p){
   }
 
   if(!recs.length){
-    list.innerHTML='<div class="smart-recs-loading" style="color:var(--green)">✓ No urgent recommendations at this time.</div>';
+    list.innerHTML='<div class="smart-recs-loading" style="color:var(--green)"><i class="ph ph-check"></i> No urgent recommendations at this time.</div>';
     return;
   }
 
@@ -4466,14 +4980,14 @@ function renderSmartRecsFromData(cached,p){
       <div class="smart-rec-top">
         <div class="smart-rec-priority ${prCls}"><span class="smart-rec-dot ${prCls}"></span>${esc(r.priority||'Medium')}</div>
         <div class="smart-rec-btns">
-          <button class="smart-rec-btn ack" onclick="ackSmartRec(${i})" title="Acknowledge"${isAcked?' disabled':''}>✓${isAcked?' Acknowledged':''}</button>
-          <button class="smart-rec-btn dismiss" onclick="dismissSmartRec(${i})" title="Dismiss">✕</button>
+          <button class="smart-rec-btn ack" onclick="ackSmartRec(${i})" title="Acknowledge"${isAcked?' disabled':''}><i class="ph ph-check"></i>${isAcked?' Acknowledged':''}</button>
+          <button class="smart-rec-btn dismiss" onclick="dismissSmartRec(${i})" title="Dismiss"><i class="ph ph-x"></i></button>
         </div>
       </div>
       <div class="smart-rec-action">${esc(r.action)}</div>
       <div class="smart-rec-meta">
         <div class="smart-rec-trigger"><strong>Data trigger:</strong> ${esc(r.data_trigger)}</div>
-        <div class="smart-rec-impact">▲ ${esc(r.estimated_impact)}</div>
+        <div class="smart-rec-impact"><i class="ph ph-arrow-up"></i> ${esc(r.estimated_impact)}</div>
         <div class="smart-rec-dimension">${esc(r.target_dimension)}</div>
       </div>
     </div>`;
@@ -4490,7 +5004,7 @@ function ackSmartRec(idx){
   if(card){
     card.classList.add('acknowledged');
     const btn=card.querySelector('.smart-rec-btn.ack');
-    if(btn){btn.disabled=true;btn.textContent='✓ Acknowledged';}
+    if(btn){btn.disabled=true;btn.innerHTML='<i class="ph ph-check"></i> Acknowledged';}
   }
 }
 
@@ -4519,7 +5033,7 @@ function renderPImpact(){
   const el=document.getElementById('p-impact-panel');if(!el)return;
   if(!p.impactAssessment)p.impactAssessment={groups:[]};
   const groups=p.impactAssessment.groups;
-  if(!groups.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add impacted groups to begin the impact assessment.</p></div>';return;}
+  if(!groups.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add impacted groups to begin the impact assessment. Map who\u2019s affected, how, and what support they\u2019ll need.</p></div>';return;}
   el.innerHTML=groups.map((g,gi)=>{
     const lvlCls=g.level==='High'?'high':g.level==='Low'?'low':'medium';
     return`<div class="impact-group">
@@ -5022,20 +5536,11 @@ function renderSaturationMap(){
   // Filter to groups appearing in 2+ projects for the saturation view, but show all
   const groups=Object.values(groupMap).sort((a,b)=>b.projects.length-a.projects.length);
   // Update collapse summary stat
-  const satSummary=document.getElementById('sat-summary-stat');
   if(!groups.length){
-    if(satSummary)satSummary.textContent='No stakeholder groups found';
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No stakeholder groups found. Add stakeholders to projects to see saturation data.</div>';return;
   }
   const satHigh=groups.filter(g=>g.projects.length>=3).length;
   const satMod=groups.filter(g=>g.projects.length===2).length;
-  if(satSummary){
-    const parts=[];
-    if(satHigh)parts.push(satHigh+' high saturation');
-    if(satMod)parts.push(satMod+' moderate');
-    parts.push(groups.length+' total groups');
-    satSummary.textContent=parts.join(' · ');
-  }
   // Get unique projects as columns
   const allProjs=[];const projSet=new Set();
   releases.forEach(r=>(r.projects||[]).forEach(p=>{if(!projSet.has(p.id)){projSet.add(p.id);allProjs.push({id:p.id,name:p.name,relName:r.name,golive:p.golive||r.golive||'',relId:r.id});}}));
@@ -5146,14 +5651,14 @@ function collectOcmWorkloadData(){
 }
 
 function renderOcmWorkloadBalance(){
-  const sec=document.getElementById('wkl-bal-sec');if(!sec)return;
+  const sec=document.getElementById('people-cap-sec');if(!sec)return;
   const data=collectOcmWorkloadData();
   renderOcmWklSummary(data);
   renderOcmWklRoster(data);
   renderOcmWklReleaseComparison(data);
   renderOcmWklCrossRelease(data);
-  // Header stat
-  const statEl=document.getElementById('wkl-summary-stat');
+  // Header stat — shown on combined People & Capacity toggle
+  const statEl=document.getElementById('people-cap-stat');
   if(statEl){
     const parts=[];
     if(data.summary.totalGaps)parts.push(data.summary.totalGaps+' gap'+(data.summary.totalGaps!==1?'s':''));
@@ -5178,7 +5683,7 @@ function renderOcmWklSummary(data){
 
 function renderOcmWklRoster(data){
   const el=document.getElementById('wkl-roster');if(!el)return;
-  if(!data.people.length){el.innerHTML='<div class="wkl-empty">No OCM resources assigned across portfolio.</div>';return;}
+  if(!data.people.length){el.innerHTML='<div class="wkl-empty">No OCM resources assigned across portfolio. Assign team members in individual projects to see workload distribution here.</div>';return;}
   // Bucket people by utilization level
   const heavy=[],active=[],available=[];
   data.people.forEach(person=>{
@@ -5313,6 +5818,16 @@ let _sfCurrentMode='forecast';
 window._sfCache=null;
 window._sfWhatIfCache=null;
 window._sfSeqCache=null;
+
+function switchPeopleCapTab(tab){
+  const tabs=['workload','saturation'];
+  tabs.forEach(t=>{
+    const panel=document.getElementById('pctab-'+t);
+    const btn=document.getElementById('pctab-btn-'+t);
+    if(panel)panel.style.display=t===tab?'block':'none';
+    if(btn){btn.classList.toggle('pc-tab-active',t===tab);}
+  });
+}
 
 function switchSFMode(mode){
   _sfCurrentMode=mode;
@@ -5588,7 +6103,7 @@ function renderWhatIfResult(result,allProjs){
   h+='<button class="sf-wi-compare-btn" id="sf-wi-compare" onclick="runWhatIfComparison()">Re-Compare</button>';
 
   // Verdict banner
-  const verdictIcon=comp.verdict==='recommended'?'✓':comp.verdict==='neutral'?'○':'✗';
+  const verdictIcon=comp.verdict==='recommended'?'<i class="ph ph-check"></i>':comp.verdict==='neutral'?'<i class="ph ph-minus-circle"></i>':'<i class="ph ph-x"></i>';
   const verdictLabel=comp.verdict==='recommended'?'Recommended Change':comp.verdict==='not_recommended'?'Not Recommended':'Neutral Impact';
   h+='<div class="sf-wi-verdict '+(comp.verdict||'neutral')+'"><span style="font-size:18px;margin-right:6px">'+verdictIcon+'</span>'+verdictLabel+'</div>';
 
@@ -5735,7 +6250,7 @@ function renderPPostLaunch(){
         if(obs.adoption!==undefined){
           const delta=obs.adoption-preScore;
           const cls=delta>=0?'pl-trend-up':'pl-trend-down';
-          h+='<div class="pl-trend '+cls+'">'+(delta>=0?'▲':'▼')+' '+Math.abs(delta)+'% vs pre-launch prediction</div>';
+          h+='<div class="pl-trend '+cls+'">'+(delta>=0?'<i class="ph ph-arrow-up"></i>':'<i class="ph ph-arrow-down"></i>')+' '+Math.abs(delta)+'% vs pre-launch prediction</div>';
         }
       }else{
         h+='<div class="pl-iv-locked">Available in '+(parseInt(iv.key.substring(1))-daysSince)+' days</div>';
@@ -5967,7 +6482,7 @@ function renderPPulse(){
       h+='<div class="pulse-bars">';
       gapData.forEach(g=>{
         const gapCls=g.absDiff>=2?'pulse-gap-high':g.absDiff>=1?'pulse-gap-mod':'pulse-gap-low';
-        const arrow=g.diff>0.5?'▼':g.diff<-0.5?'▲':'≈';
+        const arrow=g.diff>0.5?'<i class="ph ph-arrow-down"></i>':g.diff<-0.5?'<i class="ph ph-arrow-up"></i>':'<i class="ph ph-minus"></i>';
         const arrowLabel=g.diff>0.5?'Stakeholders lower':g.diff<-0.5?'Stakeholders higher':'Aligned';
         h+='<div class="pulse-bar-row">';
         h+='<div class="pulse-dim-lbl">'+esc(g.dim.word)+'</div>';
@@ -5997,7 +6512,7 @@ function renderPPulse(){
   if(totalTextResponses>0||hasAnyResults){
     h+='<div class="pulse-ai-panel" id="pulse-ai-panel">';
     h+='<div class="pulse-ai-hdr" onclick="togglePulseAI()">';
-    h+='<h3><span class="ai-sparkle">✦</span> AI Pulse Insights</h3>';
+    h+='<h3><span class="ai-sparkle"><i class="ph ph-sparkle"></i></span> AI Pulse Insights</h3>';
     h+='<div class="pulse-ai-acts">';
     const cached=p._pulseInsightsCache;
     if(cached?.timestamp){h+='<span class="pulse-ai-meta">Analyzed '+fmtDate(cached.timestamp.split('T')[0])+'</span>';}
@@ -6297,7 +6812,7 @@ function renderPulseInsightsHTML(analysis){
     h+='<div class="pai-section-hd">Top Themes <span style="font-weight:400;font-size:10px;color:var(--ink-60)">('+analysis.themes.length+' identified)</span></div>';
     h+='<div class="pai-themes">';
     analysis.themes.forEach(t=>{
-      const trendLabel={new:'● New',growing:'▲ Growing',stable:'— Stable',declining:'▼ Declining',resolved:'✓ Resolved'};
+      const trendLabel={new:'<i class="ph ph-circle-fill"></i> New',growing:'<i class="ph ph-arrow-up"></i> Growing',stable:'<i class="ph ph-minus"></i> Stable',declining:'<i class="ph ph-arrow-down"></i> Declining',resolved:'<i class="ph ph-check"></i> Resolved'};
       h+='<div class="pai-theme">';
       h+='<div class="pai-theme-name" title="'+(esc(t.description||''))+'">'+esc(t.theme)+'</div>';
       h+='<div class="pai-theme-count">'+t.count+'×</div>';
@@ -6310,7 +6825,7 @@ function renderPulseInsightsHTML(analysis){
 
   // 4. Resistance signals
   if(analysis.resistance_signals?.length){
-    h+='<div class="pai-section-hd">⚠ Resistance Signals <span style="font-weight:400;font-size:10px;color:var(--ink-60)">('+analysis.resistance_signals.length+' detected)</span></div>';
+    h+='<div class="pai-section-hd"><i class="ph ph-warning"></i> Resistance Signals <span style="font-weight:400;font-size:10px;color:var(--ink-60)">('+analysis.resistance_signals.length+' detected)</span></div>';
     h+='<div class="pai-signals">';
     analysis.resistance_signals.forEach(s=>{
       const typeLabels={active_resistance:'Active Resistance',confusion:'Confusion',disengagement:'Disengagement',fear:'Fear',skepticism:'Skepticism'};
@@ -6520,7 +7035,7 @@ function pdfCheckPage(doc,y,w,h,pg,needed){
 }
 
 function exportProjectPDF(){
-  if(!window.jspdf){alert('PDF library is still loading. Please try again in a moment.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   migrateResources(p);
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -6613,7 +7128,7 @@ function exportProjectPDF(){
 }
 
 function exportReleasePDF(){
-  if(!window.jspdf){alert('PDF library is still loading. Please try again in a moment.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const r=getRel();if(!r)return;
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
   const w=doc.internal.pageSize.getWidth(),h=doc.internal.pageSize.getHeight();
@@ -6671,7 +7186,7 @@ function getProjFlags(p){
 // CLIENT HANDOFF PDF
 // ════════════════════════════════════════════════════════
 function exportHandoffPDF(){
-  if(!window.jspdf){alert('PDF library is still loading. Please try again in a moment.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   try{
   const brand=getBrand();
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -6806,7 +7321,7 @@ function exportHandoffPDF(){
   const blob=doc.output('blob');
   const url=URL.createObjectURL(blob);
   window.open(url,'_blank');
-  }catch(e){console.error('Handoff PDF error:',e);alert('Error generating PDF: '+e.message);}
+  }catch(e){console.error('Handoff PDF error:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 // ════════════════════════════════════════════════════════
@@ -7067,7 +7582,7 @@ function _trainingModality(sh){
 }
 
 function genStakeholderAnalysis(aiNarrative,audience){
-  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -7268,11 +7783,11 @@ function genStakeholderAnalysis(aiNarrative,audience){
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
-  }catch(e){console.error('Stakeholder Analysis PDF:',e);alert('Error generating PDF: '+e.message);}
+  }catch(e){console.error('Stakeholder Analysis PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genTrainingPlan(aiNarrative,audience){
-  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -7488,11 +8003,11 @@ function genTrainingPlan(aiNarrative,audience){
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
-  }catch(e){console.error('Training Plan PDF:',e);alert('Error generating PDF: '+e.message);}
+  }catch(e){console.error('Training Plan PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genCommsPlan(aiNarrative,audience){
-  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -7671,11 +8186,11 @@ function genCommsPlan(aiNarrative,audience){
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
-  }catch(e){console.error('Comms Plan PDF:',e);alert('Error generating PDF: '+e.message);}
+  }catch(e){console.error('Comms Plan PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genResistancePlan(aiNarrative,audience){
-  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -7919,11 +8434,11 @@ function genResistancePlan(aiNarrative,audience){
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
-  }catch(e){console.error('Resistance Plan PDF:',e);alert('Error generating PDF: '+e.message);}
+  }catch(e){console.error('Resistance Plan PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genReadinessRec(aiNarrative,audience){
-  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   try{
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -8217,11 +8732,11 @@ function genReadinessRec(aiNarrative,audience){
   pdfFooter(doc,w,h,pg[0]);
   {const blobUrl=URL.createObjectURL(doc.output('blob'));window.open(blobUrl,'_blank');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);}
   toggleGenMenu();
-  }catch(e){console.error('Readiness Rec PDF:',e);alert('Error generating PDF: '+e.message);}
+  }catch(e){console.error('Readiness Rec PDF:',e);alert('Export didn\u2019t complete. Check your browser settings and try again.');}
 }
 
 function genFullPackage(){
-  if(!window.jspdf){alert('PDF library is still loading.');return;}
+  if(!window.jspdf){alert('Preparing your readiness report for export\u2026 Please try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   alert('Generating all 5 deliverables (without AI narratives). Each will open in a separate tab.');
   toggleGenMenu();
@@ -8243,10 +8758,13 @@ function setDemoMode(on){
   ['demo-banner-p','demo-banner-r','demo-banner-proj'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display=on?'inline-block':'none';
   });
+  if(on){isReadOnly=true;document.body.classList.add('readonly-mode');applyReadOnlyRestrictions();}
 }
 function exitDemo(){
   localStorage.removeItem(storageKey());
   isDemoMode=false;
+  isReadOnly=false;
+  document.body.classList.remove('readonly-mode');
   setDemoMode(false);
   releases=[];
   showLanding();
@@ -8482,6 +9000,7 @@ async function loadDemoData(){
   p2a.stakeholders=[{id:uid(),name:'Branch Tellers',factors:{resistance:3,env:3,window:3,complexity:3,saturation:2,leadership:3},objectives:['Process deposits/withdrawals','Handle wire transfers','Customer authentication verification'],kirk:{L1:{method:'Role-based training modules',timing:'2 weeks pre-go-live'},L2:{method:'Transaction simulation',assessment:'100 test cases'},L3:{observable:'Avg transaction time',interval:'14-day post go-live'},L4:{outcome:'Zero fraudulent transactions',metric:'Risk dashboard'}},rein:{owner:'Branch Managers',activities:'Daily check-ins + super-user support',intervals:['Week 1','Week 2','Week 4'],escalation:'Escalate if transaction errors exceed 0.5%'}}];
   const p2b=newProject('Online Banking',['JPMorgan'],45000);
   p2b.status='Not Started';
+  p2b.golive='2026-08-30';
   p2b.gateState={g1_0:'yellow',g1_1:'yellow',g1_2:'red',g1_3:'red',g1_4:'red'};
   migrateResources(p2b);
   p2b.resources.ocm_impl=[{name:'Jennifer Walsh',contact:''}];
@@ -8724,7 +9243,7 @@ async function loadDemoData(){
   r6.projects=[p6a];
   releases.push(r6);
 
-  await saveData();setDemoMode(true);renderPortfolio();renderAlerts();
+  await saveData();setDemoMode(true);renderPortfolio();renderAlerts();showSuccess('You\u2019re in demo mode. Explore freely \u2014 nothing here is real data.');
   initTopBrand();
   closeWelcome();
 }
@@ -8779,9 +9298,9 @@ async function exportAuditLog(){
 }
 async function renderAuditLog(){
   const container=document.getElementById('audit-log-body');if(!container)return;
-  container.innerHTML='<div style="color:var(--ink-60);font-size:12px;padding:8px 0">Loading\u2026</div>';
+  container.innerHTML='<div style="color:var(--ink-60);font-size:12px;padding:8px 0">Loading release intelligence\u2026</div>';
   const{data,error}=await _supabase.from('audit_log').select('*').eq('user_id',currentUserId).order('created_at',{ascending:false}).limit(50);
-  if(error||!data||!data.length){container.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet.</p></div>';return;}
+  if(error||!data||!data.length){container.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet. Actions you take in AdoptIQ will appear here as an audit trail.</p></div>';return;}
   const ACTION_LABELS={release_created:'Release Created',release_deleted:'Release Removed',project_created:'Project Added',project_deleted:'Project Removed',gate_updated:'Gate Updated',adkar_updated:fwShort()+' Updated'};
   container.innerHTML=data.map(row=>{
     const ts=new Date(row.created_at);
@@ -8917,7 +9436,7 @@ async function loadSharedView(token){
     const{data:row,error:qErr}=await _supabase.from('shared_links').select('snapshot,label,created_at,expires_at').eq('token',token).eq('is_active',true).gt('expires_at',new Date().toISOString()).maybeSingle();
     if(qErr||!row){
       document.getElementById('v-login').classList.remove('active');
-      document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);font-family:DM Sans,sans-serif"><div style="text-align:center;max-width:400px;padding:40px"><div style="font-size:48px;margin-bottom:16px">&#128279;</div><h2 style="font-family:DM Serif Display,Georgia,serif;margin-bottom:12px">Link Expired or Invalid</h2><p style="color:#666;font-size:14px">This shared dashboard link has expired, been revoked, or does not exist.</p><a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;background:#b8922a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Go to AdoptIQ</a></div></div>';
+      document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);font-family:DM Sans,sans-serif"><div style="text-align:center;max-width:400px;padding:40px"><div style="font-size:48px;margin-bottom:16px"><i class="ph ph-link-break" style="font-size:48px"></i></div><h2 style="font-family:DM Serif Display,Georgia,serif;margin-bottom:12px">Link Expired or Invalid</h2><p style="color:#666;font-size:14px">This shared dashboard link has expired, been revoked, or does not exist.</p><a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;background:#b8922a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Go to AdoptIQ</a></div></div>';
       return;
     }
     sharedViewData=row;
@@ -9097,7 +9616,7 @@ async function renderTrendCharts(){
   const deltaHtml=(val,unit,inverted)=>{
     if(val===null||val===0)return'<span class="trend-delta trend-neutral">No change</span>';
     const up=val>0;const good=inverted?!up:up;
-    return`<span class="trend-delta ${good?'trend-up':'trend-down'}">${up?'&#9650; +':'&#9660; '}${Math.abs(val)}${unit} this week</span>`;
+    return`<span class="trend-delta ${good?'trend-up':'trend-down'}">${up?'<i class="ph ph-arrow-up"></i> +':'<i class="ph ph-arrow-down"></i> '}${Math.abs(val)}${unit} this week</span>`;
   };
   const kpiEl=document.getElementById('trend-kpis');
   if(kpiEl)kpiEl.innerHTML=`
@@ -9111,23 +9630,23 @@ async function renderTrendCharts(){
   const insights=[];
   // Gate readiness trajectory
   if(gateDelta!==null){
-    if(gateDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`Portfolio readiness improved by <strong>${gateDelta}%</strong> this week, now at <strong>${curGate}%</strong>.`});
-    else if(gateDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`Portfolio readiness dropped by <strong>${Math.abs(gateDelta)}%</strong> this week to <strong>${curGate}%</strong> — review incomplete gates.`});
+    if(gateDelta>0)insights.push({icon:'<i class="ph ph-arrow-up"></i>',cls:'good',text:`Portfolio readiness improved by <strong>${gateDelta}%</strong> this week, now at <strong>${curGate}%</strong>.`});
+    else if(gateDelta<0)insights.push({icon:'<i class="ph ph-arrow-down"></i>',cls:'warn',text:`Portfolio readiness dropped by <strong>${Math.abs(gateDelta)}%</strong> this week to <strong>${curGate}%</strong> — review incomplete gates.`});
     else insights.push({icon:'—',cls:'neutral',text:`Gate readiness held steady at <strong>${curGate}%</strong>.`});
   }
   // Gate vs target
-  if(curGate!=null&&curGate<80)insights.push({icon:'&#9673;',cls:'warn',text:`Portfolio is <strong>${80-curGate}%</strong> below the 80% go-live readiness target.`});
-  else if(curGate!=null&&curGate>=80)insights.push({icon:'&#10003;',cls:'good',text:`Portfolio exceeds the 80% go-live readiness target.`});
+  if(curGate!=null&&curGate<80)insights.push({icon:'<i class="ph ph-warning-circle"></i>',cls:'warn',text:`Portfolio is <strong>${80-curGate}%</strong> below the 80% go-live readiness target.`});
+  else if(curGate!=null&&curGate>=80)insights.push({icon:'<i class="ph ph-check-circle"></i>',cls:'good',text:`Portfolio exceeds the 80% go-live readiness target.`});
   // Risk flags
   if(flagDelta!==null){
     if(flagDelta>0)insights.push({icon:'!',cls:'warn',text:`Risk flags increased by <strong>${flagDelta}</strong> this week (now ${curFlags}). Investigate new incomplete gates.`});
-    else if(flagDelta<0)insights.push({icon:'&#10003;',cls:'good',text:`Risk flags decreased by <strong>${Math.abs(flagDelta)}</strong> this week (now ${curFlags}).`});
+    else if(flagDelta<0)insights.push({icon:'<i class="ph ph-check-circle"></i>',cls:'good',text:`Risk flags decreased by <strong>${Math.abs(flagDelta)}</strong> this week (now ${curFlags}).`});
   }
   // ADKAR stagnation
   if(adkarAvgs.length>=3){
     const last3=adkarAvgs.slice(-3);
     const flat=last3.every((v,_,a)=>v!=null&&Math.abs(v-a[0])<0.2);
-    if(flat&&curAdkar!=null&&curAdkar<4)insights.push({icon:'&#9724;',cls:'warn',text:`${fwShort()} scores have been flat at <strong>${curAdkar}/5</strong> for 3+ weeks — reinforcement activities may need attention.`});
+    if(flat&&curAdkar!=null&&curAdkar<4)insights.push({icon:'<i class="ph ph-minus-square"></i>',cls:'warn',text:`${fwShort()} scores have been flat at <strong>${curAdkar}/5</strong> for 3+ weeks — reinforcement activities may need attention.`});
   }
   // Per-release insights: find biggest mover
   if(recent.length>=2){
@@ -9142,8 +9661,8 @@ async function renderTrendCharts(){
         if(d<worstDelta){worstDelta=d;worstName=lr.name;}
       }
     });
-    if(bestDelta>0)insights.push({icon:'&#9650;',cls:'good',text:`<strong>${esc(bestName)}</strong> improved the most this week (+${bestDelta}% readiness).`});
-    if(worstDelta<0)insights.push({icon:'&#9660;',cls:'warn',text:`<strong>${esc(worstName)}</strong> declined this week (${worstDelta}% readiness) — may need intervention.`});
+    if(bestDelta>0)insights.push({icon:'<i class="ph ph-arrow-up"></i>',cls:'good',text:`<strong>${esc(bestName)}</strong> improved the most this week (+${bestDelta}% readiness).`});
+    if(worstDelta<0)insights.push({icon:'<i class="ph ph-arrow-down"></i>',cls:'warn',text:`<strong>${esc(worstName)}</strong> declined this week (${worstDelta}% readiness) — may need intervention.`});
   }
 
   const insEl=document.getElementById('trend-insights');
@@ -9151,7 +9670,7 @@ async function renderTrendCharts(){
   const insToggle=document.getElementById('trend-insights-toggle');
   if(insEl){
     if(!insights.length){
-      insEl.innerHTML='<div class="es"><p class="es-txt">Collecting data — insights will appear as trends emerge.</p></div>';
+      insEl.innerHTML='<div class="es"><p class="es-txt">Trends build over time.</p><p class="es-txt">You\u2019ll see readiness trajectories here as scores accumulate across releases. Keep assessing \u2014 the picture will form.</p></div>';
       if(insOverflow)insOverflow.style.display='none';
       if(insToggle)insToggle.style.display='none';
     } else {
@@ -9210,6 +9729,19 @@ async function renderTrendCharts(){
       scales:{y:{min:0,max:5,ticks:{stepSize:1,font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
         x:{ticks:{font:{size:9},color:chartSubColor(),maxRotation:45},grid:{display:false}}},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+'/5'}}}}
+    });
+  }
+
+  // ── Re-render charts when details toggle opens ──
+  const detWrap=document.getElementById('chart-trend-gate')?.closest('details');
+  if(detWrap&&!detWrap._toggleBound){
+    detWrap._toggleBound=true;
+    detWrap.addEventListener('toggle',()=>{
+      if(detWrap.open){
+        ['trend-gate','trend-flags','trend-adkar'].forEach(k=>{
+          if(chartInstances[k])chartInstances[k].resize();
+        });
+      }
     });
   }
 

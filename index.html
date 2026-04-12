@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="AdoptIQ — Enterprise OCM readiness gate platform. Track training dependencies, ADKAR assessment, stakeholder adoption, and SDLC gate readiness across your portfolio.">
 <title>AdoptIQ — Adoption Intelligence Platform</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
@@ -13,9 +13,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>A</text></svg>">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
 <link rel="stylesheet" href="css/adoptiq.css">
 </head>
-<body>
+<body data-density="comfortable">
 <a href="#main-content" class="skip-link">Skip to main content</a>
 <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
@@ -29,7 +30,7 @@
       <div class="lp-nav-right">
         <a href="#lp-features" class="lp-nav-link">Features</a>
         <a href="#lp-how" class="lp-nav-link">How It Works</a>
-        <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme">&#9789;</button>
+        <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme"><i class="ph ph-moon"></i></button>
         <button class="lp-nav-signin" onclick="landingToLogin()">Sign In</button>
       </div>
     </div>
@@ -108,13 +109,13 @@
           <h3 class="lp-step-title">Set Up</h3>
           <p class="lp-step-desc">Define your releases, add projects, map the people affected, and configure your readiness checkpoints.</p>
         </div>
-        <div class="lp-step-arrow">&#8594;</div>
+        <div class="lp-step-arrow"><i class="ph ph-arrow-right"></i></div>
         <div class="lp-step">
           <div class="lp-step-num">2</div>
           <h3 class="lp-step-title">Track</h3>
           <p class="lp-step-desc">Log evidence at every stage — training outcomes, trust levels, lifecycle signals, and engagement results.</p>
         </div>
-        <div class="lp-step-arrow">&#8594;</div>
+        <div class="lp-step-arrow"><i class="ph ph-arrow-right"></i></div>
         <div class="lp-step">
           <div class="lp-step-num">3</div>
           <h3 class="lp-step-title">Prove Results</h3>
@@ -169,7 +170,7 @@
       <div class="lp-footer-copy">&copy; 2026 Providence Consulting Firm, LLC. All rights reserved.</div>
     <!-- Hidden Netlify form detection -->
     <form name="walkthrough-request" netlify netlify-honeypot="bot-field" hidden>
-      <input name="firstName"><input name="lastName"><input name="email"><input name="organization"><input name="role"><textarea name="message"></textarea><input name="contactMethod">
+      <input name="firstName" aria-label="First name"><input name="lastName" aria-label="Last name"><input name="email" aria-label="Email"><input name="organization" aria-label="Organization"><input name="role" aria-label="Role"><textarea name="message" aria-label="Message"></textarea><input name="contactMethod" aria-label="Contact method">
     </form>
     </div>
   </footer>
@@ -248,7 +249,7 @@
     <!-- EMAIL VERIFICATION PENDING -->
     <div id="login-verify" style="display:none">
       <div style="text-align:center;padding:8px 0 4px">
-        <div style="font-size:36px;margin-bottom:10px">&#9993;</div>
+        <div style="font-size:36px;margin-bottom:10px"><i class="ph ph-envelope"></i></div>
         <div style="font-family:var(--font-d);font-size:18px;color:var(--ink);margin-bottom:8px">Check Your Email</div>
         <p style="font-size:12.5px;color:var(--ink-60);line-height:1.7;margin-bottom:20px">
           We sent a verification link to <strong id="verify-email-display"></strong>.<br>
@@ -278,12 +279,17 @@
         <span class="top-tagline">Where OCM Meets Measurable Readiness</span>
       </div>
       <div class="top-right">
+        <div class="density-switcher">
+          <button class="density-btn" onclick="setDensity('compact')" aria-label="Compact density">Compact</button>
+          <button class="density-btn density-btn--active" onclick="setDensity('comfortable')" aria-label="Comfortable density">Comfortable</button>
+          <button class="density-btn" onclick="setDensity('spacious')" aria-label="Spacious density">Spacious</button>
+        </div>
         <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">
-          <span id="theme-icon">&#9790;</span>
+          <span id="theme-icon"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl">Dark</span>
         </button>
-        <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer">&#9654; EXIT DEMO</button>
-        <select id="view-role-select" class="role-select" onchange="applyViewRole(this.value);renderPortfolio()">
+        <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
+        <select id="view-role-select" class="role-select" aria-label="View role" onchange="applyViewRole(this.value);renderPortfolio()">
           <option value="admin">Administrator</option>
           <option value="staff">Staff / Team</option>
           <option value="exec_sponsor">Executive Sponsor</option>
@@ -313,19 +319,19 @@
   <div id="pending-invites-bar" style="display:none"></div>
 
   <!-- Ask AdoptIQ NLQ Bar -->
-  <div class="aiq-bar" id="aiq-bar">
-    <div class="aiq-bar-inner">
+  <div class="aiq-panel" id="aiq-bar">
+    <div class="aiq-panel-inner">
       <div class="aiq-search-wrap">
-        <span class="aiq-icon">✦</span>
-        <input type="text" id="aiq-input" class="aiq-input" placeholder="Ask AdoptIQ anything about your portfolio…" autocomplete="off" onkeydown="if(event.key==='Enter')askAdoptIQ()">
-        <button class="aiq-go" id="aiq-go-btn" onclick="askAdoptIQ()">Ask</button>
+        <span class="aiq-icon"><i class="ph ph-sparkle"></i></span>
+        <input type="text" id="aiq-input" class="aiq-input" aria-label="Ask AdoptIQ" placeholder="Ask AdoptIQ anything about your portfolio…" autocomplete="off" onkeydown="if(event.key==='Enter')askAdoptIQ()">
+        <button class="aiq-go" id="aiq-go-btn" onclick="askAdoptIQ()">Ask AIQ</button>
       </div>
       <div class="aiq-chips" id="aiq-chips"></div>
     </div>
   </div>
-  <div class="aiq-answer-area" id="aiq-answer-area" style="display:none"></div>
+  <div class="aiq-messages" id="aiq-answer-area" style="display:none"></div>
   <!-- Mobile NLQ FAB -->
-  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ">✦</button>
+  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ"><i class="ph ph-sparkle"></i></button>
 
   <div class="port-body" id="main-content">
     <div id="what-data-tells"></div>
@@ -338,9 +344,9 @@
     </div>
     <!-- EXECUTIVE DASHBOARD -->
     <div id="exec-dash" style="display:none;margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye">Executive Summary</div><div class="sec-ttl">Portfolio Health Dashboard</div></div></div>
+      <div class="sec-head"><div><div class="sec-eye overline">Executive Summary</div><div class="sec-ttl">Portfolio Health Dashboard</div></div></div>
       <div id="exec-rag-summary" style="margin-bottom:16px"></div>
-      <div class="exec-dash-grid">
+      <div class="exec-dash-grid stagger-children">
         <div class="exec-card">
           <div class="exec-card-title">Overall Readiness</div>
           <div class="exec-chart-wrap"><canvas id="chart-port-readiness" role="img" aria-label="Portfolio readiness donut chart"></canvas></div>
@@ -355,7 +361,7 @@
         </div>
       </div>
       <!-- Collapsible: Go-Live & Risks -->
-      <details class="dash-section">
+      <details class="dash-section" open>
         <summary class="dash-section-toggle">Go-Live Countdown &amp; Risks</summary>
         <div class="golive-strip" id="exec-golive-strip"></div>
         <div class="exec-card exec-card-wide" style="margin-top:12px">
@@ -364,7 +370,7 @@
         </div>
       </details>
       <!-- Collapsible: Agency & Insights -->
-      <details class="dash-section">
+      <details class="dash-section" open>
         <summary class="dash-section-toggle">Agency Readiness &amp; Insights</summary>
         <div class="exec-card exec-card-wide" style="margin-top:12px">
           <div class="exec-card-title">Readiness by Agency</div>
@@ -376,18 +382,18 @@
         </div>
       </details>
       <!-- Complexity & Resource Planning -->
-      <details class="dash-section">
+      <details class="dash-section" open>
         <summary class="dash-section-toggle">Resource &amp; Complexity Planning</summary>
         <div id="exec-complexity-hm" style="margin-top:12px"></div>
       </details>
       <!-- Value Realization -->
-      <details class="dash-section">
+      <details class="dash-section" open>
         <summary class="dash-section-toggle">Value Realization</summary>
         <div id="exec-value-realization" style="margin-top:12px"></div>
       </details>
     </div>
     <div id="trends-sec" style="display:none;margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye">Insights &amp; Trends</div><div class="sec-ttl">What Changed This Week</div></div></div>
+      <div class="sec-head"><div><div class="sec-eye overline">Insights &amp; Trends</div><div class="sec-ttl">What Changed This Week</div></div></div>
       <!-- Delta KPI Row -->
       <div class="trend-kpi-row" id="trend-kpis"></div>
       <!-- Auto-generated insights — top 2 shown, rest toggleable -->
@@ -400,7 +406,7 @@
         </div>
       </div>
       <!-- Charts — collapsed by default -->
-      <details class="dash-section" style="margin-top:16px">
+      <details class="dash-section" style="margin-top:16px" open>
         <summary class="dash-section-toggle">Trend Charts</summary>
         <div class="exec-dash-grid" style="padding:0 12px 12px">
           <div class="exec-card">
@@ -436,98 +442,97 @@
       </div>
     </div>
     <div style="margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye">Active Releases</div><div class="sec-ttl">Release Portfolio</div></div></div>
-      <div id="rel-grid-wrap"></div>
+      <div class="sec-head"><div><div class="sec-eye overline">Active Releases</div><div class="sec-ttl">Release Portfolio</div></div></div>
+      <div id="rel-grid-wrap" class="stagger-children"></div>
     </div>
-    <!-- Portfolio Heatmap removed — redundant with release cards -->
-    <div id="sat-sec" style="display:none">
-      <details class="port-collapse">
-        <summary class="port-collapse-toggle">
-          <span class="port-collapse-title">Saturation Intelligence</span>
-          <span class="port-collapse-stat" id="sat-summary-stat"></span>
-          <span class="port-collapse-arrow">▸</span>
-        </summary>
-        <div class="port-collapse-body">
-          <div class="panel" style="border:none;box-shadow:none;margin:0">
-            <div class="pb"><div id="sat-map"></div></div>
-          </div>
-          <!-- Saturation Forecast -->
-          <div id="sat-forecast-sec" style="display:none">
-            <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:20px">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-                <div>
-                  <div class="sf-title">Saturation Forecast</div>
-                  <div class="sf-subtitle">AI-powered change load prediction &amp; sequencing</div>
-                </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button class="sf-mode-btn sf-mode-active" id="sf-btn-forecast" onclick="switchSFMode('forecast')">Forecast</button>
-                  <button class="sf-mode-btn" id="sf-btn-whatif" onclick="switchSFMode('whatif')">What If</button>
-                  <button class="sf-mode-btn" id="sf-btn-sequencing" onclick="switchSFMode('sequencing')">Sequencing</button>
-                </div>
-              </div>
-              <div id="sf-forecast-panel">
-                <div id="sf-forecast-content" class="sf-content-area">
-                  <div class="sf-empty-state">
-                    <div style="font-size:28px;margin-bottom:8px">📊</div>
-                    <div class="sf-title" style="font-size:13px;margin-bottom:4px">Forecast Change Load</div>
-                    <div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">AI analyzes your portfolio timeline to predict stakeholder saturation peaks</div>
-                    <button class="sf-analyze-btn" onclick="runSaturationForecast()">Generate Forecast</button>
-                  </div>
-                </div>
-              </div>
-              <div id="sf-whatif-panel" style="display:none">
-                <div id="sf-whatif-content" class="sf-content-area"></div>
-              </div>
-              <div id="sf-sequencing-panel" style="display:none">
-                <div id="sf-sequencing-content" class="sf-content-area"></div>
-              </div>
-              <div class="sf-disclaimer">AI-generated analysis — verify recommendations with project stakeholders before making scheduling decisions.</div>
-            </div>
-          </div>
-        </div>
-      </details>
-    </div>
-    <!-- Timeline moved above release cards -->
-
-    <div id="wkl-bal-sec" style="display:none">
-      <details class="port-collapse">
-        <summary class="port-collapse-toggle">
-          <span class="port-collapse-title">OCM Workload Balance</span>
-          <span class="port-collapse-stat" id="wkl-summary-stat"></span>
-          <span class="port-collapse-arrow">&#9654;</span>
-        </summary>
-        <div class="port-collapse-body">
-          <div id="wkl-summary-strip"></div>
-          <div style="margin-top:20px">
-            <div class="wkl-sec-title">Resource Roster</div>
-            <div class="wkl-sec-sub">OCM Training and Implementation assignments by person</div>
-            <div id="wkl-roster"></div>
-          </div>
-          <div style="margin-top:20px">
-            <div class="wkl-sec-title">Release Workload Comparison</div>
-            <div class="wkl-sec-sub">OCM resource coverage by release</div>
-            <div id="wkl-rel-compare"></div>
-          </div>
-          <div id="wkl-cross-rel-sec" style="margin-top:24px">
-            <div class="wkl-sec-title">Cross-Release OCM Overlap</div>
-            <div class="wkl-sec-sub">OCM resources spanning multiple releases</div>
-            <div id="wkl-cross-rel"></div>
-          </div>
-        </div>
-      </details>
-    </div>
-
+    <!-- Portfolio Risk Dashboard — most actionable, shown first -->
     <div id="port-craid-sec" style="display:none">
-      <details class="port-collapse">
+      <details class="port-collapse" open>
         <summary class="port-collapse-toggle">
           <span class="port-collapse-title">Portfolio Risk Dashboard</span>
           <span class="port-collapse-stat" id="port-craid-stat"></span>
-          <span class="port-collapse-arrow">&#9654;</span>
+          <span class="port-collapse-arrow"><i class="ph ph-caret-right"></i></span>
         </summary>
         <div class="port-collapse-body">
           <div id="port-craid-summary"></div>
           <div id="port-craid-top-risks" style="margin-top:20px"></div>
           <div id="port-craid-by-release" style="margin-top:20px"></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- People & Capacity — combined Saturation + Workload with tab switcher -->
+    <div id="people-cap-sec" style="display:none">
+      <details class="port-collapse" open>
+        <summary class="port-collapse-toggle">
+          <span class="port-collapse-title">People &amp; Capacity</span>
+          <span class="port-collapse-stat" id="people-cap-stat"></span>
+          <span class="port-collapse-arrow"><i class="ph ph-caret-right"></i></span>
+        </summary>
+        <div class="port-collapse-body">
+          <div class="pc-tab-row">
+            <button class="pc-tab-btn pc-tab-active" id="pctab-btn-workload" onclick="switchPeopleCapTab('workload')">OCM Workload</button>
+            <button class="pc-tab-btn" id="pctab-btn-saturation" onclick="switchPeopleCapTab('saturation')">Saturation Intelligence</button>
+          </div>
+          <!-- Workload panel -->
+          <div id="pctab-workload">
+            <div id="wkl-summary-strip"></div>
+            <div style="margin-top:20px">
+              <div class="wkl-sec-title">Resource Roster</div>
+              <div class="wkl-sec-sub">OCM Training and Implementation assignments by person</div>
+              <div id="wkl-roster"></div>
+            </div>
+            <div style="margin-top:20px">
+              <div class="wkl-sec-title">Release Workload Comparison</div>
+              <div class="wkl-sec-sub">OCM resource coverage by release</div>
+              <div id="wkl-rel-compare"></div>
+            </div>
+            <div id="wkl-cross-rel-sec" style="margin-top:24px">
+              <div class="wkl-sec-title">Cross-Release OCM Overlap</div>
+              <div class="wkl-sec-sub">OCM resources spanning multiple releases</div>
+              <div id="wkl-cross-rel"></div>
+            </div>
+          </div>
+          <!-- Saturation panel -->
+          <div id="pctab-saturation" style="display:none">
+            <div id="sat-sec">
+              <div class="panel" style="border:none;box-shadow:none;margin:0">
+                <div class="pb"><div id="sat-map"></div></div>
+              </div>
+              <div id="sat-forecast-sec" style="display:none">
+                <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:20px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+                    <div>
+                      <div class="sf-title">Saturation Forecast</div>
+                      <div class="sf-subtitle">AI-powered change load prediction &amp; sequencing</div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      <button class="sf-mode-btn sf-mode-active" id="sf-btn-forecast" onclick="switchSFMode('forecast')">Forecast</button>
+                      <button class="sf-mode-btn" id="sf-btn-whatif" onclick="switchSFMode('whatif')">What If</button>
+                      <button class="sf-mode-btn" id="sf-btn-sequencing" onclick="switchSFMode('sequencing')">Sequencing</button>
+                    </div>
+                  </div>
+                  <div id="sf-forecast-panel">
+                    <div id="sf-forecast-content" class="sf-content-area">
+                      <div class="sf-empty-state">
+                        <div style="font-size:28px;margin-bottom:8px">📊</div>
+                        <div class="sf-title" style="font-size:13px;margin-bottom:4px">Forecast Change Load</div>
+                        <div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">AI analyzes your portfolio timeline to predict stakeholder saturation peaks</div>
+                        <button class="sf-analyze-btn" onclick="runSaturationForecast()">Generate Forecast</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="sf-whatif-panel" style="display:none">
+                    <div id="sf-whatif-content" class="sf-content-area"></div>
+                  </div>
+                  <div id="sf-sequencing-panel" style="display:none">
+                    <div id="sf-sequencing-content" class="sf-content-area"></div>
+                  </div>
+                  <div class="sf-disclaimer">AI-generated analysis — verify recommendations with project stakeholders before making scheduling decisions.</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </details>
     </div>
@@ -566,7 +571,7 @@
     <button class="btn-gold" onclick="generateShareLink()" style="width:100%;margin-bottom:12px">Generate Share Link</button>
     <div id="share-link-result" style="display:none;margin-bottom:16px">
       <div style="display:flex;gap:8px;align-items:center">
-        <input id="share-link-url" class="modal-inp" readonly style="flex:1;font-size:11px;font-family:monospace">
+        <input id="share-link-url" class="modal-inp" aria-label="Share link URL" readonly style="flex:1;font-size:11px;font-family:monospace">
         <button class="btn-gold" onclick="copyShareLink()" style="white-space:nowrap;padding:8px 16px">Copy</button>
       </div>
       <div id="share-link-expires" style="font-size:10px;color:var(--ink-60);margin-top:6px"></div>
@@ -598,12 +603,17 @@
       </div>
       <div class="top-right">
         <span class="save-ind" id="save-ind-r">Saved</span>
+        <div class="density-switcher">
+          <button class="density-btn" onclick="setDensity('compact')" aria-label="Compact density">Compact</button>
+          <button class="density-btn density-btn--active" onclick="setDensity('comfortable')" aria-label="Comfortable density">Comfortable</button>
+          <button class="density-btn" onclick="setDensity('spacious')" aria-label="Spacious density">Spacious</button>
+        </div>
         <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">
-          <span id="theme-icon-r">&#9790;</span>
+          <span id="theme-icon-r"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl-r">Dark</span>
         </button>
         <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
-        <button id="demo-banner-r" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer">&#9654; EXIT DEMO</button>
+        <button id="demo-banner-r" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-r"></span><span id="avatar-name-r">Profile</span></button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
@@ -629,27 +639,27 @@
     <div class="info-band-i">
       <div class="ib-field" style="max-width:280px">
         <div class="ib-label">Release Name</div>
-        <input class="ib-input" id="r-name" type="text" placeholder="Release name" oninput="syncRel('name',this.value)">
+        <input class="ib-input" id="r-name" type="text" aria-label="Release name" placeholder="e.g., Online Banking 2.0" oninput="syncRel('name',this.value)">
       </div>
       <div class="ib-field">
         <div class="ib-label">Agencies</div>
         <div class="chip-row" id="rel-agency-chips"></div>
         <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-          <input class="chip-add-inp-band" type="text" id="rel-agency-inp" placeholder="Add agency..." onkeydown="if(event.key==='Enter'){addRelAgency();event.preventDefault();}">
+          <input class="chip-add-inp-band" type="text" id="rel-agency-inp" aria-label="Add agency" placeholder="Add agency..." onkeydown="if(event.key==='Enter'){addRelAgency();event.preventDefault();}">
           <button class="btn-sm" onclick="addRelAgency()">Add</button>
         </div>
       </div>
       <div class="ib-field" style="max-width:180px">
-        <div class="ib-label">SDLC Phase</div>
-        <select class="ib-select" id="r-phase" onchange="syncRel('phase',this.value)">
+        <div class="ib-label" title="Where this release sits in the software development lifecycle. Change management activities should align with \u2014 and anticipate \u2014 each phase transition.">SDLC Phase</div>
+        <select class="ib-select" id="r-phase" aria-label="SDLC phase" onchange="syncRel('phase',this.value)">
           <option value="">Select phase</option>
-          <option>Requirements</option><option>Design</option><option>Development</option>
-          <option>UAT</option><option>Pre-Go-Live</option><option>Post-Go-Live</option>
+          <option>Requirements</option><option>Design</option><option>Development</option><option>Testing</option>
+          <option>UAT</option><option>Pre-Go-Live</option><option>Active Production</option><option>Post-Go-Live</option><option>Complete</option>
         </select>
       </div>
       <div class="ib-field" style="max-width:160px">
-        <div class="ib-label">Go-Live Date</div>
-        <input class="ib-input" id="r-golive" type="date" onchange="updateRelDays();syncRel('golive',this.value)">
+        <div class="ib-label" title="The date this release enters production. All readiness timelines and ADKAR assessments are measured against this date.">Go-Live Date</div>
+        <input class="ib-input" id="r-golive" type="date" aria-label="Release go-live date" onchange="updateRelDays();syncRel('golive',this.value)">
       </div>
       <div class="ib-stat">
         <div class="ib-stat-n" id="rel-days-num">—</div>
@@ -780,12 +790,17 @@
       </div>
       <div class="top-right">
         <span class="save-ind" id="save-ind-p">Saved</span>
+        <div class="density-switcher">
+          <button class="density-btn" onclick="setDensity('compact')" aria-label="Compact density">Compact</button>
+          <button class="density-btn density-btn--active" onclick="setDensity('comfortable')" aria-label="Comfortable density">Comfortable</button>
+          <button class="density-btn" onclick="setDensity('spacious')" aria-label="Spacious density">Spacious</button>
+        </div>
         <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">
-          <span id="theme-icon-p">&#9790;</span>
+          <span id="theme-icon-p"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl-p">Dark</span>
         </button>
         <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
-        <button id="demo-banner-proj" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer">&#9654; EXIT DEMO</button>
+        <button id="demo-banner-proj" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-proj"></span><span id="avatar-name-proj">Profile</span></button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
@@ -816,7 +831,7 @@
         <button class="nav-btn" onclick="showProjTab('pulse',this)">Pulse</button>
         <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)" style="display:none">Post-Launch</button>
       </nav>
-      <button class="btn-gold" onclick="exportProjectPDF()">Export Summary</button>
+      <button class="btn-gold" onclick="exportProjectPDF()">Export Report</button>
       <div class="dropdown-gen">
         <button class="btn-gold btn-gen" onclick="toggleGenMenu()">Generate ▾</button>
         <div class="gen-menu" id="gen-menu">
@@ -835,13 +850,13 @@
     <div class="info-band-i">
       <div class="ib-field" style="max-width:260px">
         <div class="ib-label">Project Name</div>
-        <input class="ib-input" id="p-name" type="text" placeholder="Project name" oninput="syncProj('name',this.value)">
+        <input class="ib-input" id="p-name" type="text" aria-label="Project name" placeholder="Project name" oninput="syncProj('name',this.value)">
       </div>
       <div class="ib-field">
         <div class="ib-label">Agencies</div>
         <div class="chip-row" id="proj-agency-chips"></div>
         <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-          <input class="chip-add-inp-band" type="text" id="proj-agency-inp" placeholder="Add agency..." onkeydown="if(event.key==='Enter'){addProjAgency();event.preventDefault();}">
+          <input class="chip-add-inp-band" type="text" id="proj-agency-inp" aria-label="Add agency" placeholder="Add agency..." onkeydown="if(event.key==='Enter'){addProjAgency();event.preventDefault();}">
           <button class="btn-sm" onclick="addProjAgency()">Add</button>
         </div>
       </div>
@@ -854,15 +869,15 @@
       </div>
       <div class="ib-field" style="max-width:150px">
         <div class="ib-label">Go-Live Date</div>
-        <input class="ib-input" id="p-golive" type="date" onchange="syncProj('golive',this.value)">
+        <input class="ib-input" id="p-golive" type="date" aria-label="Project go-live date" onchange="syncProj('golive',this.value)">
       </div>
       <div class="ib-field" style="max-width:130px">
         <div class="ib-label">Est. End Users</div>
-        <input class="ib-input" id="p-users" type="number" min="0" placeholder="0" oninput="syncProj('estimatedUsers',parseInt(this.value)||0)">
+        <input class="ib-input" id="p-users" type="number" min="0" aria-label="Estimated end users" placeholder="0" oninput="syncProj('estimatedUsers',parseInt(this.value)||0)">
       </div>
       <div class="ib-field" style="max-width:140px">
         <div class="ib-label">Status</div>
-        <select class="ib-select" id="p-status" onchange="syncProj('status',this.value)">
+        <select class="ib-select" id="p-status" aria-label="Project status" onchange="syncProj('status',this.value)">
           <option>Not Started</option><option>In Progress</option><option>Complete</option><option>On Hold</option><option>Blocked</option>
         </select>
       </div>
@@ -872,7 +887,7 @@
       </div>
       <div class="ib-stat">
         <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Overall Readiness</div>
-        <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="How this score works" aria-label="How scoring works">ⓘ</button>
+        <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="Composite score across ADKAR dimensions, gate completeness, and milestone health. 70+ is a solid baseline before go-live. Below 60 warrants a conversation with your sponsor." aria-label="How scoring works">ⓘ</button>
       </div>
     </div>
   </div>
@@ -898,7 +913,7 @@
               <span class="traj-conf-dot"></span>
               <span class="traj-conf-label"></span>
             </div>
-            <button class="btn-outline traj-refresh-btn" id="traj-refresh-btn" onclick="refreshPrediction()" title="Refresh prediction">&#x21BB; Refresh</button>
+            <button class="btn-outline traj-refresh-btn" id="traj-refresh-btn" onclick="refreshPrediction()" title="Refresh prediction"><i class="ph ph-arrow-clockwise"></i> Refresh</button>
           </div>
         </div>
         <div id="traj-warning-banner" class="traj-warning" style="display:none"></div>
@@ -934,7 +949,7 @@
           </div>
           <div class="smart-recs-actions">
             <span class="smart-recs-ts" id="smart-recs-ts"></span>
-            <button class="btn-outline smart-recs-refresh" id="smart-recs-refresh" onclick="refreshSmartRecs()">&#x21BB; Re-analyze</button>
+            <button class="btn-outline smart-recs-refresh" id="smart-recs-refresh" onclick="refreshSmartRecs()"><i class="ph ph-arrow-clockwise"></i> Re-analyze</button>
           </div>
         </div>
         <div id="smart-recs-list" class="smart-recs-list"></div>
@@ -964,7 +979,7 @@
           <div><div class="pt">Impacted Groups &amp; Readiness Actions</div>
           <div class="ps-text">Map stakeholder groups to impact levels, change types, and transition states.</div></div>
           <button class="btn-navy" onclick="addImpactGroup()">+ Add Group</button>
-          <button class="btn-outline" onclick="openDocImport('impact')" title="Import from document">&#x1F4C4; Import</button>
+          <button class="btn-outline" onclick="openDocImport('impact')" title="Import from document"><i class="ph ph-file-text"></i> Import</button>
         </div>
         <div class="pb" id="p-impact-panel">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Add impacted groups to begin the impact assessment.</p></div>
@@ -986,8 +1001,11 @@
       <div class="tab-eye" id="assess-eye">ADKAR Model</div>
       <div class="tab-head" id="assess-head">ADKAR Readiness Assessment</div>
       <div class="panel">
-        <div class="ph"><div><div class="pt" id="assess-pt">Change Readiness by Area</div><div class="ps-text">Score each area 1–5. Notes capture observations from your engagement activities.</div></div></div>
+        <div class="ph"><div><div class="pt" id="assess-pt">Change Readiness by Area</div><div class="ps-text">Score each area 1–5. Notes capture observations from your engagement activities.</div></div>
+          <div class="ph-actions" id="adkar-actions"><button class="btn-sm" onclick="enterGuidedAdkar()"><i class="ph ph-compass"></i> Guided Assessment</button><button class="btn-sm btn-ghost" onclick="renderAdkarJourneyRef()" title="Show the ADKAR Journey overview"><i class="ph ph-info"></i></button></div>
+        </div>
         <div class="pb np">
+          <div id="guided-adkar-container"></div>
           <div class="adkar-grid" id="p-adkar-grid"></div>
           <div class="ak-sum">
             <div><div class="ak-sum-l" id="ak-sum-label">Overall ADKAR Score</div><div class="ak-sum-v" id="p-adkar-overall">—</div></div>
@@ -1005,9 +1023,9 @@
         <div class="ph">
           <div><div class="pt">Stakeholder Group Assessment</div><div class="ps-text">Score each factor, define learning objectives, establish measurement, and document reinforcement planning.</div></div>
           <div class="adopt-tb" style="margin:0">
-            <input type="text" id="p-sh-inp" placeholder="Group name..." onkeydown="if(event.key==='Enter')addPSH()">
+            <input type="text" id="p-sh-inp" aria-label="Stakeholder group name" placeholder="Group name..." onkeydown="if(event.key==='Enter')addPSH()">
             <button class="btn-navy" onclick="addPSH()">Add Group</button>
-            <button class="btn-outline" onclick="openDocImport('stakeholders')" title="Import from document">&#x1F4C4; Import</button>
+            <button class="btn-outline" onclick="openDocImport('stakeholders')" title="Import from document"><i class="ph ph-file-text"></i> Import</button>
           </div>
         </div>
         <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">Add the groups of people affected by this change to begin tracking their readiness.</p></div></div></div>
@@ -1121,7 +1139,7 @@
     <div class="modal-sub">Each release contains its own projects, each with independent gate trackers, readiness assessments, and adoption scoring.</div>
     <div class="modal-field">
       <label for="new-r-name">Release Name</label>
-      <input class="modal-inp" type="text" id="new-r-name" placeholder="e.g. 6/21 Release">
+      <input class="modal-inp" type="text" id="new-r-name" placeholder="e.g., Online Banking 2.0">
       <div class="field-err" id="err-r-name">Release name is required.</div>
     </div>
     <div class="modal-field">
@@ -1141,8 +1159,8 @@
         <label for="new-r-phase">SDLC Phase</label>
         <select class="modal-inp" id="new-r-phase">
           <option value="">Select phase</option>
-          <option>Requirements</option><option>Design</option><option>Development</option>
-          <option>UAT</option><option>Pre-Go-Live</option><option>Post-Go-Live</option>
+          <option>Requirements</option><option>Design</option><option>Development</option><option>Testing</option>
+          <option>UAT</option><option>Pre-Go-Live</option><option>Active Production</option><option>Post-Go-Live</option><option>Complete</option>
         </select>
       </div>
     </div>
@@ -1184,7 +1202,7 @@
     <div class="modal-sub" id="move-proj-sub">Move this project to a different release.</div>
     <div style="margin:16px 0">
       <label style="font-size:12px;color:var(--ink-55);margin-bottom:6px;display:block">Destination Release</label>
-      <select class="ib-select" id="move-proj-select" style="width:100%"></select>
+      <select class="ib-select" id="move-proj-select" aria-label="Destination release" style="width:100%"></select>
     </div>
     <div class="modal-acts">
       <button class="btn-ghost" onclick="closeModal('move-proj-modal')">Cancel</button>
@@ -1245,10 +1263,10 @@
     <div class="profile-field">
       <label for="brand-g1">Gate Labels</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <input id="brand-g1" type="text" class="modal-inp" placeholder="Gate 1">
-        <input id="brand-g2" type="text" class="modal-inp" placeholder="Gate 2">
-        <input id="brand-g3" type="text" class="modal-inp" placeholder="Gate 3">
-        <input id="brand-g4" type="text" class="modal-inp" placeholder="Gate 4">
+        <input id="brand-g1" type="text" class="modal-inp" aria-label="Gate 1 label" placeholder="Gate 1">
+        <input id="brand-g2" type="text" class="modal-inp" aria-label="Gate 2 label" placeholder="Gate 2">
+        <input id="brand-g3" type="text" class="modal-inp" aria-label="Gate 3 label" placeholder="Gate 3">
+        <input id="brand-g4" type="text" class="modal-inp" aria-label="Gate 4 label" placeholder="Gate 4">
       </div>
     </div>
     <div class="profile-field">
@@ -1271,11 +1289,11 @@
     <div class="profile-section-title">Email Alerts</div>
     <div class="profile-field">
       <label class="alert-toggle"><input type="checkbox" id="alert-golive" checked> Go-Live Approaching</label>
-      <div class="alert-desc">Alert when a release is within <select id="alert-golive-days" class="alert-select"><option value="14">14</option><option value="30" selected>30</option><option value="60">60</option><option value="90">90</option></select> days of go-live and gate readiness is below <select id="alert-golive-thresh" class="alert-select"><option value="30">30%</option><option value="50" selected>50%</option><option value="70">70%</option><option value="80">80%</option></select></div>
+      <div class="alert-desc">Alert when a release is within <select id="alert-golive-days" class="alert-select" aria-label="Go-live alert days"><option value="14">14</option><option value="30" selected>30</option><option value="60">60</option><option value="90">90</option></select> days of go-live and gate readiness is below <select id="alert-golive-thresh" class="alert-select" aria-label="Readiness threshold"><option value="30">30%</option><option value="50" selected>50%</option><option value="70">70%</option><option value="80">80%</option></select></div>
     </div>
     <div class="profile-field">
       <label class="alert-toggle"><input type="checkbox" id="alert-stale" checked> Stale Data Warning</label>
-      <div class="alert-desc">Alert when no updates for <select id="alert-stale-days" class="alert-select"><option value="3">3</option><option value="7" selected>7</option><option value="14">14</option></select> days</div>
+      <div class="alert-desc">Alert when no updates for <select id="alert-stale-days" class="alert-select" aria-label="Stale data days"><option value="3">3</option><option value="7" selected>7</option><option value="14">14</option></select> days</div>
     </div>
     <div class="profile-field">
       <label class="alert-toggle"><input type="checkbox" id="alert-adkar" checked> Assessment Stagnation</label>
@@ -1283,7 +1301,7 @@
     </div>
     <div class="profile-field">
       <label class="alert-toggle"><input type="checkbox" id="alert-digest" checked> Weekly Portfolio Digest</label>
-      <div class="alert-desc">Send every <select id="alert-digest-day" class="alert-select"><option value="1" selected>Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option></select></div>
+      <div class="alert-desc">Send every <select id="alert-digest-day" class="alert-select" aria-label="Weekly digest day"><option value="1" selected>Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option></select></div>
     </div>
     <div class="profile-field">
       <label class="alert-toggle"><input type="checkbox" id="alert-share" checked> Share Link Expiring</label>
@@ -1311,7 +1329,7 @@
 <div class="modal-ov" id="note-modal" role="dialog" aria-modal="true">
   <div class="note-box">
     <div class="note-ttl">Cell Note</div>
-    <textarea class="note-ta" id="note-ta" placeholder="Enter context, blockers, or next steps..."></textarea>
+    <textarea class="note-ta" id="note-ta" aria-label="Cell note" placeholder="Enter context, blockers, or next steps..."></textarea>
     <div class="note-acts">
       <button class="btn-ghost" onclick="closeModal('note-modal')">Cancel</button>
       <button class="btn-gold" onclick="saveNote()">Save Note</button>
@@ -1361,13 +1379,13 @@
 <div class="modal-ov" id="welcome-modal" role="dialog" aria-modal="true">
   <div class="modal-box" style="max-width:520px;text-align:center">
     <div id="welcome-step-1" class="welcome-step">
-      <div style="font-size:36px;margin-bottom:12px">&#9758;</div>
+      <div style="font-size:36px;margin-bottom:12px"><i class="ph ph-hand-pointing"></i></div>
       <div class="modal-ttl" style="font-family:var(--font-d);font-size:22px">Welcome to AdoptIQ</div>
       <div class="modal-sub" style="text-align:left;margin:16px 0">AdoptIQ is your adoption intelligence platform — purpose-built for OCM professionals managing enterprise-scale change. Track readiness gates, measure ADKAR, score stakeholder adoption risk, and generate executive-ready reports.</div>
       <div class="modal-acts" style="justify-content:center"><button class="btn-gold" onclick="welcomeNext(2)">Next</button></div>
     </div>
     <div id="welcome-step-2" class="welcome-step" style="display:none">
-      <div style="font-size:36px;margin-bottom:12px">&#9881;</div>
+      <div style="font-size:36px;margin-bottom:12px"><i class="ph ph-gear"></i></div>
       <div class="modal-ttl" style="font-family:var(--font-d);font-size:22px">How It Works</div>
       <div class="modal-sub" style="text-align:left;margin:16px 0">
         <strong>Releases</strong> represent deployment waves (e.g. "6/21 Release").<br><br>
@@ -1377,7 +1395,7 @@
       <div class="modal-acts" style="justify-content:center"><button class="btn-ghost" onclick="welcomeNext(1)">Back</button><button class="btn-gold" onclick="welcomeNext(3)">Next</button></div>
     </div>
     <div id="welcome-step-3" class="welcome-step" style="display:none">
-      <div style="font-size:36px;margin-bottom:12px">&#9889;</div>
+      <div style="font-size:36px;margin-bottom:12px"><i class="ph ph-lightning"></i></div>
       <div class="modal-ttl" style="font-family:var(--font-d);font-size:22px">Get Started</div>
       <div class="modal-sub" style="margin:16px 0">Choose how you'd like to begin:</div>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:20px 0">
@@ -1389,6 +1407,11 @@
   </div>
 </div>
 
+<div class="focus-mode-hint">Press F to exit presentation mode</div>
+<div class="print-header" style="display:none;">
+  <span class="print-header__brand">AdoptIQ — Providence Consulting Firm</span>
+  <span class="print-header__meta">Confidential</span>
+</div>
 <script src="js/adoptiq.js"></script>
 </body>
 </html>
