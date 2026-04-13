@@ -561,6 +561,16 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--ink);font-siz
 .sh-card{border:1px solid var(--border);border-radius:var(--r6);overflow:hidden;margin-bottom:14px}
 .sh-card:last-child{margin-bottom:0}
 .sh-hd{background:var(--bg-deep);padding:10px 17px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);transition:background .25s}
+/* Stakeholder card tabs (Fix 4) */
+.sh-tabs{display:flex;border-bottom:2px solid var(--border);padding:0 12px;background:var(--bg-deep);gap:2px}
+.sh-tab{padding:8px 13px;font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;border:none;background:transparent;cursor:pointer;color:var(--ink-60);border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .14s,border-color .14s;display:flex;align-items:center;line-height:1.2}
+.sh-tab:hover{color:var(--ink)}
+.sh-tab.active{color:var(--navy);border-bottom-color:var(--navy)}
+[data-theme="dark"] .sh-tab.active{color:var(--gold-light);border-bottom-color:var(--gold-light)}
+.sh-tab-panels{background:var(--surface)}
+.sh-tab-panel{display:none;padding:16px 17px}
+.sh-tab-panel.active{display:block}
+.sh-identity-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
 .sh-name{font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--ink);flex:1}
 .adopt-badge{font-size:11px;font-weight:700;letter-spacing:0.07em;padding:4px 11px;border-radius:2px}
 .adopt-badge.low{background:var(--green-bg);color:var(--green)} .adopt-badge.mod{background:var(--amber-bg);color:var(--amber)} .adopt-badge.high{background:var(--color-warning-bg);color:var(--color-orange-dark)} .adopt-badge.crit{background:var(--red-bg);color:var(--red)}

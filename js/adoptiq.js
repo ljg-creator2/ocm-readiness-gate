@@ -2524,6 +2524,7 @@ function addPSH(){
   const p=getProj();if(!p)return;
   const inp=document.getElementById('p-sh-inp');const name=inp.value.trim();if(!name)return;
   p.stakeholders.push({id:uid(),name,
+    agency:'',stakeholderType:'end_user_group',roleCategory:'',
     factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},objectives:[],
     kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
     rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''},
@@ -2532,6 +2533,12 @@ function addPSH(){
   inp.value='';renderPSH();renderPKPIs();touch('proj');schedSave();
 }
 function removePSH(id){const p=getProj();if(!p)return;p.stakeholders=p.stakeholders.filter(s=>s.id!==id);renderPSH();renderPKPIs();touch('proj');schedSave();}
+function switchSHTab(shId,idx){
+  const card=document.getElementById('sh-card-'+shId);if(!card)return;
+  card.querySelectorAll('.sh-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
+  card.querySelectorAll('.sh-tab-panel').forEach((p,i)=>p.classList.toggle('active',i===idx));
+}
+
 function renderPSH(){
   const p=getProj();if(!p)return;const wrap=document.getElementById('p-sh-wrap');
   if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
@@ -2539,58 +2546,79 @@ function renderPSH(){
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
   wrap.innerHTML=p.stakeholders.map(sh=>{
     const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
-    const kr=kirkReady(sh),rr=reinReady(sh);const loc=sh.objectives.filter(o=>o.trim()).length;
-    return`<div class="sh-card"><div class="sh-hd">
-      <div class="sh-name">${esc(sh.name)}</div>
-      <div class="adopt-badge ${cls}">${sc}% — ${tier}</div>
-      <button class="btn-rm-sh" onclick="removePSH(${sh.id})">&times;</button>
-    </div>
-    <div class="sh-factors">${AF.map(f=>`<div class="sh-fac"><label>${f.label}</label>
-      <div class="fac-row"><input type="range" class="fac-sl" min="1" max="5" value="${sh.factors[f.key]}" oninput="updatePFac(${sh.id},'${f.key}',this.value)">
-      <div class="fac-vl" id="pfv-${sh.id}-${f.key}">${sh.factors[f.key]}</div></div>
-      <div class="fac-desc" id="pfd-${sh.id}-${f.key}">${FD[sh.factors[f.key]]}</div></div>`).join('')}</div>
-    <div class="exp-secs">
-      <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('plo-${sh.id}',this)" aria-expanded="false">
-        <div class="exp-tog-l">Learning Objectives<span class="exp-badge ${loc>0?'ready':'needed'}">${loc>0?loc+' Defined':'Not Started'}</span></div>
-        <span class="exp-arr" id="parr-lo-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
-        <div class="exp-body" id="plo-${sh.id}">
+    const kr=kirkReady(sh),rr=reinReady(sh);
+    const loc=sh.objectives.filter(o=>o.trim()).length;
+    const trust=sh.trust||3;
+    const trustColors={1:'var(--red)',2:'var(--amber)',3:'var(--ink-60)',4:'var(--gold)',5:'var(--green)'};
+    const trustLabels=['','Active Distrust','Skeptical','Neutral','Cautiously Optimistic','High Trust'];
+    const tabDefs=[
+      {label:'Identity',badge:''},
+      {label:'Objectives',badge:`<span class="exp-badge ${loc>0?'ready':'needed'}" style="margin-left:5px;font-size:9px">${loc>0?loc:'0'}</span>`},
+      {label:'Measurement',badge:`<span class="exp-badge ${kr}" style="margin-left:5px;font-size:9px">${badgeLabel(kr)}</span>`},
+      {label:'Reinforcement',badge:`<span class="exp-badge ${rr}" style="margin-left:5px;font-size:9px">${badgeLabel(rr)}</span>`},
+      {label:'Readiness',badge:`<span class="exp-badge" style="margin-left:5px;font-size:9px;background:${trustColors[trust]};color:#fff">${trustLabels[trust]||trust}</span>`}
+    ];
+    return`<div class="sh-card" id="sh-card-${sh.id}">
+      <div class="sh-hd">
+        <div class="sh-name">${esc(sh.name)}</div>
+        <div class="adopt-badge ${cls}">${sc}% — ${tier}</div>
+        <button class="btn-rm-sh" onclick="removePSH(${sh.id})">&times;</button>
+      </div>
+      <div class="sh-tabs">
+        ${tabDefs.map((t,i)=>`<button class="sh-tab${i===0?' active':''}" onclick="switchSHTab(${sh.id},${i})">${t.label}${t.badge}</button>`).join('')}
+      </div>
+      <div class="sh-tab-panels">
+        <!-- Tab 1: Identity & Adoption Factors -->
+        <div class="sh-tab-panel active">
+          <div class="sh-identity-fields">
+            <div class="rein-field"><label>Agency / Organization</label><input class="rein-inp" placeholder="e.g. Department of Health" value="${esc(sh.agency||'')}" oninput="updateSHField(${sh.id},'agency',this.value)"></div>
+            <div class="rein-field"><label>Stakeholder Type</label>
+              <select class="kirk-inp" onchange="updateSHField(${sh.id},'stakeholderType',this.value)">
+                <option value="end_user_group"${(sh.stakeholderType||'end_user_group')==='end_user_group'?' selected':''}>End User Group</option>
+                <option value="decision_maker"${sh.stakeholderType==='decision_maker'?' selected':''}>Decision-Maker</option>
+              </select>
+            </div>
+            <div class="rein-field"><label>Role Category</label><input class="rein-inp" placeholder="e.g. Clinical Staff" value="${esc(sh.roleCategory||'')}" oninput="updateSHField(${sh.id},'roleCategory',this.value)"></div>
+          </div>
+          <div class="sh-factors">${AF.map(f=>`<div class="sh-fac"><label>${f.label}</label>
+            <div class="fac-row"><input type="range" class="fac-sl" min="1" max="5" value="${sh.factors[f.key]}" oninput="updatePFac(${sh.id},'${f.key}',this.value)">
+            <div class="fac-vl" id="pfv-${sh.id}-${f.key}">${sh.factors[f.key]}</div></div>
+            <div class="fac-desc" id="pfd-${sh.id}-${f.key}">${FD[sh.factors[f.key]]}</div></div>`).join('')}
+          </div>
+        </div>
+        <!-- Tab 2: Learning Objectives -->
+        <div class="sh-tab-panel">
           <div class="lo-hint">Write in performance terms: the learner will be able to [verb] [skill/behavior] [condition/standard].</div>
           <ul class="lo-list">${sh.objectives.map((o,i)=>`<li class="lo-item"><span class="lo-num">0${i+1}</span>
             <input class="lo-inp" value="${esc(o)}" placeholder="The learner will be able to..." oninput="updatePLO(${sh.id},${i},this.value)">
             <button class="btn-lo-rm" onclick="removePLO(${sh.id},${i})">&times;</button></li>`).join('')}</ul>
           <button class="btn-lo-add" onclick="addPLO(${sh.id})">+ Add Objective</button>
         </div>
-      </div>
-      <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('pkirk-${sh.id}',this)" aria-expanded="false">
-        <div class="exp-tog-l">Measurement Framework — Kirkpatrick<span class="exp-badge ${kr}">${badgeLabel(kr)}</span></div>
-        <span class="exp-arr" id="parr-kirk-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
-        <div class="exp-body" id="pkirk-${sh.id}">
+        <!-- Tab 3: Kirkpatrick Measurement -->
+        <div class="sh-tab-panel">
           <div class="kirk-grid">
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L1</div><div><div class="kirk-name">Reaction</div><div class="kirk-desc-txt">Learner feedback and satisfaction</div></div></div>
-              <div class="kirk-field"><label>Feedback Method</label><input class="kirk-inp" placeholder="e.g. Post-training survey via LMS" value="${esc(sh.kirk.L1.method)}" oninput="updatePKirk(${sh.id},'L1','method',this.value)"></div>
-              <div class="kirk-field"><label>Collection Timing</label><input class="kirk-inp" placeholder="e.g. Immediately following each session" value="${esc(sh.kirk.L1.timing)}" oninput="updatePKirk(${sh.id},'L1','timing',this.value)"></div></div>
+              <div class="kirk-field"><label>Feedback Method</label><input class="kirk-inp" placeholder="e.g. Post-training survey via LMS" value="${esc(sh.kirk.L1.method||'')}" oninput="updatePKirk(${sh.id},'L1','method',this.value)"></div>
+              <div class="kirk-field"><label>Collection Timing</label><input class="kirk-inp" placeholder="e.g. Immediately following each session" value="${esc(sh.kirk.L1.timing||'')}" oninput="updatePKirk(${sh.id},'L1','timing',this.value)"></div></div>
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L2</div><div><div class="kirk-name">Learning</div><div class="kirk-desc-txt">Knowledge and skill transfer confirmation</div></div></div>
-              <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${esc(sh.kirk.L2.method)}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
-              <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${esc(sh.kirk.L2.assessment)}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
+              <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${esc(sh.kirk.L2.method||'')}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
+              <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${esc(sh.kirk.L2.assessment||'')}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L3</div><div><div class="kirk-name">Behavior</div><div class="kirk-desc-txt">Observable behavior change post go-live</div></div></div>
-              <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${esc(sh.kirk.L3.observable)}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
+              <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${esc(sh.kirk.L3.observable||'')}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
               <div class="kirk-field"><label>Measurement Interval</label>
                 <select class="kirk-inp" style="width:auto" onchange="updatePKirk(${sh.id},'L3','interval',this.value)">
-                  <option ${sh.kirk.L3.interval==='14'?'selected':''}>14 days post go-live</option>
-                  <option ${sh.kirk.L3.interval==='30'?'selected':''}>30 days post go-live</option>
-                  <option ${sh.kirk.L3.interval==='60'?'selected':''}>60 days post go-live</option>
-                  <option ${sh.kirk.L3.interval==='90'?'selected':''}>90 days post go-live</option>
+                  <option${sh.kirk.L3.interval==='14'?' selected':''}>14 days post go-live</option>
+                  <option${sh.kirk.L3.interval==='30'?' selected':''}>30 days post go-live</option>
+                  <option${(!sh.kirk.L3.interval||sh.kirk.L3.interval==='60')?' selected':''}>60 days post go-live</option>
+                  <option${sh.kirk.L3.interval==='90'?' selected':''}>90 days post go-live</option>
                 </select></div></div>
             <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L4</div><div><div class="kirk-name">Results</div><div class="kirk-desc-txt">Organizational outcome alignment</div></div></div>
-              <div class="kirk-field"><label>Targeted Organizational Outcome</label><input class="kirk-inp" placeholder="e.g. Reduction in case processing errors" value="${esc(sh.kirk.L4.outcome)}" oninput="updatePKirk(${sh.id},'L4','outcome',this.value)"></div>
-              <div class="kirk-field"><label>Success Metric</label><input class="kirk-inp" placeholder="e.g. Error rate below 5% at 60-day review" value="${esc(sh.kirk.L4.metric)}" oninput="updatePKirk(${sh.id},'L4','metric',this.value)"></div></div>
+              <div class="kirk-field"><label>Targeted Organizational Outcome</label><input class="kirk-inp" placeholder="e.g. Reduction in case processing errors" value="${esc(sh.kirk.L4.outcome||'')}" oninput="updatePKirk(${sh.id},'L4','outcome',this.value)"></div>
+              <div class="kirk-field"><label>Success Metric</label><input class="kirk-inp" placeholder="e.g. Error rate below 5% at 60-day review" value="${esc(sh.kirk.L4.metric||'')}" oninput="updatePKirk(${sh.id},'L4','metric',this.value)"></div></div>
           </div>
         </div>
-      </div>
-      <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('prein-${sh.id}',this)" aria-expanded="false">
-        <div class="exp-tog-l">Reinforcement Plan — ${fwShort()} Alignment<span class="exp-badge ${rr}">${badgeLabel(rr)}</span></div>
-        <span class="exp-arr" id="parr-rein-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
-        <div class="exp-body" id="prein-${sh.id}">
+        <!-- Tab 4: Reinforcement Plan -->
+        <div class="sh-tab-panel">
           <div class="rein-grid">
             <div class="rein-field"><label>Reinforcement Owner</label><input class="rein-inp" placeholder="e.g. Direct supervisor, change champion" value="${esc(sh.rein.owner)}" oninput="updatePRein(${sh.id},'owner',this.value)"></div>
             <div class="rein-field"><label>Escalation Path</label><input class="rein-inp" placeholder="e.g. Escalate to OCM lead if metrics fall below threshold" value="${esc(sh.rein.escalation)}" oninput="updatePRein(${sh.id},'escalation',this.value)"></div>
@@ -2601,14 +2629,18 @@ function renderPSH(){
           </div>
           <div class="ak-r-note"><strong>${fwShort()} Reinforcement Score: ${adkarR}/5 —</strong> ${rNote}</div>
         </div>
+        <!-- Tab 5: Trust & Emotional Readiness -->
+        <div class="sh-tab-panel">
+          ${renderTrustPanel(sh)}
+        </div>
       </div>
-      ${renderTrustSection(sh)}
-    </div></div>`;
+    </div>`;
   }).join('');
   renderPAHM();
 }
 
-function renderTrustSection(sh){
+// Inner trust content — used both by the legacy accordion and the new tab panel
+function renderTrustPanel(sh){
   const trust=sh.trust||3;
   const trustLabels=['','Active Distrust','Skeptical','Neutral','Cautiously Optimistic','High Trust'];
   const trustColors={1:'var(--red)',2:'var(--amber)',3:'var(--ink-60)',4:'var(--gold)',5:'var(--green)'};
@@ -2627,62 +2659,67 @@ function renderTrustSection(sh){
     trustDeclining:(sh.trustHistory||[]).length>=2&&sh.trustHistory[sh.trustHistory.length-1].value<sh.trustHistory[sh.trustHistory.length-2].value,
     highAnxiety
   });
+  return`<div class="trust-section">
+    <div class="trust-score-row">
+      <div class="trust-sent-card">
+        <div class="trust-sent-val" style="color:${sentSc>=60?'var(--green)':sentSc>=40?'var(--gold)':'var(--red)'}">${sentSc}%</div>
+        <div class="trust-sent-lbl">Sentiment Score</div>
+        ${sentSW?`<div class="so-what-line">${esc(sentSW)}</div>`:''}
+      </div>
+      <div class="trust-breakdown">
+        <div class="trust-mod-row"><span>Base readiness score</span><span>${adoptScore(sh.factors)}%</span></div>
+        <div class="trust-mod-row"><span>Trust modifier</span><span style="color:${trust<3?'var(--red)':trust>3?'var(--green)':'var(--ink-60)'}">${trust<3?'−'+(3-trust)*8:trust>3?'+'+(trust-3)*4:'0'}pts</span></div>
+        <div class="trust-mod-row"><span>Anxiety modifier</span><span style="color:${highAnxiety?'var(--red)':'var(--ink-60)'}'">${highAnxiety?'−'+([(ai.whatDoesThisMeanFreq||0)>5,(ai.extraReviewCycles||0)>2,(ai.escalations||0)>1,ai.attendanceDrop].filter(Boolean).length*5):'0'}pts</span></div>
+        <div class="trust-mod-row"><span>Touchpoint modifier</span><span style="color:${increased>decreased?'var(--green)':decreased>increased?'var(--red)':'var(--ink-60)'}">${increased>0||decreased>0?((increased-decreased)*5>0?'+':'')+Math.max(-30,Math.min(15,(increased-decreased)*5)+'pts'):'0pts'}</span></div>
+      </div>
+    </div>
+    <div class="trust-field"><label>Trust Level</label>
+      <div class="trust-selector">${[1,2,3,4,5].map(v=>`<button class="trust-btn ${trust===v?'active':''}" onclick="updateSHTrust(${sh.id},${v})" title="${trustLabels[v]}">${v}<div class="trust-btn-lbl">${trustLabels[v]}</div></button>`).join('')}</div>
+    </div>
+    ${sh.trustHistory?.length>=2?`<div class="trust-history-spark">${renderTrustSparkline(sh.trustHistory)}</div>`:''}
+    <button class="btn-add-sm" onclick="recordTrustUpdate(${sh.id})">+ Record Trust Update</button>
+    <div class="trust-field" style="margin-top:16px"><label>Preconceptions</label>
+      <div class="preconcepts-list">${prec.map((pc,i)=>`<div class="preconcept-item">
+        <span class="preconcept-text">${esc(pc.text)}</span>
+        <select class="pc-status-sel" onchange="updatePreconception(${sh.id},${i},'status',this.value)">
+          <option ${pc.status==='Active'?'selected':''}>Active</option>
+          <option ${pc.status==='Being Addressed'?'selected':''}>Being Addressed</option>
+          <option ${pc.status==='Resolved'?'selected':''}>Resolved</option>
+        </select>
+        <span class="pc-status-badge pc-${(pc.status||'Active').toLowerCase().replace(' ','-')}">${pc.status||'Active'}</span>
+        <button class="btn-rm-sm" onclick="removePreconception(${sh.id},${i})">&times;</button>
+      </div>`).join('')}</div>
+      <button class="btn-add-sm" onclick="addPreconception(${sh.id})">+ Add Preconception</button>
+    </div>
+    <div class="trust-field" style="margin-top:16px"><label>Anxiety Indicators</label>
+      <div class="anxiety-grid">
+        <div class="anxiety-row"><span>"What does this mean?" frequency</span><input class="inp-sm" type="number" min="0" value="${ai.whatDoesThisMeanFreq||0}" oninput="updateSHAnxiety(${sh.id},'whatDoesThisMeanFreq',+this.value)">${(ai.whatDoesThisMeanFreq||0)>5?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
+        <div class="anxiety-row"><span>Extra review cycle requests</span><input class="inp-sm" type="number" min="0" value="${ai.extraReviewCycles||0}" oninput="updateSHAnxiety(${sh.id},'extraReviewCycles',+this.value)">${(ai.extraReviewCycles||0)>2?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
+        <div class="anxiety-row"><span>Escalations to leadership</span><input class="inp-sm" type="number" min="0" value="${ai.escalations||0}" oninput="updateSHAnxiety(${sh.id},'escalations',+this.value)">${(ai.escalations||0)>1?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
+        <div class="anxiety-row"><span>Attendance/participation drop-off</span><label class="toggle-label"><input type="checkbox" ${ai.attendanceDrop?'checked':''} onchange="updateSHAnxiety(${sh.id},'attendanceDrop',this.checked)"><span class="toggle-pill"></span></label>${ai.attendanceDrop?'<span class="anxiety-warn"><i class="ph ph-warning"></i> Active</span>':''}</div>
+      </div>
+    </div>
+    <div class="trust-field" style="margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><label>Engagement Touchpoints</label><button class="btn-add-sm" onclick="openAddTouchpoint(${sh.id})">+ Log Touchpoint</button></div>
+      ${tps.length?`<div class="tp-summary"><span class="tp-sum increased">↑ ${increased} Increased</span><span class="tp-sum no-change">→ ${noChange} No Change</span><span class="tp-sum decreased">↓ ${decreased} Decreased</span></div>`:''}
+      <div class="tp-list">${tps.map((tp,i)=>`<div class="tp-item">
+        <span class="tp-impact-icon ${tp.trustImpact==='Increased'?'ti-up':tp.trustImpact==='Decreased'?'ti-down':'ti-neutral'}">${tp.trustImpact==='Increased'?'↑':tp.trustImpact==='Decreased'?'↓':'→'}</span>
+        <div class="tp-detail"><div class="tp-desc">${esc(tp.description)}</div><div class="tp-meta">${tp.type} · ${fmtDate(tp.date)} · <span style="color:${tp.trustImpact==='Increased'?'var(--green)':tp.trustImpact==='Decreased'?'var(--red)':'var(--ink-60)'}">${tp.trustImpact}</span></div></div>
+        <button class="btn-rm-sm" onclick="removeTouchpoint(${sh.id},${i})">&times;</button>
+      </div>`).join('')||'<div class="es-txt" style="font-size:12px;padding:8px 0">No engagement touchpoints recorded. Log stakeholder interactions to track adoption momentum.</div>'}
+      </div>
+    </div>
+  </div>`;
+}
+// Accordion wrapper kept for any call sites that need the legacy exp-sec structure
+function renderTrustSection(sh){
+  const trust=sh.trust||3;
+  const trustLabels=['','Active Distrust','Skeptical','Neutral','Cautiously Optimistic','High Trust'];
+  const trustColors={1:'var(--red)',2:'var(--amber)',3:'var(--ink-60)',4:'var(--gold)',5:'var(--green)'};
   return`<div class="exp-sec"><button class="exp-tog" onclick="toggleExp('ptrust-${sh.id}',this)" aria-expanded="false">
     <div class="exp-tog-l">Emotional Readiness &amp; Trust<span class="exp-badge" style="background:${trustColors[trust]||'var(--ink-60)'};color:#fff">${trustLabels[trust]||'Level '+trust}</span></div>
     <span class="exp-arr" id="parr-trust-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
-    <div class="exp-body" id="ptrust-${sh.id}">
-      <div class="trust-section">
-        <div class="trust-score-row">
-          <div class="trust-sent-card">
-            <div class="trust-sent-val" style="color:${sentSc>=60?'var(--green)':sentSc>=40?'var(--gold)':'var(--red)'}">${sentSc}%</div>
-            <div class="trust-sent-lbl">Sentiment Score</div>
-            ${sentSW?`<div class="so-what-line">${esc(sentSW)}</div>`:''}
-          </div>
-          <div class="trust-breakdown">
-            <div class="trust-mod-row"><span>Base readiness score</span><span>${adoptScore(sh.factors)}%</span></div>
-            <div class="trust-mod-row"><span>Trust modifier</span><span style="color:${trust<3?'var(--red)':trust>3?'var(--green)':'var(--ink-60)'}">${trust<3?'−'+(3-trust)*8:trust>3?'+'+(trust-3)*4:'0'}pts</span></div>
-            <div class="trust-mod-row"><span>Anxiety modifier</span><span style="color:${highAnxiety?'var(--red)':'var(--ink-60)'}'">${highAnxiety?'−'+([(ai.whatDoesThisMeanFreq||0)>5,(ai.extraReviewCycles||0)>2,(ai.escalations||0)>1,ai.attendanceDrop].filter(Boolean).length*5):'0'}pts</span></div>
-            <div class="trust-mod-row"><span>Touchpoint modifier</span><span style="color:${increased>decreased?'var(--green)':decreased>increased?'var(--red)':'var(--ink-60)'}">${increased>0||decreased>0?((increased-decreased)*5>0?'+':'')+Math.max(-30,Math.min(15,(increased-decreased)*5)+'pts'):'0pts'}</span></div>
-          </div>
-        </div>
-        <div class="trust-field"><label>Trust Level</label>
-          <div class="trust-selector">${[1,2,3,4,5].map(v=>`<button class="trust-btn ${trust===v?'active':''}" onclick="updateSHTrust(${sh.id},${v})" title="${trustLabels[v]}">${v}<div class="trust-btn-lbl">${trustLabels[v]}</div></button>`).join('')}</div>
-        </div>
-        ${sh.trustHistory?.length>=2?`<div class="trust-history-spark">${renderTrustSparkline(sh.trustHistory)}</div>`:''}
-        <button class="btn-add-sm" onclick="recordTrustUpdate(${sh.id})">+ Record Trust Update</button>
-        <div class="trust-field" style="margin-top:16px"><label>Preconceptions</label>
-          <div class="preconcepts-list">${prec.map((pc,i)=>`<div class="preconcept-item">
-            <span class="preconcept-text">${esc(pc.text)}</span>
-            <select class="pc-status-sel" onchange="updatePreconception(${sh.id},${i},'status',this.value)">
-              <option ${pc.status==='Active'?'selected':''}>Active</option>
-              <option ${pc.status==='Being Addressed'?'selected':''}>Being Addressed</option>
-              <option ${pc.status==='Resolved'?'selected':''}>Resolved</option>
-            </select>
-            <span class="pc-status-badge pc-${(pc.status||'Active').toLowerCase().replace(' ','-')}">${pc.status||'Active'}</span>
-            <button class="btn-rm-sm" onclick="removePreconception(${sh.id},${i})">&times;</button>
-          </div>`).join('')}</div>
-          <button class="btn-add-sm" onclick="addPreconception(${sh.id})">+ Add Preconception</button>
-        </div>
-        <div class="trust-field" style="margin-top:16px"><label>Anxiety Indicators</label>
-          <div class="anxiety-grid">
-            <div class="anxiety-row"><span>"What does this mean?" frequency</span><input class="inp-sm" type="number" min="0" value="${ai.whatDoesThisMeanFreq||0}" oninput="updateSHAnxiety(${sh.id},'whatDoesThisMeanFreq',+this.value)">${(ai.whatDoesThisMeanFreq||0)>5?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
-            <div class="anxiety-row"><span>Extra review cycle requests</span><input class="inp-sm" type="number" min="0" value="${ai.extraReviewCycles||0}" oninput="updateSHAnxiety(${sh.id},'extraReviewCycles',+this.value)">${(ai.extraReviewCycles||0)>2?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
-            <div class="anxiety-row"><span>Escalations to leadership</span><input class="inp-sm" type="number" min="0" value="${ai.escalations||0}" oninput="updateSHAnxiety(${sh.id},'escalations',+this.value)">${(ai.escalations||0)>1?'<span class="anxiety-warn"><i class="ph ph-warning"></i> High</span>':''}</div>
-            <div class="anxiety-row"><span>Attendance/participation drop-off</span><label class="toggle-label"><input type="checkbox" ${ai.attendanceDrop?'checked':''} onchange="updateSHAnxiety(${sh.id},'attendanceDrop',this.checked)"><span class="toggle-pill"></span></label>${ai.attendanceDrop?'<span class="anxiety-warn"><i class="ph ph-warning"></i> Active</span>':''}</div>
-          </div>
-        </div>
-        <div class="trust-field" style="margin-top:16px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><label>Engagement Touchpoints</label><button class="btn-add-sm" onclick="openAddTouchpoint(${sh.id})">+ Log Touchpoint</button></div>
-          ${tps.length?`<div class="tp-summary"><span class="tp-sum increased">↑ ${increased} Increased</span><span class="tp-sum no-change">→ ${noChange} No Change</span><span class="tp-sum decreased">↓ ${decreased} Decreased</span></div>`:''}
-          <div class="tp-list">${tps.map((tp,i)=>`<div class="tp-item">
-            <span class="tp-impact-icon ${tp.trustImpact==='Increased'?'ti-up':tp.trustImpact==='Decreased'?'ti-down':'ti-neutral'}">${tp.trustImpact==='Increased'?'↑':tp.trustImpact==='Decreased'?'↓':'→'}</span>
-            <div class="tp-detail"><div class="tp-desc">${esc(tp.description)}</div><div class="tp-meta">${tp.type} · ${fmtDate(tp.date)} · <span style="color:${tp.trustImpact==='Increased'?'var(--green)':tp.trustImpact==='Decreased'?'var(--red)':'var(--ink-60)'}">${tp.trustImpact}</span></div></div>
-            <button class="btn-rm-sm" onclick="removeTouchpoint(${sh.id},${i})">&times;</button>
-          </div>`).join('')||'<div class="es-txt" style="font-size:12px;padding:8px 0">No engagement touchpoints recorded. Log stakeholder interactions to track adoption momentum.</div>'}
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="exp-body" id="ptrust-${sh.id}">${renderTrustPanel(sh)}</div>
   </div>`;
 }
 function renderTrustSparkline(history){
@@ -2697,6 +2734,11 @@ function updateSHTrust(id,val){
   const p=getProj();if(!p)return;
   const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
   sh.trust=val;renderPSH();touch('proj');schedSave();
+}
+function updateSHField(id,field,val){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
+  sh[field]=val;touch('proj');schedSave();
 }
 function recordTrustUpdate(id){
   const p=getProj();if(!p)return;
@@ -2792,20 +2834,51 @@ function updatePRein(id,field,val){const p=getProj();if(!p)return;const sh=p.sta
 function updatePReinIv(id,iv,checked){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;if(checked&&!sh.rein.intervals.includes(iv))sh.rein.intervals.push(iv);if(!checked)sh.rein.intervals=sh.rein.intervals.filter(x=>x!==iv);touch('proj');schedSave();}
 function toggleExp(id,btn){const body=document.getElementById(id);const arr=btn.querySelector('.exp-arr');if(!body)return;const open=body.classList.toggle('open');if(arr)arr.classList.toggle('open',open);btn.setAttribute('aria-expanded',open);}
 
+function _ahmRow(sh){
+  const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
+  const kr=kirkReady(sh),rr=reinReady(sh);
+  const krCls=kr==='ready'?'low':kr==='partial'?'mod':'crit';
+  const rrCls=rr==='ready'?'low':rr==='partial'?'mod':'crit';
+  let r=`<tr><td class="ahm-rl">${esc(sh.name)}`;
+  if(sh.roleCategory)r+=`<div style="font-size:10px;opacity:0.6;margin-top:2px">${esc(sh.roleCategory)}</div>`;
+  r+='</td>';
+  AF.forEach(f=>{const v=sh.factors[f.key],t=facTier(v);r+=`<td class="ahm-cw"><div class="ahm-cell ${t}">${TIER_MAP[t]}<br><span style="font-size:9px;opacity:0.65">${v}/5</span></div></td>`;});
+  r+=`<td class="ahm-cw"><div class="ahm-cell ${krCls}">${badgeLabel(kr)}</div></td>`;
+  r+=`<td class="ahm-cw"><div class="ahm-cell ${rrCls}">${badgeLabel(rr)}</div></td>`;
+  r+=`<td class="ahm-cw"><div class="ahm-cell ${cls}" style="font-size:11px">${sc}%<br><span style="font-size:9px;opacity:0.65">${tier}</span></div></td></tr>`;
+  return r;
+}
+
 function renderPAHM(){
   const p=getProj();if(!p)return;const pan=document.getElementById('p-ahm-panel');
   if(!p.stakeholders.length){pan.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Score stakeholder groups in the Adoption Scoring tab to see where readiness is real and where it\u2019s assumed.</p></div>';return;}
   const cols=[...AF.map(f=>f.label),'Measurement','Reinforcement','Adoption Score'];
+  const colCount=cols.length+1;
   let h='<div style="overflow-x:auto"><table class="ahm-tbl"><thead><tr><th class="ahm-rh">Group</th>';cols.forEach(c=>{h+=`<th>${c}</th>`;});h+='</tr></thead><tbody>';
-  p.stakeholders.forEach(sh=>{
-    const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
-    const kr=kirkReady(sh),rr=reinReady(sh);const krCls=kr==='ready'?'low':kr==='partial'?'mod':'crit';const rrCls=rr==='ready'?'low':rr==='partial'?'mod':'crit';
-    h+=`<tr><td class="ahm-rl">${esc(sh.name)}</td>`;
-    AF.forEach(f=>{const v=sh.factors[f.key],t=facTier(v);h+=`<td class="ahm-cw"><div class="ahm-cell ${t}">${TIER_MAP[t]}<br><span style="font-size:9px;opacity:0.65">${v}/5</span></div></td>`;});
-    h+=`<td class="ahm-cw"><div class="ahm-cell ${krCls}">${badgeLabel(kr)}</div></td>`;
-    h+=`<td class="ahm-cw"><div class="ahm-cell ${rrCls}">${badgeLabel(rr)}</div></td>`;
-    h+=`<td class="ahm-cw"><div class="ahm-cell ${cls}" style="font-size:11px">${sc}%<br><span style="font-size:9px;opacity:0.65">${tier}</span></div></td></tr>`;
+
+  // Group by agency; ungrouped stakeholders rendered first under a blank section
+  const byAgency={};
+  p.stakeholders.forEach(sh=>{const ag=sh.agency||'';if(!byAgency[ag])byAgency[ag]=[];byAgency[ag].push(sh);});
+  const agencyOrder=Object.keys(byAgency).sort((a,b)=>a===''?-1:b===''?1:a.localeCompare(b));
+
+  agencyOrder.forEach(agency=>{
+    const shs=byAgency[agency];
+    if(agency){
+      h+=`<tr><td colspan="${colCount}" style="background:var(--bg-deep);font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--navy);padding:7px 16px;border-top:2px solid var(--border)">${esc(agency)}</td></tr>`;
+    }
+    const dms=shs.filter(sh=>sh.stakeholderType==='decision_maker');
+    const eus=shs.filter(sh=>sh.stakeholderType!=='decision_maker');
+    const showSubHeaders=dms.length>0&&eus.length>0;
+    if(showSubHeaders){
+      h+=`<tr><td colspan="${colCount}" style="background:var(--bg-deep);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-60);padding:4px 24px">Decision-Makers</td></tr>`;
+      dms.forEach(sh=>{h+=_ahmRow(sh);});
+      h+=`<tr><td colspan="${colCount}" style="background:var(--bg-deep);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-60);padding:4px 24px">Affected End-Users</td></tr>`;
+      eus.forEach(sh=>{h+=_ahmRow(sh);});
+    }else{
+      shs.forEach(sh=>{h+=_ahmRow(sh);});
+    }
   });
+
   h+='</tbody></table></div>';pan.innerHTML=h;
 }
 
@@ -3507,6 +3580,86 @@ function renderTrajectoryChart(prediction,data){
 // ════════════════════════════════════════════════════════
 let _importTarget=null;
 let _importParsed=[];
+let _importSections=[];// used by smart/auto import
+
+// Fields that signal which section type a document belongs to
+const _IMPACT_SIG=['level','currentState','futureState','changeTypes'];
+const _GAP_SIG=['description','severity','trainingImpact'];
+const _SH_SIG=['role','influence','sentiment','needs','agency','stakeholderType','roleCategory'];
+
+function classifyImportRows(rows){
+  if(!rows.length)return[];
+  const headers=Object.keys(rows[0]);
+  const mapped=new Set();
+  headers.forEach(h=>{const m=fuzzyMatch(h,FIELD_ALIASES);if(m)mapped.add(m);});
+  const sections=[];
+  if(_IMPACT_SIG.some(f=>mapped.has(f)))sections.push({target:'impact',rows});
+  if(_GAP_SIG.some(f=>mapped.has(f)))sections.push({target:'gaps',rows});
+  if(_SH_SIG.some(f=>mapped.has(f)))sections.push({target:'stakeholders',rows});
+  // fallback: if just 'name' matched and nothing else, assume impact
+  if(!sections.length&&mapped.has('name'))sections.push({target:'impact',rows});
+  return sections;
+}
+
+function renderRoutingConfirmation(container,sections){
+  const targetLabels={impact:'Impact Assessment',gaps:'Gap Analysis',stakeholders:'Stakeholder Groups'};
+  let html='<div class="import-preview"><h3>Document Analysis Complete</h3>';
+  html+='<div class="import-preview-count">We found <strong>'+sections.length+' section'+(sections.length!==1?'s':'')+
+    '</strong> in this document. Review routing below, then confirm to import all.</div>';
+  html+='<div style="margin:14px 0">';
+  sections.forEach(sec=>{
+    html+=`<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;background:var(--bg-deep)">
+      <i class="ph ph-arrow-right" style="color:var(--gold)"></i>
+      <div style="flex:1"><strong>${targetLabels[sec.target]||sec.target}</strong>
+        <div style="font-size:12px;color:var(--ink-60);margin-top:2px">${sec.rows.length} row${sec.rows.length!==1?'s':''} detected</div></div>
+      <span class="exp-badge ready">Ready</span>
+    </div>`;
+  });
+  html+='</div>';
+  html+='<div class="import-merge-opts"><label><input type="radio" name="import-merge" value="append" checked> Append to existing</label>'
+      +'<label><input type="radio" name="import-merge" value="replace"> Replace existing</label></div>';
+  html+='<div class="import-acts"><button class="btn-ghost" onclick="document.getElementById(\'doc-import-modal\').classList.remove(\'open\')">Cancel</button>';
+  html+='<button class="btn-gold" onclick="commitSmartImport()">Import All Sections</button></div></div>';
+  container.innerHTML=html;
+}
+
+function commitSmartImport(){
+  const p=getProj();if(!p)return;
+  if(!_importSections.length){showSuccess('No sections to import.');return;}
+  const mergeMode=document.querySelector('input[name="import-merge"]:checked')?.value||'append';
+  let totalImported=0;
+  _importSections.forEach(sec=>{
+    const items=sec.rows;if(!items.length)return;
+    if(sec.target==='impact'){
+      if(!p.impactAssessment)p.impactAssessment={groups:[]};
+      if(mergeMode==='replace'&&totalImported===0)p.impactAssessment.groups=[];
+      items.forEach(item=>{
+        const lvl=normalizeLevel(item.level);
+        const ct=item.changeTypes?item.changeTypes.split(/[,;]/).map(s=>s.trim()).filter(s=>s):[];
+        p.impactAssessment.groups.push({name:item.name||'Imported Group',level:lvl,changeTypes:ct.length?ct:['Process'],currentState:item.currentState||'',futureState:item.futureState||'',actions:[]});
+      });
+      renderPImpact();
+    }else if(sec.target==='gaps'){
+      if(!p.gapAnalysis)p.gapAnalysis={gaps:[]};
+      if(mergeMode==='replace'&&totalImported===0)p.gapAnalysis.gaps=[];
+      items.forEach(item=>{
+        p.gapAnalysis.gaps.push({id:uid(),description:item.description||item.name||'',severity:normalizeSeverity(item.severity),trainingImpact:item.trainingImpact||'',status:item.status||''});
+      });
+      renderPGaps();
+    }else if(sec.target==='stakeholders'){
+      if(mergeMode==='replace'&&totalImported===0)p.stakeholders=[];
+      items.forEach(item=>{
+        p.stakeholders.push({id:uid(),name:item.name||'Imported Group',agency:item.agency||'',stakeholderType:item.stakeholderType||'end_user_group',roleCategory:item.roleCategory||'',factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},objectives:[],kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},rein:{owner:'',activities:'',intervals:[],escalation:''},trust:3,trustHistory:[],preconceptions:[],touchpoints:[],anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}});
+      });
+      renderPSH();renderPKPIs();
+    }
+    totalImported+=items.length;
+  });
+  touch('proj');schedSave();
+  const statusArea=document.getElementById('import-status-area');
+  if(statusArea)statusArea.innerHTML='<div class="import-status success">Imported '+totalImported+' item'+(totalImported!==1?'s':'')+' across '+_importSections.length+' section'+(_importSections.length!==1?'s':'')+'.</div>';
+  setTimeout(()=>{const modal=document.getElementById('doc-import-modal');if(modal)modal.classList.remove('open');},1400);
+}
 
 function openDocImport(target){
   _importTarget=target;
@@ -3535,6 +3688,41 @@ function openDocImport(target){
   document.body.appendChild(modal);
   modal.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
   // Drag and drop
+  const dropZone=modal.querySelector('#import-drop-zone');
+  dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');
+    if(e.dataTransfer.files.length)handleImportFile(e.dataTransfer.files[0]);});
+  requestAnimationFrame(()=>modal.classList.add('open'));
+}
+
+// Project-level smart upload — parses first, then classifies and routes to the right tab(s)
+function openDocImportSmart(){
+  _importTarget='auto';
+  _importParsed=[];
+  _importSections=[];
+  let existing=document.getElementById('doc-import-modal');
+  if(existing)existing.remove();
+  const modal=document.createElement('div');
+  modal.id='doc-import-modal';
+  modal.className='import-modal';
+  modal.innerHTML=`<div class="import-modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><h2>Upload Documents</h2>
+      <div class="import-sub">Upload any OCM document and AdoptIQ will detect the content type and route it to the right section automatically. Supports .xlsx, .csv, .docx, .pdf, .pptx, and .txt files.</div></div>
+      <button class="btn-ghost" onclick="document.getElementById('doc-import-modal').classList.remove('open')" style="font-size:22px;padding:0 6px;line-height:1">&times;</button>
+    </div>
+    <div class="import-drop" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
+      <div class="import-drop-icon">📄</div>
+      <div class="import-drop-text">Drag &amp; drop your file here or <strong>browse</strong></div>
+      <div class="import-drop-formats">.xlsx &nbsp; .csv &nbsp; .docx &nbsp; .pdf &nbsp; .pptx &nbsp; .txt</div>
+    </div>
+    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.docx,.pdf,.pptx,.txt" style="display:none" onchange="handleImportFile(this.files[0])">
+    <div id="import-preview-area"></div>
+    <div id="import-status-area"></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
   const dropZone=modal.querySelector('#import-drop-zone');
   dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
   dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
@@ -3577,7 +3765,29 @@ async function handleImportFile(file){
       statusArea.innerHTML='<div class="import-status error">No data found in file. Ensure your document contains a table or structured data.</div>';
       return;
     }
-    // Map to target schema
+    // Smart (auto) routing: classify content type, then map and show confirmation
+    if(_importTarget==='auto'){
+      _importSections=classifyImportRows(rows);
+      if(!_importSections.length){
+        statusArea.innerHTML='<div class="import-status error">Could not determine content type. Ensure your file has recognizable column headers for impact assessment, gap analysis, or stakeholder data.</div>';
+        return;
+      }
+      // Map rows for each detected section
+      _importSections=_importSections.map(sec=>({target:sec.target,rows:mapImportRows(rows,sec.target)})).filter(sec=>sec.rows.length);
+      if(_importSections.length===1){
+        // Single section: fall through to normal preview
+        _importTarget=_importSections[0].target;
+        _importParsed=_importSections[0].rows;
+        statusArea.innerHTML='';
+        renderImportPreview(previewArea,_importParsed,_importTarget);
+      }else{
+        // Multi-section: show routing confirmation screen
+        statusArea.innerHTML='';
+        renderRoutingConfirmation(previewArea,_importSections);
+      }
+      return;
+    }
+    // Targeted import: map to specified schema
     _importParsed=mapImportRows(rows,_importTarget);
     if(!_importParsed.length){
       statusArea.innerHTML='<div class="import-status error">Could not map document structure to '+_importTarget+' fields. Ensure your file has recognizable column headers.</div>';
@@ -3592,25 +3802,56 @@ async function handleImportFile(file){
 }
 
 function parseCSV(text){
-  const lines=text.split(/\r?\n/).filter(l=>l.trim());
-  if(lines.length<2)return[];
-  const headers=splitCSVLine(lines[0]);
-  return lines.slice(1).map(line=>{
-    const vals=splitCSVLine(line);
-    const obj={};
-    headers.forEach((h,i)=>{obj[h.trim()]=vals[i]?.trim()||'';});
-    return obj;
+  // RFC 4180 compliant: handles escaped quotes ("") and embedded newlines in quoted fields
+  const records=[];let pos=0;const len=text.length;
+  function parseField(){
+    if(pos>=len)return'';
+    if(text[pos]==='"'){
+      pos++;let field='';
+      while(pos<len){
+        if(text[pos]==='"'){
+          if(pos+1<len&&text[pos+1]==='"'){field+='"';pos+=2;}// escaped quote
+          else{pos++;break;}// closing quote
+        }else{field+=text[pos++];}
+      }
+      return field;
+    }
+    const start=pos;
+    while(pos<len&&text[pos]!==','&&text[pos]!=='\r'&&text[pos]!=='\n')pos++;
+    return text.slice(start,pos);
+  }
+  function parseRecord(){
+    const fields=[];
+    while(true){
+      fields.push(parseField());
+      if(pos>=len||text[pos]==='\r'||text[pos]==='\n')break;
+      if(text[pos]===',')pos++;
+    }
+    if(pos<len&&text[pos]==='\r')pos++;
+    if(pos<len&&text[pos]==='\n')pos++;
+    return fields;
+  }
+  while(pos<len){
+    if(text[pos]==='\r'||text[pos]==='\n'){pos++;continue;}
+    records.push(parseRecord());
+  }
+  if(records.length<2)return[];
+  const headers=records[0].map(h=>h.trim());
+  return records.slice(1).map(vals=>{
+    const obj={};headers.forEach((h,i)=>{obj[h]=vals[i]?.trim()||'';});return obj;
   }).filter(obj=>Object.values(obj).some(v=>v));
 }
 function splitCSVLine(line){
+  // Single-line CSV split with escaped-quote support — use parseCSV() for full RFC 4180
   const result=[];let current='';let inQuotes=false;
   for(let i=0;i<line.length;i++){
     const c=line[i];
-    if(c==='"'){inQuotes=!inQuotes;}
-    else if(c===','&&!inQuotes){result.push(current);current='';}
+    if(c==='"'&&inQuotes&&line[i+1]==='"'){current+='"';i++;}// escaped quote
+    else if(c==='"'){inQuotes=!inQuotes;}
+    else if(c===','&&!inQuotes){result.push(current.trim());current='';}
     else{current+=c;}
   }
-  result.push(current);
+  result.push(current.trim());
   return result;
 }
 
@@ -3781,27 +4022,41 @@ function parseTXT(text){
 // Fuzzy column header matching
 const FIELD_ALIASES={
   // Impact fields
-  name:['name','group','stakeholder','audience','team','department','population','group name','stakeholder group','stakeholder name','topic description','topic','change/ topic description','change/topic description','change/ topic'],
-  level:['level','impact','impact level','severity','priority','impact rating'],
-  currentState:['current','current state','as-is','as is','current process','from','business need'],
-  futureState:['future','future state','to-be','to be','target state','to','desired state','users impact'],
-  changeTypes:['change type','change types','type','types','impact type','impact area','area'],
+  name:['name','group','audience','team','population','group name','stakeholder group','stakeholder name','topic description','topic','change/ topic description','change/topic description','change/ topic'],
+  level:['level','impact level','impact rating','change impact','severity level'],
+  currentState:['current state','as-is','as is','current process','business need','current proficiency'],
+  futureState:['future state','to-be','to be','target state','desired state','users impact','target proficiency'],
+  changeTypes:['change type','change types','impact type','impact area'],
   // Gap fields
-  description:['description','gap','gap description','issue','finding','detail','details','gap detail','identified gaps','identified gap'],
-  severity:['severity','priority','level','risk','rating','criticality','risk level'],
-  trainingImpact:['training','training impact','impact','adoption impact','recommendation','mitigation','remediation','system impact'],
-  status:['status','state','progress','resolution'],
+  description:['description','gap','gap description','issue','finding','gap detail','identified gaps','identified gap'],
+  severity:['severity','risk level','criticality'],
+  trainingImpact:['training impact','adoption impact','recommendation','mitigation','remediation','system impact'],
+  status:['status','resolution'],
   // Stakeholder fields (for adoption scoring)
-  role:['role','title','position','job title','function','interests'],
+  role:['role','title','position','job title','function'],
   influence:['influence','power','authority'],
-  sentiment:['sentiment','attitude','disposition','readiness'],
-  needs:['needs','expectations','requirements']
+  sentiment:['sentiment','attitude','disposition'],
+  needs:['stakeholder needs','needs analysis','requirements analysis'],
+  // New stakeholder classification fields (Fix 2)
+  agency:['agency','organization','division','unit','department'],
+  stakeholderType:['stakeholder type','user type','role type'],
+  roleCategory:['role category','job category','role group']
 };
 
 function fuzzyMatch(header,fieldAliases){
   const h=header.toLowerCase().trim();
   for(const[field,aliases] of Object.entries(fieldAliases)){
-    if(aliases.some(a=>h===a||h.includes(a)||a.includes(h)))return field;
+    if(aliases.some(a=>{
+      if(h===a)return true;
+      if(a.includes(h))return true;// alias phrase fully contains this header
+      // Word-boundary phrase match replaces plain includes() to prevent false positives
+      // e.g. "needs" should not greedily match "Organizational Needs Assessment"
+      const escaped=a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      if(!new RegExp('\\b'+escaped+'\\b','i').test(h))return false;
+      // Strict: alias word-count must exceed half of header word-count
+      // e.g. 1-word alias won't match a 2-word header; 2-word alias matches up to 3-word headers
+      return a.split(/\s+/).length*2>h.split(/\s+/).length;
+    }))return field;
   }
   return null;
 }
@@ -3836,6 +4091,13 @@ function renderImportPreview(container,items,target){
   const cols=getPreviewColumns(target);
   let html='<div class="import-preview"><h3>Preview — '+items.length+' item'+(items.length!==1?'s':'')+' found</h3>';
   html+='<div class="import-preview-count">Review the parsed data below. Uncheck any rows you don\'t want to import.</div>';
+  // Unmapped column warning
+  const unmapped=Object.keys(items[0]||{}).filter(k=>k.startsWith('_raw_')).map(k=>k.slice(5));
+  if(unmapped.length){
+    html+='<div class="import-status" style="background:var(--amber-bg);color:var(--amber);margin-bottom:8px;border-radius:4px;padding:8px 12px;font-size:12px">'
+      +'<strong>Unmapped columns (will not be imported):</strong> '+unmapped.map(esc).join(', ')
+      +'<div style="margin-top:4px;opacity:0.8">These column headers weren\'t recognized. Rename them to match standard OCM field names and re-import.</div></div>';
+  }
   html+='<div class="import-merge-opts"><label><input type="radio" name="import-merge" value="append" checked> Append to existing</label><label><input type="radio" name="import-merge" value="replace"> Replace existing</label></div>';
   html+='<div style="overflow-x:auto"><table class="import-tbl"><thead><tr><th class="import-check"><input type="checkbox" checked onchange="toggleAllImportRows(this.checked)"></th>';
   cols.forEach(c=>{html+='<th>'+c.label+'</th>';});
@@ -3906,10 +4168,15 @@ function commitImport(){
       p.stakeholders.push({
         id:uid(),
         name:item.name||'Imported Group',
+        agency:item.agency||'',
+        stakeholderType:item.stakeholderType||'end_user_group',
+        roleCategory:item.roleCategory||'',
         factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},
         objectives:[],
-        kirk:{L1:{},L2:{},L3:{},L4:{}},
-        rein:{owner:'',activities:'',intervals:[],escalation:''}
+        kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
+        rein:{owner:'',activities:'',intervals:[],escalation:''},
+        trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
+        anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}
       });
     });
     renderPSH();renderPKPIs();
@@ -3946,8 +4213,9 @@ function bulkClear(target){
 function normalizeLevel(val){
   if(!val)return'Medium';
   const v=val.toLowerCase().trim();
-  if(v.includes('high')||v.includes('3')||v.includes('major'))return'High';
-  if(v.includes('low')||v.includes('1')||v.includes('minor'))return'Low';
+  // Word-boundary matching prevents "not high" or "highlight" from returning 'High'
+  if(/\bhigh\b/.test(v)||/\b3\b/.test(v)||/\bmajor\b/.test(v))return'High';
+  if(/\blow\b/.test(v)||/\b1\b/.test(v)||/\bminor\b/.test(v))return'Low';
   return'Medium';
 }
 function normalizeSeverity(val){

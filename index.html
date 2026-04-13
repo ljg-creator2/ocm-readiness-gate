@@ -953,6 +953,10 @@
         <div class="ib-label">Release</div>
         <button class="btn-sm" style="margin-top:8px;white-space:nowrap" onclick="openMoveProject(activeProjId,getProj()?.name||'')">Move to&hellip;</button>
       </div>
+      <div class="ib-field" style="max-width:160px">
+        <div class="ib-label">Documents</div>
+        <button class="btn-sm" style="margin-top:8px;white-space:nowrap;display:flex;align-items:center;gap:5px" onclick="openDocImportSmart()" title="Upload any OCM document — AdoptIQ will detect content type and route automatically"><i class="ph ph-upload-simple"></i> Upload Documents</button>
+      </div>
       <div class="ib-stat">
         <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Overall Readiness</div>
         <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="Composite score across ADKAR dimensions, gate completeness, and milestone health. 70+ is a solid baseline before go-live. Below 60 warrants a conversation with your sponsor." aria-label="How scoring works">ⓘ</button>
