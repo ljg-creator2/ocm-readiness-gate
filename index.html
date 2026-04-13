@@ -420,6 +420,10 @@
       <div class="ps-card cg"><div class="ps-lbl">Avg Readiness</div><div class="ps-val" id="ps-gate">—</div><div class="ps-sub">Portfolio average</div></div>
       <div class="ps-card cb"><div class="ps-lbl">Nearest Go-Live</div><div class="ps-val" id="ps-near-d" style="font-size:20px;padding-top:6px;letter-spacing:0">—</div><div class="ps-sub" id="ps-near-r">No go-live dates set</div></div>
     </div>
+    <div style="margin-bottom:28px">
+      <div class="sec-head"><div><div class="sec-eye overline">Active Releases</div><div class="sec-ttl">Release Portfolio</div></div></div>
+      <div id="rel-grid-wrap" class="stagger-children"></div>
+    </div>
     <!-- EXECUTIVE DASHBOARD -->
     <div id="exec-dash" style="display:none;margin-bottom:28px">
       <div class="sec-head"><div><div class="sec-eye overline">Executive Summary</div><div class="sec-ttl">Portfolio Health Dashboard</div></div></div>
@@ -439,7 +443,7 @@
         </div>
       </div>
       <!-- Collapsible: Go-Live & Risks -->
-      <details class="dash-section" open>
+      <details class="dash-section">
         <summary class="dash-section-toggle">Go-Live Countdown &amp; Risks</summary>
         <div class="golive-strip" id="exec-golive-strip"></div>
         <div class="exec-card exec-card-wide" style="margin-top:12px">
@@ -448,7 +452,7 @@
         </div>
       </details>
       <!-- Collapsible: Agency & Insights -->
-      <details class="dash-section" open>
+      <details class="dash-section">
         <summary class="dash-section-toggle">Agency Readiness &amp; Insights</summary>
         <div class="exec-card exec-card-wide" style="margin-top:12px">
           <div class="exec-card-title">Readiness by Agency</div>
@@ -460,12 +464,12 @@
         </div>
       </details>
       <!-- Complexity & Resource Planning -->
-      <details class="dash-section" open>
+      <details class="dash-section">
         <summary class="dash-section-toggle">Resource &amp; Complexity Planning</summary>
         <div id="exec-complexity-hm" style="margin-top:12px"></div>
       </details>
       <!-- Value Realization -->
-      <details class="dash-section" open>
+      <details class="dash-section">
         <summary class="dash-section-toggle">Value Realization</summary>
         <div id="exec-value-realization" style="margin-top:12px"></div>
       </details>
@@ -484,7 +488,7 @@
         </div>
       </div>
       <!-- Charts — collapsed by default -->
-      <details class="dash-section" style="margin-top:16px" open>
+      <details class="dash-section" style="margin-top:16px">
         <summary class="dash-section-toggle">Trend Charts</summary>
         <div class="exec-dash-grid" style="padding:0 12px 12px">
           <div class="exec-card">
@@ -519,13 +523,9 @@
         </div>
       </div>
     </div>
-    <div style="margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye overline">Active Releases</div><div class="sec-ttl">Release Portfolio</div></div></div>
-      <div id="rel-grid-wrap" class="stagger-children"></div>
-    </div>
     <!-- Portfolio Risk Dashboard — most actionable, shown first -->
     <div id="port-craid-sec" style="display:none">
-      <details class="port-collapse" open>
+      <details class="port-collapse">
         <summary class="port-collapse-toggle">
           <span class="port-collapse-title">Portfolio Risk Dashboard</span>
           <span class="port-collapse-stat" id="port-craid-stat"></span>
@@ -541,7 +541,7 @@
 
     <!-- People & Capacity — combined Saturation + Workload with tab switcher -->
     <div id="people-cap-sec" style="display:none">
-      <details class="port-collapse" open>
+      <details class="port-collapse">
         <summary class="port-collapse-toggle">
           <span class="port-collapse-title">People &amp; Capacity</span>
           <span class="port-collapse-stat" id="people-cap-stat"></span>
@@ -952,6 +952,13 @@
       <div class="ib-field" id="ib-move-proj" style="max-width:120px;display:none">
         <div class="ib-label">Release</div>
         <button class="btn-sm" style="margin-top:8px;white-space:nowrap" onclick="openMoveProject(activeProjId,getProj()?.name||'')">Move to&hellip;</button>
+      </div>
+      <div class="ib-field" style="max-width:280px">
+        <div class="ib-label">Import</div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn-sm" style="white-space:nowrap" onclick="openDocImportSmart('changeplan')"><i class="ph ph-upload-simple" style="margin-right:4px"></i>Change Plan</button>
+          <button class="btn-sm" style="white-space:nowrap" onclick="openDocImportSmart('trainingplan')"><i class="ph ph-upload-simple" style="margin-right:4px"></i>Training Plan</button>
+        </div>
       </div>
       <div class="ib-stat">
         <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Overall Readiness</div>

@@ -405,6 +405,7 @@ const GATE_DEFS=[
   {id:'g1',label:'Gate 1',sub:'Post-Requirements / Pre-Design',items:[
     {text:'Impacted user groups identified via Impact Analysis',owner:'ocm_impl'},
     {text:'Preliminary stakeholder matrix drafted and shared with Training',owner:'ocm_impl'},
+    {text:'End-user journey map created by Implementation team',owner:'func'},
     {text:'High-level scope of system changes documented',owner:'func'},
     {text:'Training approach approved (ILT, vILT, eLearning, job aids)',owner:'train_env'},
     {text:'Training resources confirmed',owner:'train_env'}
@@ -2524,6 +2525,7 @@ function addPSH(){
   const p=getProj();if(!p)return;
   const inp=document.getElementById('p-sh-inp');const name=inp.value.trim();if(!name)return;
   p.stakeholders.push({id:uid(),name,
+    agency:'',stakeholderType:'end_user_group',roleCategory:'',
     factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},objectives:[],
     kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
     rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''},
@@ -2531,79 +2533,134 @@ function addPSH(){
     anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}});
   inp.value='';renderPSH();renderPKPIs();touch('proj');schedSave();
 }
-function removePSH(id){const p=getProj();if(!p)return;p.stakeholders=p.stakeholders.filter(s=>s.id!==id);renderPSH();renderPKPIs();touch('proj');schedSave();}
+function removePSH(id){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);const label=sh?sh.name:'this group';if(!confirm('Remove stakeholder group "'+label+'"? This will delete all objectives, measurement data, reinforcement plans, and touchpoints for this group.'))return;p.stakeholders=p.stakeholders.filter(s=>s.id!==id);renderPSH();renderPKPIs();touch('proj');schedSave();}
+function migrateStakeholders(p){
+  if(!p||!p.stakeholders)return;
+  p.stakeholders.forEach(sh=>{
+    if(sh.agency===undefined)sh.agency='';
+    if(sh.stakeholderType===undefined)sh.stakeholderType='end_user_group';
+    if(sh.roleCategory===undefined)sh.roleCategory='';
+    if(sh.trust===undefined)sh.trust=3;
+    if(!sh.trustHistory)sh.trustHistory=[];
+    if(!sh.preconceptions)sh.preconceptions=[];
+    if(!sh.touchpoints)sh.touchpoints=[];
+    if(!sh.anxietyIndicators)sh.anxietyIndicators={whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false};
+  });
+}
+function updatePSHField(id,field,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh[field]=val;touch('proj');schedSave();renderPAHM();}
+function removeMember(shId,memberIdx){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===shId);if(!sh||!sh.members)return;
+  const name=sh.members[memberIdx]||'this member';
+  if(!confirm('Remove "'+name+'" from '+sh.name+'?'))return;
+  sh.members.splice(memberIdx,1);
+  touch('proj');schedSave();_shActiveTab[shId]=0;renderPSH();
+}
+function addMember(shId){
+  const p=getProj();if(!p)return;
+  const sh=p.stakeholders.find(s=>s.id===shId);if(!sh)return;
+  const name=prompt('Enter member name:');
+  if(!name||!name.trim())return;
+  if(!sh.members)sh.members=[];
+  sh.members.push(name.trim());
+  touch('proj');schedSave();_shActiveTab[shId]=0;renderPSH();
+}
+const _shActiveTab={};
+function switchSHTab(shId,idx){
+  _shActiveTab[shId]=idx;
+  const card=document.getElementById('shcard-'+shId);if(!card)return;
+  card.querySelectorAll('.sh-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
+  card.querySelectorAll('.sh-tab-panel').forEach((p,i)=>p.classList.toggle('active',i===idx));
+}
 function renderPSH(){
-  const p=getProj();if(!p)return;const wrap=document.getElementById('p-sh-wrap');
+  const p=getProj();if(!p)return;migrateStakeholders(p);const wrap=document.getElementById('p-sh-wrap');
   if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
   const adkarR=p.adkarScores['R'];
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
+  const tabNames=['Identity','Adoption Factors','Objectives & Measurement','Reinforcement','Readiness'];
   wrap.innerHTML=p.stakeholders.map(sh=>{
     const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
     const kr=kirkReady(sh),rr=reinReady(sh);const loc=sh.objectives.filter(o=>o.trim()).length;
-    return`<div class="sh-card"><div class="sh-hd">
-      <div class="sh-name">${esc(sh.name)}</div>
+    const at=_shActiveTab[sh.id]||1;
+    const typeLabel=sh.stakeholderType==='decision_maker'?'Decision-Maker':'End-User Group';
+    const memberList=sh.members&&sh.members.length?sh.members:[];
+    return`<div class="sh-card" id="shcard-${sh.id}"><div class="sh-hd">
+      <div class="sh-name">${esc(sh.name)}${memberList.length?` <span style="font-size:11px;font-weight:400;color:var(--ink-60)">(${memberList.length} members)</span>`:''}</div>
       <div class="adopt-badge ${cls}">${sc}% — ${tier}</div>
       <button class="btn-rm-sh" onclick="removePSH(${sh.id})">&times;</button>
     </div>
-    <div class="sh-factors">${AF.map(f=>`<div class="sh-fac"><label>${f.label}</label>
-      <div class="fac-row"><input type="range" class="fac-sl" min="1" max="5" value="${sh.factors[f.key]}" oninput="updatePFac(${sh.id},'${f.key}',this.value)">
-      <div class="fac-vl" id="pfv-${sh.id}-${f.key}">${sh.factors[f.key]}</div></div>
-      <div class="fac-desc" id="pfd-${sh.id}-${f.key}">${FD[sh.factors[f.key]]}</div></div>`).join('')}</div>
-    <div class="exp-secs">
-      <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('plo-${sh.id}',this)" aria-expanded="false">
-        <div class="exp-tog-l">Learning Objectives<span class="exp-badge ${loc>0?'ready':'needed'}">${loc>0?loc+' Defined':'Not Started'}</span></div>
-        <span class="exp-arr" id="parr-lo-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
-        <div class="exp-body" id="plo-${sh.id}">
-          <div class="lo-hint">Write in performance terms: the learner will be able to [verb] [skill/behavior] [condition/standard].</div>
-          <ul class="lo-list">${sh.objectives.map((o,i)=>`<li class="lo-item"><span class="lo-num">0${i+1}</span>
-            <input class="lo-inp" value="${esc(o)}" placeholder="The learner will be able to..." oninput="updatePLO(${sh.id},${i},this.value)">
-            <button class="btn-lo-rm" onclick="removePLO(${sh.id},${i})">&times;</button></li>`).join('')}</ul>
-          <button class="btn-lo-add" onclick="addPLO(${sh.id})">+ Add Objective</button>
-        </div>
+    <div class="sh-tabs">${tabNames.map((t,i)=>`<button class="sh-tab${i===at?' active':''}" onclick="switchSHTab(${sh.id},${i})">${t}</button>`).join('')}</div>
+    <!-- Tab 0: Identity -->
+    <div class="sh-tab-panel${at===0?' active':''}">
+      <div class="sh-identity-grid">
+        <div class="sh-id-field"><label>Agency / Organization</label><input class="sh-id-inp" value="${esc(sh.agency)}" placeholder="e.g. Department of Labor" oninput="updatePSHField(${sh.id},'agency',this.value)"></div>
+        <div class="sh-id-field"><label>Stakeholder Type</label><select class="sh-id-inp" onchange="updatePSHField(${sh.id},'stakeholderType',this.value)">
+          <option value="end_user_group"${sh.stakeholderType==='end_user_group'?' selected':''}>End-User Group</option>
+          <option value="decision_maker"${sh.stakeholderType==='decision_maker'?' selected':''}>Decision-Maker</option></select></div>
+        <div class="sh-id-field"><label>Role Category</label><input class="sh-id-inp" value="${esc(sh.roleCategory)}" placeholder="e.g. Case Workers, Supervisors" oninput="updatePSHField(${sh.id},'roleCategory',this.value)"></div>
       </div>
-      <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('pkirk-${sh.id}',this)" aria-expanded="false">
-        <div class="exp-tog-l">Measurement Framework — Kirkpatrick<span class="exp-badge ${kr}">${badgeLabel(kr)}</span></div>
-        <span class="exp-arr" id="parr-kirk-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
-        <div class="exp-body" id="pkirk-${sh.id}">
-          <div class="kirk-grid">
-            <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L1</div><div><div class="kirk-name">Reaction</div><div class="kirk-desc-txt">Learner feedback and satisfaction</div></div></div>
-              <div class="kirk-field"><label>Feedback Method</label><input class="kirk-inp" placeholder="e.g. Post-training survey via LMS" value="${esc(sh.kirk.L1.method)}" oninput="updatePKirk(${sh.id},'L1','method',this.value)"></div>
-              <div class="kirk-field"><label>Collection Timing</label><input class="kirk-inp" placeholder="e.g. Immediately following each session" value="${esc(sh.kirk.L1.timing)}" oninput="updatePKirk(${sh.id},'L1','timing',this.value)"></div></div>
-            <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L2</div><div><div class="kirk-name">Learning</div><div class="kirk-desc-txt">Knowledge and skill transfer confirmation</div></div></div>
-              <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${esc(sh.kirk.L2.method)}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
-              <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${esc(sh.kirk.L2.assessment)}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
-            <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L3</div><div><div class="kirk-name">Behavior</div><div class="kirk-desc-txt">Observable behavior change post go-live</div></div></div>
-              <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${esc(sh.kirk.L3.observable)}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
-              <div class="kirk-field"><label>Measurement Interval</label>
-                <select class="kirk-inp" style="width:auto" onchange="updatePKirk(${sh.id},'L3','interval',this.value)">
-                  <option ${sh.kirk.L3.interval==='14'?'selected':''}>14 days post go-live</option>
-                  <option ${sh.kirk.L3.interval==='30'?'selected':''}>30 days post go-live</option>
-                  <option ${sh.kirk.L3.interval==='60'?'selected':''}>60 days post go-live</option>
-                  <option ${sh.kirk.L3.interval==='90'?'selected':''}>90 days post go-live</option>
-                </select></div></div>
-            <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L4</div><div><div class="kirk-name">Results</div><div class="kirk-desc-txt">Organizational outcome alignment</div></div></div>
-              <div class="kirk-field"><label>Targeted Organizational Outcome</label><input class="kirk-inp" placeholder="e.g. Reduction in case processing errors" value="${esc(sh.kirk.L4.outcome)}" oninput="updatePKirk(${sh.id},'L4','outcome',this.value)"></div>
-              <div class="kirk-field"><label>Success Metric</label><input class="kirk-inp" placeholder="e.g. Error rate below 5% at 60-day review" value="${esc(sh.kirk.L4.metric)}" oninput="updatePKirk(${sh.id},'L4','metric',this.value)"></div></div>
-          </div>
-        </div>
+      <div style="margin-top:12px;padding:10px 12px;background:var(--bg-alt,#f7f8fa);border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--ink-60);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Members (${memberList.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${memberList.map((m,mi)=>`<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:var(--bg,#fff);border:1px solid var(--border,#e0e0e0);border-radius:4px;font-size:12px;color:var(--ink)">${esc(m)}<button onclick="removeMember(${sh.id},${mi})" style="background:none;border:none;color:var(--ink-60);cursor:pointer;font-size:14px;line-height:1;padding:0 2px" title="Remove ${esc(m)}">&times;</button></span>`).join('')}</div>
+        <button onclick="addMember(${sh.id})" style="margin-top:8px;background:none;border:1px dashed var(--border,#ccc);border-radius:4px;padding:4px 12px;font-size:12px;color:var(--ink-60);cursor:pointer">+ Add Member</button>
       </div>
-      <div class="exp-sec"><button class="exp-tog" onclick="toggleExp('prein-${sh.id}',this)" aria-expanded="false">
-        <div class="exp-tog-l">Reinforcement Plan — ${fwShort()} Alignment<span class="exp-badge ${rr}">${badgeLabel(rr)}</span></div>
-        <span class="exp-arr" id="parr-rein-${sh.id}"><i class="ph ph-caret-down"></i></span></button>
-        <div class="exp-body" id="prein-${sh.id}">
-          <div class="rein-grid">
-            <div class="rein-field"><label>Reinforcement Owner</label><input class="rein-inp" placeholder="e.g. Direct supervisor, change champion" value="${esc(sh.rein.owner)}" oninput="updatePRein(${sh.id},'owner',this.value)"></div>
-            <div class="rein-field"><label>Escalation Path</label><input class="rein-inp" placeholder="e.g. Escalate to OCM lead if metrics fall below threshold" value="${esc(sh.rein.escalation)}" oninput="updatePRein(${sh.id},'escalation',this.value)"></div>
-            <div class="rein-field" style="grid-column:1/-1"><label>Reinforcement Activities</label>
-              <textarea class="rein-ta" placeholder="e.g. Job aids at go-live, 2-week floor support, 30-day check-in..." oninput="updatePRein(${sh.id},'activities',this.value)">${esc(sh.rein.activities)}</textarea></div>
-            <div class="rein-field" style="grid-column:1/-1"><label>Post Go-Live Check-In Intervals</label>
-              <div class="rein-intervals">${['2 Weeks','30 Days','60 Days','90 Days','6 Months'].map(iv=>`<label class="intv-cb"><input type="checkbox" ${sh.rein.intervals.includes(iv)?'checked':''} onchange="updatePReinIv(${sh.id},'${iv}',this.checked)"> ${iv}</label>`).join('')}</div></div>
-          </div>
-          <div class="ak-r-note"><strong>${fwShort()} Reinforcement Score: ${adkarR}/5 —</strong> ${rNote}</div>
-        </div>
+    </div>
+    <!-- Tab 1: Adoption Factors -->
+    <div class="sh-tab-panel${at===1?' active':''}">
+      <div class="sh-factors">${AF.map(f=>`<div class="sh-fac"><label>${f.label}</label>
+        <div class="fac-row"><input type="range" class="fac-sl" min="1" max="5" value="${sh.factors[f.key]}" oninput="updatePFac(${sh.id},'${f.key}',this.value)">
+        <div class="fac-vl" id="pfv-${sh.id}-${f.key}">${sh.factors[f.key]}</div></div>
+        <div class="fac-desc" id="pfd-${sh.id}-${f.key}">${FD[sh.factors[f.key]]}</div></div>`).join('')}</div>
+    </div>
+    <!-- Tab 2: Objectives & Measurement -->
+    <div class="sh-tab-panel${at===2?' active':''}">
+      <div style="margin-bottom:24px">
+        <h4 style="margin:0 0 8px;font-size:13px;font-weight:700;color:var(--ink)">Learning Objectives <span class="exp-badge ${loc>0?'ready':'needed'}">${loc>0?loc+' Defined':'Not Started'}</span></h4>
+        <div class="lo-hint">Write in performance terms: the learner will be able to [verb] [skill/behavior] [condition/standard].</div>
+        <ul class="lo-list">${sh.objectives.map((o,i)=>`<li class="lo-item"><span class="lo-num">0${i+1}</span>
+          <input class="lo-inp" value="${esc(o)}" placeholder="The learner will be able to..." oninput="updatePLO(${sh.id},${i},this.value)">
+          <button class="btn-lo-rm" onclick="removePLO(${sh.id},${i})">&times;</button></li>`).join('')}</ul>
+        <button class="btn-lo-add" onclick="addPLO(${sh.id})">+ Add Objective</button>
       </div>
+      <h4 style="margin:0 0 8px;font-size:13px;font-weight:700;color:var(--ink)">Measurement Framework — Kirkpatrick <span class="exp-badge ${kr}">${badgeLabel(kr)}</span></h4>
+      <div class="kirk-grid">
+        <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L1</div><div><div class="kirk-name">Reaction</div><div class="kirk-desc-txt">Learner feedback and satisfaction</div></div></div>
+          <div class="kirk-field"><label>Feedback Method</label><input class="kirk-inp" placeholder="e.g. Post-training survey via LMS" value="${esc(sh.kirk.L1.method)}" oninput="updatePKirk(${sh.id},'L1','method',this.value)"></div>
+          <div class="kirk-field"><label>Collection Timing</label><input class="kirk-inp" placeholder="e.g. Immediately following each session" value="${esc(sh.kirk.L1.timing)}" oninput="updatePKirk(${sh.id},'L1','timing',this.value)"></div></div>
+        <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L2</div><div><div class="kirk-name">Learning</div><div class="kirk-desc-txt">Knowledge and skill transfer confirmation</div></div></div>
+          <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${esc(sh.kirk.L2.method)}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
+          <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${esc(sh.kirk.L2.assessment)}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
+        <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L3</div><div><div class="kirk-name">Behavior</div><div class="kirk-desc-txt">Observable behavior change post go-live</div></div></div>
+          <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${esc(sh.kirk.L3.observable)}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
+          <div class="kirk-field"><label>Measurement Interval</label>
+            <select class="kirk-inp" style="width:auto" onchange="updatePKirk(${sh.id},'L3','interval',this.value)">
+              <option ${sh.kirk.L3.interval==='14'?'selected':''}>14 days post go-live</option>
+              <option ${sh.kirk.L3.interval==='30'?'selected':''}>30 days post go-live</option>
+              <option ${sh.kirk.L3.interval==='60'?'selected':''}>60 days post go-live</option>
+              <option ${sh.kirk.L3.interval==='90'?'selected':''}>90 days post go-live</option>
+            </select></div></div>
+        <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L4</div><div><div class="kirk-name">Results</div><div class="kirk-desc-txt">Organizational outcome alignment</div></div></div>
+          <div class="kirk-field"><label>Targeted Organizational Outcome</label><input class="kirk-inp" placeholder="e.g. Reduction in case processing errors" value="${esc(sh.kirk.L4.outcome)}" oninput="updatePKirk(${sh.id},'L4','outcome',this.value)"></div>
+          <div class="kirk-field"><label>Success Metric</label><input class="kirk-inp" placeholder="e.g. Error rate below 5% at 60-day review" value="${esc(sh.kirk.L4.metric)}" oninput="updatePKirk(${sh.id},'L4','metric',this.value)"></div></div>
+      </div>
+    </div>
+    <!-- Tab 3: Reinforcement -->
+    <div class="sh-tab-panel${at===3?' active':''}">
+      <div class="rein-grid">
+        <div class="rein-field"><label>Reinforcement Owner</label><input class="rein-inp" placeholder="e.g. Direct supervisor, change champion" value="${esc(sh.rein.owner)}" oninput="updatePRein(${sh.id},'owner',this.value)"></div>
+        <div class="rein-field"><label>Escalation Path</label><input class="rein-inp" placeholder="e.g. Escalate to OCM lead if metrics fall below threshold" value="${esc(sh.rein.escalation)}" oninput="updatePRein(${sh.id},'escalation',this.value)"></div>
+        <div class="rein-field" style="grid-column:1/-1"><label>Reinforcement Activities</label>
+          <textarea class="rein-ta" placeholder="e.g. Job aids at go-live, 2-week floor support, 30-day check-in..." oninput="updatePRein(${sh.id},'activities',this.value)">${esc(sh.rein.activities)}</textarea></div>
+        <div class="rein-field" style="grid-column:1/-1"><label>Post Go-Live Check-In Intervals</label>
+          <div class="rein-intervals">${['2 Weeks','30 Days','60 Days','90 Days','6 Months'].map(iv=>`<label class="intv-cb"><input type="checkbox" ${sh.rein.intervals.includes(iv)?'checked':''} onchange="updatePReinIv(${sh.id},'${iv}',this.checked)"> ${iv}</label>`).join('')}</div></div>
+      </div>
+      <div class="ak-r-note"><strong>${fwShort()} Reinforcement Score: ${adkarR}/5 —</strong> ${rNote}</div>
+    </div>
+    <!-- Tab 4: Readiness -->
+    <div class="sh-tab-panel${at===4?' active':''}">
       ${renderTrustSection(sh)}
-    </div></div>`;
+    </div>
+    </div>`;
   }).join('');
   renderPAHM();
 }
@@ -2719,6 +2776,7 @@ function addPreconception(id){
 function removePreconception(shId,idx){
   const p=getProj();if(!p)return;
   const sh=p.stakeholders.find(s=>s.id===shId);if(!sh||!sh.preconceptions)return;
+  if(!confirm('Remove this preconception?'))return;
   sh.preconceptions.splice(idx,1);renderPSH();touch('proj');schedSave();
 }
 function updatePreconception(shId,idx,field,val){
@@ -2776,11 +2834,12 @@ function saveTouchpoint(shId){
 function removeTouchpoint(shId,idx){
   const p=getProj();if(!p)return;
   const sh=p.stakeholders.find(s=>s.id===shId);if(!sh||!sh.touchpoints)return;
+  if(!confirm('Remove this touchpoint?'))return;
   sh.touchpoints.splice(idx,1);renderPSH();touch('proj');schedSave();
 }
 function updatePFac(id,key,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.factors[key]=parseInt(val);const ve=document.getElementById(`pfv-${id}-${key}`);const de=document.getElementById(`pfd-${id}-${key}`);if(ve)ve.textContent=val;if(de)de.textContent=FD[parseInt(val)];renderPSH();renderPKPIs();touch('proj');schedSave();}
 function addPLO(id){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives.push('');renderPSH();const b=document.getElementById('plo-'+id);if(b){b.classList.add('open');const a=document.getElementById('parr-lo-'+id);if(a)a.classList.add('open');}touch('proj');schedSave();}
-function removePLO(id,idx){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives.splice(idx,1);renderPSH();touch('proj');schedSave();}
+function removePLO(id,idx){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;if(!confirm('Remove this learning objective?'))return;sh.objectives.splice(idx,1);renderPSH();touch('proj');schedSave();}
 function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives[idx]=val;
   // Update badge count live
   const loc=sh.objectives.filter(o=>o.trim()).length;
@@ -2793,18 +2852,32 @@ function updatePReinIv(id,iv,checked){const p=getProj();if(!p)return;const sh=p.
 function toggleExp(id,btn){const body=document.getElementById(id);const arr=btn.querySelector('.exp-arr');if(!body)return;const open=body.classList.toggle('open');if(arr)arr.classList.toggle('open',open);btn.setAttribute('aria-expanded',open);}
 
 function renderPAHM(){
-  const p=getProj();if(!p)return;const pan=document.getElementById('p-ahm-panel');
+  const p=getProj();if(!p)return;migrateStakeholders(p);const pan=document.getElementById('p-ahm-panel');
   if(!p.stakeholders.length){pan.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Score stakeholder groups in the Adoption Scoring tab to see where readiness is real and where it\u2019s assumed.</p></div>';return;}
   const cols=[...AF.map(f=>f.label),'Measurement','Reinforcement','Adoption Score'];
+  const colSpan=cols.length+1;
+  // Group by agency, decision_makers first
+  const sorted=[...p.stakeholders].sort((a,b)=>{
+    const ta=a.stakeholderType==='decision_maker'?0:1,tb=b.stakeholderType==='decision_maker'?0:1;
+    if(ta!==tb)return ta-tb;
+    return(a.agency||'').localeCompare(b.agency||'');
+  });
+  const groups={};sorted.forEach(sh=>{const key=sh.agency||'Unassigned';if(!groups[key])groups[key]=[];groups[key].push(sh);});
   let h='<div style="overflow-x:auto"><table class="ahm-tbl"><thead><tr><th class="ahm-rh">Group</th>';cols.forEach(c=>{h+=`<th>${c}</th>`;});h+='</tr></thead><tbody>';
-  p.stakeholders.forEach(sh=>{
-    const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
-    const kr=kirkReady(sh),rr=reinReady(sh);const krCls=kr==='ready'?'low':kr==='partial'?'mod':'crit';const rrCls=rr==='ready'?'low':rr==='partial'?'mod':'crit';
-    h+=`<tr><td class="ahm-rl">${esc(sh.name)}</td>`;
-    AF.forEach(f=>{const v=sh.factors[f.key],t=facTier(v);h+=`<td class="ahm-cw"><div class="ahm-cell ${t}">${TIER_MAP[t]}<br><span style="font-size:9px;opacity:0.65">${v}/5</span></div></td>`;});
-    h+=`<td class="ahm-cw"><div class="ahm-cell ${krCls}">${badgeLabel(kr)}</div></td>`;
-    h+=`<td class="ahm-cw"><div class="ahm-cell ${rrCls}">${badgeLabel(rr)}</div></td>`;
-    h+=`<td class="ahm-cw"><div class="ahm-cell ${cls}" style="font-size:11px">${sc}%<br><span style="font-size:9px;opacity:0.65">${tier}</span></div></td></tr>`;
+  const agencyKeys=Object.keys(groups);
+  const showGroups=agencyKeys.length>1||agencyKeys[0]!=='Unassigned';
+  agencyKeys.forEach(agency=>{
+    if(showGroups)h+=`<tr class="ahm-group-row"><td colspan="${colSpan}" class="ahm-group-hd">${esc(agency)}</td></tr>`;
+    groups[agency].forEach(sh=>{
+      const sc=adoptScore(sh.factors),{tier,cls}=adoptTier(sc);
+      const kr=kirkReady(sh),rr=reinReady(sh);const krCls=kr==='ready'?'low':kr==='partial'?'mod':'crit';const rrCls=rr==='ready'?'low':rr==='partial'?'mod':'crit';
+      const typeBadge=sh.stakeholderType==='decision_maker'?'<span class="ahm-type-badge dm">DM</span>':'';
+      h+=`<tr><td class="ahm-rl">${typeBadge}${esc(sh.name)}</td>`;
+      AF.forEach(f=>{const v=sh.factors[f.key],t=facTier(v);h+=`<td class="ahm-cw"><div class="ahm-cell ${t}">${TIER_MAP[t]}<br><span style="font-size:9px;opacity:0.65">${v}/5</span></div></td>`;});
+      h+=`<td class="ahm-cw"><div class="ahm-cell ${krCls}">${badgeLabel(kr)}</div></td>`;
+      h+=`<td class="ahm-cw"><div class="ahm-cell ${rrCls}">${badgeLabel(rr)}</div></td>`;
+      h+=`<td class="ahm-cw"><div class="ahm-cell ${cls}" style="font-size:11px">${sc}%<br><span style="font-size:9px;opacity:0.65">${tier}</span></div></td></tr>`;
+    });
   });
   h+='</tbody></table></div>';pan.innerHTML=h;
 }
@@ -3509,6 +3582,7 @@ let _importTarget=null;
 let _importParsed=[];
 
 function openDocImport(target){
+  _smartImportMode=false;
   _importTarget=target;
   _importParsed=[];
   let existing=document.getElementById('doc-import-modal');
@@ -3541,6 +3615,680 @@ function openDocImport(target){
   dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');
     if(e.dataTransfer.files.length)handleImportFile(e.dataTransfer.files[0]);});
   requestAnimationFrame(()=>modal.classList.add('open'));
+}
+
+let _smartImportMode=false;
+function openDocImportSmart(docType){
+  _smartImportMode=true;
+  _importTarget=null;
+  _importParsed=[];
+  const isTraining=docType==='trainingplan';
+  const title=isTraining?'Import Training Plan':'Import Change Plan';
+  const sub=isTraining
+    ?'Upload your training plan document. AdoptIQ will extract learning objectives, training risks, reinforcement activities, and success criteria automatically.'
+    :'Upload a full change plan document. AdoptIQ will classify rows into Impact Assessment, Gap Analysis, or Stakeholder sections automatically.';
+  let existing=document.getElementById('doc-import-modal');
+  if(existing)existing.remove();
+  const modal=document.createElement('div');
+  modal.id='doc-import-modal';
+  modal.className='import-modal';
+  modal.innerHTML=`<div class="import-modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><h2>${title}</h2>
+      <div class="import-sub">${sub}</div></div>
+      <button class="btn-ghost" onclick="document.getElementById('doc-import-modal').classList.remove('open')" style="font-size:22px;padding:0 6px;line-height:1">&times;</button>
+    </div>
+    <div class="import-drop" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
+      <div class="import-drop-icon">📄</div>
+      <div class="import-drop-text">Drag &amp; drop your file here or <strong>browse</strong></div>
+      <div class="import-drop-formats">.xlsx &nbsp; .csv &nbsp; .docx &nbsp; .pdf &nbsp; .pptx &nbsp; .txt</div>
+    </div>
+    <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.docx,.pdf,.pptx,.txt" style="display:none" onchange="handleImportFile(this.files[0])">
+    <div id="import-preview-area"></div>
+    <div id="import-status-area"></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  const dropZone=modal.querySelector('#import-drop-zone');
+  dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');
+    if(e.dataTransfer.files.length)handleImportFile(e.dataTransfer.files[0]);});
+  requestAnimationFrame(()=>modal.classList.add('open'));
+}
+
+// ── Section title keywords for classifying slides/headings ──
+const SECTION_KEYWORDS={
+  impact:['impact','change impact','impact assessment','change assessment','impacted','affected groups','affected populations','impacted groups','current state','future state','as-is','to-be','change readiness','readiness assessment'],
+  gaps:['gap','gaps','gap analysis','risk','risks','issues','findings','mitigation','remediation','identified gaps'],
+  stakeholders:['stakeholder','stakeholders','stakeholder analysis','audience','audiences','population','affected group','stakeholder groups','stakeholder assessment','stakeholder map','stakeholder engagement'],
+  training:['training','training plan','learning','curriculum','course','learning objectives','training schedule','training strategy','training approach','training objectives'],
+  communications:['communication','communications','communication plan','messaging','key messages','communication strategy','communication approach'],
+  craid:['change request','change requests','risk register','risk log','assumptions','dependencies','constraints','craid','raid','risks & mitigation','risks and mitigation','risk mitigation'],
+  resistance:['resistance','resistance management','resistance plan','change resistance'],
+  engagement:['engagement','engagement proof','stakeholder engagement proof','engagement activities','engagement plan','engagement log','proof of engagement'],
+  successcriteria:['success criteria','success measures','success metrics','success evaluation','success factors','key performance indicators','kpi','kpis','evaluation criteria','measurement plan','measures of success','measure of success'],
+  reinforcement:['reinforcement','reinforcement plan','sustainability','sustainment','post-go-live support','post go-live support','post-go-live','hypercare','support model','go-live support','closeout','close out','close-out','closeout activities','post-go-live focus','focus group','focus groups','war room','cutover','cutover plan','post-training support','post training support'],
+  trainingmeta:['training delivery','delivery strategy','training materials','training readiness','readiness requirements','training resources','training logistics','summary of new system','new system functionality'],
+  journeymap:['journey map','journey mapping','user journey','customer journey','as-is process','to-be process','process map','process flow','swimlane'],
+  overview:['executive summary','project overview','agenda','table of contents','project scope','level of effort','change management plan','organizational change management','purpose'],
+  timeline:['project timeline','project schedule','milestone','milestones','project plan','implementation timeline','implementation schedule']
+};
+// Map categories to import targets — only overview/timeline/journeymap are skipped
+const SECTION_TARGET_MAP={
+  impact:'impact',gaps:'gaps',stakeholders:'stakeholders',
+  training:'training',communications:'comms',craid:'craid',
+  resistance:'craid',engagement:'engagement',
+  successcriteria:'successcriteria',reinforcement:'reinforcement',
+  trainingmeta:'skip',journeymap:'skip',overview:'skip',timeline:'skip'
+};
+// All valid import targets (for result structure)
+const IMPORT_TARGETS=['impact','gaps','stakeholders','craid','training','comms','reinforcement','successcriteria','engagement'];
+
+function classifySectionByTitle(title){
+  if(!title)return null;
+  const t=title.toLowerCase().trim();
+  let bestCat=null,bestScore=0;
+  for(const[cat,keywords] of Object.entries(SECTION_KEYWORDS)){
+    for(const kw of keywords){
+      const re=new RegExp('\\b'+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b');
+      if(re.test(t)){
+        const score=kw.split(' ').length;
+        if(score>bestScore){bestScore=score;bestCat=cat;}
+      }
+    }
+  }
+  return bestCat;
+}
+// Returns ALL matching categories for a title (for slides like "Impact Assessment & Gap Analysis")
+function classifySectionByTitleMulti(title){
+  if(!title)return[];
+  const t=title.toLowerCase().trim();
+  const found=new Set();
+  for(const[cat,keywords] of Object.entries(SECTION_KEYWORDS)){
+    for(const kw of keywords){
+      const re=new RegExp('\\b'+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b');
+      if(re.test(t)){found.add(cat);break;}
+    }
+  }
+  // Priority rules: prevent training from stealing sections meant for other targets
+  if(found.has('training')&&found.has('trainingmeta'))found.delete('training');
+  if(found.has('training')&&found.has('reinforcement'))found.delete('training');
+  if(found.has('training')&&found.has('successcriteria'))found.delete('training');
+  return[...found];
+}
+
+function classifySectionByHeaders(rows){
+  if(!rows.length||!rows[0])return null;
+  const headers=Object.keys(rows[0]);
+  function countMatches(fields){
+    let ct=0;
+    headers.forEach(h=>{const m=fuzzyMatch(h,FIELD_ALIASES);if(m&&fields.includes(m))ct++;});
+    return ct;
+  }
+  // Check all targets using TARGET_FIELDS, excluding 'name' (too generic to be discriminating)
+  const scores={};
+  for(const[t,fields] of Object.entries(TARGET_FIELDS)){
+    scores[t]=countMatches(fields.filter(f=>f!=='name'&&f!=='description'&&f!=='text'));
+  }
+  let best=null,bestScore=0;
+  for(const[t,s] of Object.entries(scores)){if(s>bestScore){best=t;bestScore=s;}}
+  return bestScore>0?best:null;
+}
+
+function classifyDocumentSections(sections){
+  const result={skipped:[]};
+  IMPORT_TARGETS.forEach(t=>{result[t]=[];});
+  sections.forEach(sec=>{
+    // Try multi-target title classification (e.g. "Impact Assessment & Gap Analysis")
+    const cats=classifySectionByTitleMulti(sec.title);
+    const targets=cats.map(c=>SECTION_TARGET_MAP[c]).filter(t=>t&&t!=='skip');
+    const uniqueTargets=[...new Set(targets)];
+    const skipCats=cats.filter(c=>SECTION_TARGET_MAP[c]==='skip');
+
+    if(sec.rows.length){
+      // Structured rows: process for each matched target
+      if(uniqueTargets.length>0){
+        // Disambiguate: if stakeholders + another target both matched, use headers to decide
+        // If headers don't match stakeholders, drop it (e.g. "Stakeholder Engagement Activities"
+        // has engagement columns, not stakeholder matrix columns)
+        let finalTargets=uniqueTargets;
+        if(uniqueTargets.length>1&&uniqueTargets.includes('stakeholders')){
+          const headerTarget=classifySectionByHeaders(sec.rows);
+          if(headerTarget&&headerTarget!=='stakeholders'){
+            finalTargets=uniqueTargets.filter(t=>t!=='stakeholders');
+          }
+        }
+        // Disambiguate gaps vs craid: use headers to decide
+        if(finalTargets.includes('gaps')&&finalTargets.includes('craid')){
+          const headerTarget=classifySectionByHeaders(sec.rows);
+          if(headerTarget==='craid'||Object.keys(sec.rows[0]||{}).some(h=>h.toLowerCase().includes('mitigation'))){
+            finalTargets=finalTargets.filter(t=>t!=='gaps');
+          }else if(headerTarget==='gaps'){
+            finalTargets=finalTargets.filter(t=>t!=='craid');
+          }
+        }
+        finalTargets.forEach(target=>{
+          const mapped=mapImportRows(sec.rows,target);
+          if(mapped.length){
+            result[target].push(...mapped.map(r=>Object.assign(r,{_source:sec.source,_title:sec.title})));
+          }
+        });
+      }else if(skipCats.length){
+        result.skipped.push({title:sec.title,source:sec.source,rowCount:sec.rows.length,reason:skipCats[0]||'unrecognized'});
+      }else{
+        // No title match — try header-based classification
+        const headerTarget=classifySectionByHeaders(sec.rows);
+        const target=headerTarget||'impact';
+        const mapped=mapImportRows(sec.rows,target);
+        if(mapped.length){
+          result[target].push(...mapped.map(r=>Object.assign(r,{_source:sec.source,_title:sec.title})));
+        }
+      }
+    }else if(sec.bodyTexts&&sec.bodyTexts.length){
+      // No structured rows — use body text
+      let target=uniqueTargets.length?uniqueTargets[0]:null;
+      if(!target&&skipCats.length){
+        result.skipped.push({title:sec.title,source:sec.source,rowCount:sec.bodyTexts.length,reason:skipCats[0]||'unrecognized'});
+        return;
+      }
+      if(!target){
+        // Try to guess from body text content keywords
+        const combined=sec.bodyTexts.join(' ').toLowerCase();
+        for(const[c,kws] of Object.entries(SECTION_KEYWORDS)){
+          if(kws.some(kw=>combined.includes(kw))){
+            const t=SECTION_TARGET_MAP[c];
+            if(t&&t!=='skip'){target=t;break;}
+          }
+        }
+      }
+      if(!target)return;
+      // For multi-target text, process for each target
+      const textTargets=uniqueTargets.length>1?uniqueTargets:[target];
+      textTargets.forEach(tgt=>{
+        const entries=_textLinesToEntries(sec.bodyTexts,tgt);
+        if(entries.length){
+          result[tgt].push(...entries.map(r=>Object.assign(r,{_selected:true,_source:sec.source,_title:sec.title})));
+        }
+      });
+    }
+  });
+  // Post-process: detect agency header rows in stakeholders and assign agency to subsequent rows
+  _assignAgenciesFromHeaders(result.stakeholders);
+  // Post-process: filter noise entries (dates, bare numbers, etc.) from all targets
+  _filterNoiseEntries(result);
+  // Deduplicate entries within each target (same name/description)
+  IMPORT_TARGETS.forEach(t=>{
+    const seen=new Set();
+    result[t]=result[t].filter(r=>{
+      const key=(r.name||r.description||r.text||'').toLowerCase().trim();
+      if(!key||seen.has(key))return false;
+      seen.add(key);return true;
+    });
+  });
+  return result;
+}
+
+// Detect agency header rows in stakeholder data and propagate agency to subsequent rows
+// Agency headers are rows like "Key Stakeholders of Department of X (ABBR)" that have a name
+// but no role, influence, or sentiment — they serve as group headers in the source table
+function _assignAgenciesFromHeaders(stakeholders){
+  if(!stakeholders.length)return;
+  // Group by source slide so we only detect headers within the same slide
+  const bySource={};
+  stakeholders.forEach((sh,i)=>{const src=sh._source||'';if(!bySource[src])bySource[src]=[];bySource[src].push({sh,idx:i});});
+  const headerIndices=new Set();
+  Object.values(bySource).forEach(group=>{
+    let currentAgency='';
+    group.forEach(({sh,idx})=>{
+      const name=(sh.name||'').trim();
+      const hasRole=!!(sh.role||'').trim();
+      const hasInfluence=!!(sh.influence||'').trim();
+      const hasSentiment=!!(sh.sentiment||'').trim();
+      // A header row: has a name that looks like an org/department label, but no individual-level fields
+      const looksLikeHeader=!hasRole&&!hasInfluence&&!hasSentiment&&name.length>10&&(
+        /\b(department|dept|office|agency|division|bureau|commission|authority|board|council|ministry)\b/i.test(name)||
+        /\bkey\s+stakeholders?\s+(of|for|from|in)\b/i.test(name)||
+        /\bstakeholders?\s+(of|for|from|in)\b/i.test(name)||
+        /\([A-Z]{2,8}\)\s*$/.test(name) // ends with abbreviation like (DHCF)
+      );
+      if(looksLikeHeader){
+        // Extract agency: prefer abbreviation in parens, else use full name
+        const abbrMatch=name.match(/\(([A-Z]{2,8})\)\s*$/);
+        currentAgency=abbrMatch?abbrMatch[1]:name.replace(/^key\s+stakeholders?\s+(of|for|from|in)\s+/i,'').trim();
+        headerIndices.add(idx);
+      }else if(currentAgency){
+        sh.agency=currentAgency;
+      }
+    });
+  });
+  // Remove header rows (they're labels, not actual stakeholders)
+  // Iterate in reverse so splice indices stay correct
+  const sortedIndices=[...headerIndices].sort((a,b)=>b-a);
+  sortedIndices.forEach(i=>stakeholders.splice(i,1));
+}
+
+// Filter out noise entries that got through table parsing
+function _filterNoiseEntries(result){
+  const noiseRe=[
+    /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/,
+    /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2},?\s+\d{2,4}$/i,
+    /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+    /^\d{1,4}$/,
+    /^page\s+\d+/i,
+    /confidential/i,
+    /^dc\s+government/i,
+    /^(draft|final|version)\s*\d*/i,
+    /^©/,
+    /^for internal use only$/i,
+    /^[\u200B\u200C\u200D\uFEFF\u00AD\s]*$/,  // zero-width spaces and soft hyphens only
+  ];
+  // Patterns for entries that are clearly just labels/headers, not data
+  const labelPatterns=[
+    /^\(.+\)$/,                          // "(Internal & External)" — parenthetical labels
+  ];
+  function isNoise(val){return noiseRe.some(re=>re.test(val.trim()));}
+  function isLabel(val){return labelPatterns.some(re=>re.test(val.trim()));}
+  // Check if a value looks like a person's name (Title. First Last pattern)
+  function isPersonName(val){
+    const v=val.trim();
+    return/^(mr|mrs|ms|dr|miss|prof)\.?\s+\w+/i.test(v)&&v.split(/\s+/).length<=4;
+  }
+  // Impact: filter noise and entries with no meaningful content fields
+  result.impact=result.impact.filter(r=>{
+    const name=(r.name||'').trim();
+    if(!name)return false;
+    if(isNoise(name)||isLabel(name))return false;
+    return true;
+  });
+  // Gaps: filter noise and entries that are clearly person names, not gap descriptions
+  result.gaps=result.gaps.filter(r=>{
+    const desc=(r.description||r.name||'').trim();
+    if(!desc)return false;
+    if(isNoise(desc)||isLabel(desc))return false;
+    if(isPersonName(desc))return false;
+    return true;
+  });
+  // Stakeholders: filter noise, generic labels, section sub-headers, and scope descriptions
+  const stakeholderNoiseRe=[
+    /^(in\s+scope|out\s+of\s+scope|primary\s+audience|secondary\s+audience|key\s+audience|target\s+audience)$/i,
+  ];
+  result.stakeholders=result.stakeholders.filter(r=>{
+    const name=(r.name||'').trim();
+    if(!name)return false;
+    if(isNoise(name)||isLabel(name))return false;
+    if(stakeholderNoiseRe.some(re=>re.test(name)))return false;
+    // Filter scope descriptions — sentences that describe training topics, not stakeholder groups.
+    // Scope items typically end with a period and contain process/topic language, not role/group names.
+    // Stakeholder names are short role titles (e.g. "DHS Service Center caseworkers") not full sentences.
+    if(name.endsWith('.')&&name.length>25)return false;
+    // Out-of-scope markers: "(managed separately...)" or similar parenthetical disclaimers
+    if(/\(managed\s+separately/i.test(name))return false;
+    // Scope/topic descriptions — not role/group names
+    if(/\b(functionality|workflows?\s+for|navigation\s+and|interpretation\s+and|application\s+of)\b/i.test(name))return false;
+    return true;
+  });
+  // All other targets: filter noise from primary text field
+  ['craid','training','comms','reinforcement','successcriteria','engagement'].forEach(t=>{
+    if(!result[t])return;
+    result[t]=result[t].filter(r=>{
+      const val=(r.name||r.text||r.description||'').trim();
+      if(!val)return false;
+      if(isNoise(val)||isLabel(val))return false;
+      return true;
+    });
+  });
+}
+
+function _textLinesToEntries(lines,target){
+  const meaningful=lines.map(l=>l.replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g,'').trim()).filter(l=>l.length>3);
+  if(!meaningful.length)return[];
+  const entries=[];
+  meaningful.forEach(line=>{
+    const trimmed=line.replace(/^[\s•\-*►▪◦‣→\d.)]+/,'').trim();
+    if(!trimmed)return;
+    if(target==='impact'){
+      const parts=trimmed.split(/\s*[:\u2013\u2014–—]\s*/,2);
+      entries.push({name:parts[0],currentState:'',futureState:parts[1]||'',level:'Medium'});
+    }else if(target==='gaps'){
+      entries.push({description:trimmed,severity:'Medium',trainingImpact:'',status:'Open'});
+    }else if(target==='stakeholders'){
+      const parts=trimmed.split(/\s*[:\u2013\u2014–—]\s*/,2);
+      entries.push({name:parts[0],role:parts[1]||'',agency:'',influence:'',sentiment:''});
+    }else if(target==='craid'){
+      entries.push({text:trimmed,type:'risk',severity:'Medium',status:'Open'});
+    }else if(target==='training'){
+      entries.push({text:trimmed});
+    }else if(target==='comms'){
+      entries.push({text:trimmed});
+    }else if(target==='reinforcement'){
+      entries.push({text:trimmed});
+    }else if(target==='successcriteria'){
+      entries.push({text:trimmed});
+    }else if(target==='engagement'){
+      entries.push({text:trimmed});
+    }
+  });
+  return entries;
+}
+
+// For single-table files (CSV, single-sheet XLSX), classify into one target
+function classifySingleTable(rows){
+  if(!rows.length)return{target:'impact',rows:[],unmapped:[]};
+  const target=classifySectionByHeaders(rows)||'impact';
+  const mapped=mapImportRows(rows,target);
+  const mappedHeaders=new Set();
+  Object.keys(rows[0]).forEach(h=>{const m=fuzzyMatch(h,FIELD_ALIASES);if(m)mappedHeaders.add(h);});
+  const unmapped=Object.keys(rows[0]).filter(h=>!mappedHeaders.has(h));
+  return{target,rows:mapped,unmapped};
+}
+
+let _multiSectionData=null;
+
+function renderMultiSectionPreview(container,result){
+  _multiSectionData=result;
+  const targetLabels={impact:'Impact Assessment',gaps:'Gap Analysis',stakeholders:'Stakeholder Groups',
+    craid:'CRAID Log',training:'Training Plan',comms:'Communications',
+    reinforcement:'Reinforcement / Post-Go-Live',successcriteria:'Success Criteria',engagement:'Engagement Proof'};
+  const activeSections=IMPORT_TARGETS.filter(t=>result[t]&&result[t].length>0);
+  const totalItems=activeSections.reduce((s,t)=>s+result[t].length,0);
+  let html='<div class="import-preview">';
+  // Summary header
+  html+='<div class="import-classify-hd" style="flex-direction:column;align-items:flex-start;gap:6px">';
+  html+='<strong style="font-size:14px">Document Analysis Complete</strong>';
+  html+='<div style="display:flex;gap:12px;flex-wrap:wrap">';
+  activeSections.forEach(t=>{
+    html+=`<span class="import-section-badge import-section-${t}">${targetLabels[t]}: ${result[t].length} item${result[t].length!==1?'s':''}</span>`;
+  });
+  if(result.skipped.length){
+    html+=`<span class="import-section-badge import-section-skip">${result.skipped.length} section${result.skipped.length!==1?'s':''} skipped</span>`;
+  }
+  html+='</div></div>';
+  if(!activeSections.length){
+    html+='<div class="import-status error">Could not classify any sections. Ensure your document contains recognizable change plan content.</div>';
+    html+='</div>';
+    container.innerHTML=html;
+    return;
+  }
+  // Merge mode
+  html+='<div class="import-merge-opts"><label><input type="radio" name="import-merge" value="append" checked> Append to existing</label><label><input type="radio" name="import-merge" value="replace"> Replace existing</label></div>';
+  // Section tabs
+  html+='<div class="import-sec-tabs">';
+  activeSections.forEach((t,i)=>{
+    html+=`<button class="import-sec-tab${i===0?' active':''}" data-target="${t}" onclick="switchImportSecTab('${t}')">${targetLabels[t]} (${result[t].length})</button>`;
+  });
+  html+='</div>';
+  // Section panels
+  activeSections.forEach((t,i)=>{
+    const items=result[t];
+    const cols=getPreviewColumns(t);
+    html+=`<div class="import-sec-panel${i===0?' active':''}" id="import-sec-${t}">`;
+    html+='<div style="overflow-x:auto"><table class="import-tbl"><thead><tr><th class="import-check"><input type="checkbox" checked onchange="toggleSmartSection(\''+t+'\',this.checked)"></th><th style="font-size:10px;color:var(--ink-60)">Source</th>';
+    cols.forEach(c=>{html+='<th>'+c.label+'</th>';});
+    html+='</tr></thead><tbody>';
+    items.forEach((item,idx)=>{
+      html+='<tr><td class="import-check"><input type="checkbox" '+(item._selected?'checked':'')+' onchange="toggleSmartRow(\''+t+'\','+idx+',this.checked)"></td>';
+      html+='<td style="font-size:10px;color:var(--ink-60);white-space:nowrap">'+esc(item._source||'')+'</td>';
+      cols.forEach(c=>{
+        let val=item[c.key]||'';
+        if(val.length>60)val=val.substring(0,60)+'…';
+        html+='<td>'+esc(val)+'</td>';
+      });
+      html+='</tr>';
+    });
+    html+='</tbody></table></div></div>';
+  });
+  // Skipped sections info
+  if(result.skipped.length){
+    html+='<div class="import-skipped"><strong>Skipped sections:</strong> ';
+    html+=result.skipped.map(s=>esc(s.title||s.source)+' ('+s.rowCount+' rows — '+s.reason+')').join(', ');
+    html+='</div>';
+  }
+  // Actions
+  html+='<div class="import-acts"><button class="btn-ghost" onclick="document.getElementById(\'doc-import-modal\').classList.remove(\'open\')">Cancel</button>';
+  html+=`<button class="btn-gold" onclick="commitMultiSectionImport()">Import ${totalItems} Item${totalItems!==1?'s':''}</button></div></div>`;
+  container.innerHTML=html;
+}
+
+function switchImportSecTab(target){
+  document.querySelectorAll('.import-sec-tab').forEach(t=>t.classList.toggle('active',t.dataset.target===target));
+  document.querySelectorAll('.import-sec-panel').forEach(p=>p.classList.toggle('active',p.id==='import-sec-'+target));
+}
+function toggleSmartSection(target,checked){
+  if(_multiSectionData&&_multiSectionData[target])_multiSectionData[target].forEach(r=>r._selected=checked);
+}
+function toggleSmartRow(target,idx,checked){
+  if(_multiSectionData&&_multiSectionData[target]&&_multiSectionData[target][idx])_multiSectionData[target][idx]._selected=checked;
+}
+
+function commitMultiSectionImport(){
+  const p=getProj();if(!p)return;
+  if(!_multiSectionData)return;
+  const mergeMode=document.querySelector('input[name="import-merge"]:checked')?.value||'append';
+  let totalImported=0;
+  const breakdown=[];
+  // Helper to get selected items for a target
+  function sel(t){return(_multiSectionData[t]||[]).filter(r=>r._selected);}
+
+  // ── Impact Assessment ──
+  const impactItems=sel('impact');
+  if(impactItems.length){
+    if(!p.impactAssessment)p.impactAssessment={groups:[]};
+    if(mergeMode==='replace')p.impactAssessment.groups=[];
+    impactItems.forEach(item=>{
+      const lvl=normalizeLevel(item.level);
+      const ct=item.changeTypes?item.changeTypes.split(/[,;]/).map(s=>s.trim()).filter(s=>s):[];
+      p.impactAssessment.groups.push({
+        name:item.name||'Imported Group',level:lvl,
+        changeTypes:ct.length?ct:['Process'],
+        currentState:item.currentState||'',futureState:item.futureState||'',actions:[]
+      });
+    });
+    totalImported+=impactItems.length;breakdown.push(impactItems.length+' impact');
+  }
+
+  // ── Gap Analysis ──
+  const gapItems=sel('gaps');
+  if(gapItems.length){
+    if(!p.gapAnalysis)p.gapAnalysis={gaps:[]};
+    if(mergeMode==='replace')p.gapAnalysis.gaps=[];
+    gapItems.forEach(item=>{
+      p.gapAnalysis.gaps.push({
+        id:uid(),description:item.description||item.name||item.text||'',
+        severity:normalizeSeverity(item.severity),
+        trainingImpact:item.trainingImpact||'',status:item.status||''
+      });
+    });
+    totalImported+=gapItems.length;breakdown.push(gapItems.length+' gap');
+  }
+
+  // ── Stakeholders ──
+  const shItems=sel('stakeholders');
+  if(shItems.length){
+    if(mergeMode==='replace')p.stakeholders=[];
+    // Group imported stakeholders by agency — OCM adoption scoring is done at the group/agency
+    // level, not per individual. If multiple rows share the same agency, consolidate into one
+    // group using the agency name, and store the individual names as role context.
+    const byAgency={};
+    shItems.forEach(item=>{
+      const agency=(item.agency||'').trim();
+      const name=(item.name||'').trim();
+      if(agency){
+        if(!byAgency[agency])byAgency[agency]={names:[],roles:new Set(),items:[]};
+        byAgency[agency].names.push(name);
+        if(item.role)byAgency[agency].roles.add(item.role);
+        if(item.roleCategory)byAgency[agency].roles.add(item.roleCategory);
+        byAgency[agency].items.push(item);
+      }else{
+        // No agency — treat each as its own group (could be role-based entries from DOCX)
+        byAgency['_solo_'+name]={names:[name],roles:new Set(),items:[item],solo:true};
+      }
+    });
+    let shCount=0;
+    Object.entries(byAgency).forEach(([key,group])=>{
+      const isSolo=group.solo||group.names.length===1;
+      const groupName=isSolo?group.names[0]:key;
+      const roleCategory=isSolo?(group.items[0].roleCategory||''):Array.from(group.roles).join(', ');
+      // For multi-person groups, store individual names in preconceptions-free notes
+      const stakeholderType=group.items[0].stakeholderType||'end_user_group';
+      const newSH={
+        id:uid(),name:groupName,
+        agency:isSolo?(group.items[0].agency||''):key,
+        stakeholderType,roleCategory,
+        factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},
+        objectives:[],kirk:{L1:{},L2:{},L3:{},L4:{}},
+        rein:{owner:'',activities:'',intervals:[],escalation:''},
+        trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
+        anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}
+      };
+      // If consolidating multiple people, show distinct roles and store member names
+      if(!isSolo&&group.names.length>1){
+        // Collect distinct functional roles/titles from items (role, needs, influence fields)
+        const distinctRoles=Array.from(group.roles).filter(r=>r&&r.trim());
+        // Also collect any unique names that look like role titles (not person names)
+        const nameBasedRoles=[...new Set(group.items.map(it=>(it.roleCategory||'').trim()).filter(Boolean))];
+        const allRoles=[...new Set([...distinctRoles,...nameBasedRoles])];
+        newSH.roleCategory=allRoles.length?allRoles.join(', '):'';
+        // Store individual member names for reference
+        newSH.members=group.names.filter(n=>n.trim());
+      }
+      p.stakeholders.push(newSH);
+      shCount++;
+    });
+    totalImported+=shCount;breakdown.push(shCount+' stakeholder');
+  }
+
+  // ── CRAID Log (risks, issues, change requests, resistance items) ──
+  const craidItems=sel('craid');
+  if(craidItems.length){
+    if(!p.craid)p.craid=[];
+    if(mergeMode==='replace')p.craid=[];
+    craidItems.forEach(item=>{
+      p.craid.push({
+        id:uid(),
+        type:item.type||'risk',
+        title:item.name||item.text||'',
+        description:item.description||item.text||'',
+        severity:normalizeSeverity(item.severity)||'Medium',
+        status:item.status||'Open',
+        owner:item.owner||'',dueDate:item.dueDate||'',
+        probability:item.probability||'',impact:item.impact||'',mitigation:item.mitigation||''
+      });
+    });
+    totalImported+=craidItems.length;breakdown.push(craidItems.length+' CRAID');
+  }
+
+  // ── Training Plan → Stakeholder Learning Objectives ──
+  const trainingItems=sel('training');
+  if(trainingItems.length){
+    // Add training items as learning objectives to all stakeholders
+    const objTexts=trainingItems.map(item=>item.name||item.text||item.description||'').filter(t=>t);
+    if(p.stakeholders.length){
+      p.stakeholders.forEach(sh=>{
+        if(!sh.objectives)sh.objectives=[];
+        objTexts.forEach(obj=>{
+          if(!sh.objectives.includes(obj))sh.objectives.push(obj);
+        });
+      });
+    }else{
+      // No stakeholders yet — create a general one to hold the training data
+      p.stakeholders.push({
+        id:uid(),name:'All End Users',agency:'',stakeholderType:'end_user_group',roleCategory:'',
+        factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},
+        objectives:objTexts,kirk:{L1:{},L2:{},L3:{},L4:{}},
+        rein:{owner:'',activities:'',intervals:[],escalation:''},
+        trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
+        anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}
+      });
+    }
+    totalImported+=trainingItems.length;breakdown.push(trainingItems.length+' training');
+  }
+
+  // ── Communications Plan → Stakeholder Touchpoints ──
+  const commsItems=sel('comms');
+  if(commsItems.length&&p.stakeholders.length){
+    const today=new Date().toISOString().slice(0,10);
+    p.stakeholders.forEach(sh=>{
+      if(!sh.touchpoints)sh.touchpoints=[];
+    });
+    commsItems.forEach(item=>{
+      const desc=item.name||item.text||item.description||'';
+      const audience=(item.audience||'').toLowerCase();
+      // Try to match to specific stakeholders by audience, else add to all
+      let matched=false;
+      if(audience){
+        p.stakeholders.forEach(sh=>{
+          if(sh.name.toLowerCase().includes(audience)||audience.includes(sh.name.toLowerCase())){
+            sh.touchpoints.push({date:item.timing||today,type:'Communication',description:desc,trustImpact:'neutral'});
+            matched=true;
+          }
+        });
+      }
+      if(!matched){
+        // Add to first stakeholder as a general comms record
+        p.stakeholders[0].touchpoints.push({date:item.timing||today,type:'Communication',description:desc,trustImpact:'neutral'});
+      }
+    });
+    totalImported+=commsItems.length;breakdown.push(commsItems.length+' comms');
+  }
+
+  // ── Reinforcement / Post-Go-Live → Stakeholder Reinforcement Plans ──
+  const reinItems=sel('reinforcement');
+  if(reinItems.length){
+    const reinText=reinItems.map(item=>item.name||item.text||item.description||'').filter(t=>t).join('\n• ');
+    if(p.stakeholders.length){
+      p.stakeholders.forEach(sh=>{
+        if(!sh.rein)sh.rein={owner:'',activities:'',intervals:[],escalation:''};
+        sh.rein.activities=sh.rein.activities?(sh.rein.activities+'\n• '+reinText):('• '+reinText);
+      });
+    }
+    totalImported+=reinItems.length;breakdown.push(reinItems.length+' reinforcement');
+  }
+
+  // ── Success Criteria → Value Case ──
+  const scItems=sel('successcriteria');
+  if(scItems.length){
+    if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};
+    if(mergeMode==='replace')p.valueCase.successCriteria=[];
+    scItems.forEach(item=>{
+      p.valueCase.successCriteria.push({
+        metric:item.name||item.text||item.description||'',
+        target:item.target||'',method:item.method||''
+      });
+    });
+    totalImported+=scItems.length;breakdown.push(scItems.length+' success criteria');
+  }
+
+  // ── Engagement Proof → Stakeholder Touchpoints ──
+  const engItems=sel('engagement');
+  if(engItems.length&&p.stakeholders.length){
+    const today=new Date().toISOString().slice(0,10);
+    p.stakeholders.forEach(sh=>{
+      if(!sh.touchpoints)sh.touchpoints=[];
+    });
+    engItems.forEach(item=>{
+      const desc=item.name||item.text||item.description||'';
+      // Add engagement proof to first stakeholder or try to match
+      p.stakeholders[0].touchpoints.push({
+        date:item.date||today,type:'Engagement',description:desc,trustImpact:'positive'
+      });
+    });
+    totalImported+=engItems.length;breakdown.push(engItems.length+' engagement');
+  }
+
+  // Re-render all affected sections
+  if(impactItems.length)renderPImpact();
+  if(gapItems.length)renderPGaps();
+  if(shItems.length||trainingItems.length||commsItems.length||reinItems.length||engItems.length){renderPSH();renderPKPIs();}
+  if(craidItems.length&&typeof renderPCraid==='function')renderPCraid();
+  if(scItems.length&&typeof renderPOverview==='function')renderPOverview();
+  touch('proj');schedSave();
+  const statusArea=document.getElementById('import-status-area');
+  if(statusArea)statusArea.innerHTML='<div class="import-status success">Imported '+totalImported+' items ('+breakdown.join(', ')+')!</div>';
+  setTimeout(()=>{
+    const modal=document.getElementById('doc-import-modal');
+    if(modal)modal.classList.remove('open');
+  },1500);
 }
 
 async function handleImportFile(file){
@@ -3577,14 +4325,41 @@ async function handleImportFile(file){
       statusArea.innerHTML='<div class="import-status error">No data found in file. Ensure your document contains a table or structured data.</div>';
       return;
     }
-    // Map to target schema
-    _importParsed=mapImportRows(rows,_importTarget);
-    if(!_importParsed.length){
-      statusArea.innerHTML='<div class="import-status error">Could not map document structure to '+_importTarget+' fields. Ensure your file has recognizable column headers.</div>';
-      return;
+    // Smart mode: auto-classify; standard mode: map to target
+    if(_smartImportMode){
+      // Check if parsers returned multi-section data (array of {title,rows,...})
+      const isMultiSection=Array.isArray(rows)&&rows.length>0&&rows[0].title!==undefined&&rows[0].rows!==undefined;
+      if(isMultiSection){
+        const result=classifyDocumentSections(rows);
+        const total=IMPORT_TARGETS.reduce((s,t)=>s+(result[t]?result[t].length:0),0);
+        if(!total){
+          statusArea.innerHTML='<div class="import-status error">Could not classify document sections. Ensure your document contains recognizable change plan content.</div>';
+          return;
+        }
+        statusArea.innerHTML='';
+        renderMultiSectionPreview(previewArea,result);
+      }else{
+        // Single table (CSV, single-sheet XLSX) — classify as one section
+        const classified=classifySingleTable(rows);
+        if(!classified.rows.length){
+          statusArea.innerHTML='<div class="import-status error">Could not map document structure. Ensure your file has recognizable column headers.</div>';
+          return;
+        }
+        // Wrap as multi-section for consistent UI
+        const result={impact:[],gaps:[],stakeholders:[],skipped:[]};
+        result[classified.target]=classified.rows;
+        statusArea.innerHTML='';
+        renderMultiSectionPreview(previewArea,result);
+      }
+    }else{
+      _importParsed=mapImportRows(rows,_importTarget);
+      if(!_importParsed.length){
+        statusArea.innerHTML='<div class="import-status error">Could not map document structure to '+_importTarget+' fields. Ensure your file has recognizable column headers.</div>';
+        return;
+      }
+      statusArea.innerHTML='';
+      renderImportPreview(previewArea,_importParsed,_importTarget);
     }
-    statusArea.innerHTML='';
-    renderImportPreview(previewArea,_importParsed,_importTarget);
   }catch(err){
     console.error('Import parse error:',err);
     statusArea.innerHTML='<div class="import-status error">Error parsing file: '+esc(err.message)+'</div>';
@@ -3592,61 +4367,123 @@ async function handleImportFile(file){
 }
 
 function parseCSV(text){
-  const lines=text.split(/\r?\n/).filter(l=>l.trim());
-  if(lines.length<2)return[];
-  const headers=splitCSVLine(lines[0]);
-  return lines.slice(1).map(line=>{
-    const vals=splitCSVLine(line);
+  // RFC 4180 compliant: handles embedded newlines, escaped quotes ("")
+  const rows=[];let row=[];let cell='';let inQ=false;let i=0;
+  while(i<text.length){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'&&text[i+1]==='"'){cell+='"';i+=2;continue;}
+      if(c==='"'){inQ=false;i++;continue;}
+      cell+=c;i++;
+    }else{
+      if(c==='"'&&cell===''){inQ=true;i++;continue;}
+      if(c===','){row.push(cell.trim());cell='';i++;continue;}
+      if(c==='\r'&&text[i+1]==='\n'){row.push(cell.trim());if(row.some(v=>v))rows.push(row);row=[];cell='';i+=2;continue;}
+      if(c==='\n'||c==='\r'){row.push(cell.trim());if(row.some(v=>v))rows.push(row);row=[];cell='';i++;continue;}
+      cell+=c;i++;
+    }
+  }
+  row.push(cell.trim());if(row.some(v=>v))rows.push(row);
+  if(rows.length<2)return[];
+  const headers=rows[0];
+  return rows.slice(1).map(r=>{
     const obj={};
-    headers.forEach((h,i)=>{obj[h.trim()]=vals[i]?.trim()||'';});
+    headers.forEach((h,j)=>{obj[h]=r[j]||'';});
     return obj;
   }).filter(obj=>Object.values(obj).some(v=>v));
-}
-function splitCSVLine(line){
-  const result=[];let current='';let inQuotes=false;
-  for(let i=0;i<line.length;i++){
-    const c=line[i];
-    if(c==='"'){inQuotes=!inQuotes;}
-    else if(c===','&&!inQuotes){result.push(current);current='';}
-    else{current+=c;}
-  }
-  result.push(current);
-  return result;
 }
 
 function parseXLSX(data){
   if(!window.XLSX){showSuccess('Excel parser is loading. Try again in a moment.');return[];}
   const wb=XLSX.read(data,{type:'array'});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  const json=XLSX.utils.sheet_to_json(ws,{defval:''});
-  return json;
+  if(!_smartImportMode||wb.SheetNames.length===1){
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws,{defval:''});
+  }
+  // Smart mode: each sheet is a section
+  return wb.SheetNames.map((name,i)=>{
+    const ws=wb.Sheets[name];
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    return{title:name,slideNum:i+1,rows,bodyTexts:[],source:'Sheet: '+name};
+  }).filter(s=>s.rows.length>0);
 }
 
 async function parseDOCX(data){
   if(!window.mammoth){showSuccess('Document parser is loading. Try again in a moment.');return[];}
   const result=await mammoth.convertToHtml({arrayBuffer:data});
   const html=result.value;
-  // Extract tables from HTML
   const div=document.createElement('div');
   div.innerHTML=html;
+  if(!_smartImportMode) return _parseDOCXFlat(div);
+  // Smart mode: extract sections by heading
+  const sections=[];
+  let currentTitle='';let currentBody=[];let secIdx=0;
+  function flushSection(){
+    if(!currentBody.length&&!currentTitle)return;
+    // Check for tables in the accumulated body nodes
+    const wrap=document.createElement('div');
+    currentBody.forEach(n=>wrap.appendChild(n.cloneNode(true)));
+    const tables=wrap.querySelectorAll('table');
+    let rows=[];
+    if(tables.length){
+      tables.forEach(tbl=>{
+        const thRow=tbl.querySelector('tr');if(!thRow)return;
+        const headers=Array.from(thRow.querySelectorAll('th,td')).map(c=>c.textContent.trim());
+        tbl.querySelectorAll('tr').forEach((tr,i)=>{
+          if(i===0)return;
+          const cells=Array.from(tr.querySelectorAll('td')).map(c=>c.textContent.trim());
+          const obj={};
+          headers.forEach((h,j)=>{obj[h]=cells[j]||'';});
+          if(Object.values(obj).some(v=>v))rows.push(obj);
+        });
+      });
+    }
+    // Also extract text lines for text-based parsing
+    const bodyTexts=[];
+    wrap.querySelectorAll('p,li').forEach(el=>{
+      if(el.closest('table'))return;
+      const t=el.textContent.trim();if(t)bodyTexts.push(t);
+    });
+    if(!rows.length&&bodyTexts.length)rows=_parseSlideText(bodyTexts);
+    if(rows.length||bodyTexts.length){
+      secIdx++;
+      sections.push({title:currentTitle,slideNum:secIdx,rows,bodyTexts,source:'Section '+(secIdx)});
+    }
+    currentTitle='';currentBody=[];
+  }
+  // Walk child nodes, split on headings (also detect bold numbered paragraphs
+  // common in OCM documents that don't use Word heading styles)
+  Array.from(div.children).forEach(node=>{
+    const isHeading=/^H[1-4]$/i.test(node.tagName);
+    const isBoldNumbered=node.tagName==='P'&&node.querySelector('strong')&&
+      /^\d+\.\s/.test(node.textContent.trim())&&
+      node.textContent.trim()===node.querySelector('strong')?.textContent.trim();
+    if(isHeading||isBoldNumbered){
+      flushSection();
+      currentTitle=node.textContent.trim().replace(/^\d+\.\s*/,'');
+    }else{
+      currentBody.push(node);
+    }
+  });
+  flushSection();
+  if(sections.length)return sections;
+  // Fallback: if no headings found, treat whole doc as one section
+  return _parseDOCXFlat(div);
+}
+function _parseDOCXFlat(div){
   const tables=div.querySelectorAll('table');
   if(tables.length){
-    // Use first table found
-    const tbl=tables[0];
-    const thRow=tbl.querySelector('tr');
-    if(!thRow)return[];
+    const tbl=tables[0];const thRow=tbl.querySelector('tr');if(!thRow)return[];
     const headers=Array.from(thRow.querySelectorAll('th,td')).map(c=>c.textContent.trim());
     const rows=[];
     tbl.querySelectorAll('tr').forEach((tr,i)=>{
-      if(i===0)return;// skip header
+      if(i===0)return;
       const cells=Array.from(tr.querySelectorAll('td')).map(c=>c.textContent.trim());
-      const obj={};
-      headers.forEach((h,j)=>{obj[h]=cells[j]||'';});
+      const obj={};headers.forEach((h,j)=>{obj[h]=cells[j]||'';});
       if(Object.values(obj).some(v=>v))rows.push(obj);
     });
     return rows;
   }
-  // Fallback: try to parse structured text (bullet lists, etc.)
   const textLines=div.textContent.split(/\n/).filter(l=>l.trim());
   return parseTXT(textLines.join('\n'));
 }
@@ -3695,32 +4532,203 @@ async function parsePDF(data){
 async function parsePPTX(data){
   if(!window.JSZip){showSuccess('Presentation parser is loading. Try again in a moment.');return[];}
   const zip=await JSZip.loadAsync(data);
-  let allText='';
-  // Extract text from each slide
-  const slideFiles=Object.keys(zip.files).filter(f=>f.match(/^ppt\/slides\/slide\d+\.xml$/)).sort();
-  for(const sf of slideFiles){
+  const slideFiles=Object.keys(zip.files).filter(f=>f.match(/^ppt\/slides\/slide\d+\.xml$/)).sort((a,b)=>parseInt(a.match(/slide(\d+)/)[1])-parseInt(b.match(/slide(\d+)/)[1]));
+  // If not in smart mode, use legacy flat parsing
+  if(!_smartImportMode) return _parsePPTXFlat(zip,slideFiles);
+  // Smart mode: extract slide-by-slide sections
+  const sections=[];
+  for(let si=0;si<slideFiles.length;si++){
+    const sf=slideFiles[si];
     const xml=await zip.files[sf].async('text');
-    // Parse XML to extract text from <a:t> tags
     const parser=new DOMParser();
     const doc=parser.parseFromString(xml,'application/xml');
-    const textNodes=doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','t');
+    const ns='http://schemas.openxmlformats.org/drawingml/2006/main';
+    // Get slide title from title placeholder or first large text
+    let title='';
+    const spNodes=doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/presentationml/2006/main','sp');
+    for(const sp of Array.from(spNodes)){
+      const nvPr=sp.getElementsByTagNameNS('http://schemas.openxmlformats.org/presentationml/2006/main','nvSpPr')[0];
+      const ph=nvPr?.getElementsByTagNameNS('http://schemas.openxmlformats.org/presentationml/2006/main','ph')[0];
+      const phType=ph?.getAttribute('type')||'';
+      if(phType==='title'||phType==='ctrTitle'){
+        const tNodes=sp.getElementsByTagNameNS(ns,'t');
+        title=Array.from(tNodes).map(t=>t.textContent.trim()).join(' ');
+        break;
+      }
+    }
+    // If no title placeholder found, use first text block
+    if(!title){
+      const allT=doc.getElementsByTagNameNS(ns,'t');
+      if(allT.length)title=allT[0].textContent.trim();
+    }
+    // Extract tables
+    const tblNodes=doc.getElementsByTagNameNS(ns,'tbl');
+    let rows=[];
+    const singleRowTexts=[];
+    if(tblNodes.length){
+      Array.from(tblNodes).forEach(tbl=>{
+        const trNodes=tbl.getElementsByTagNameNS(ns,'tr');
+        const tblRows=[];
+        Array.from(trNodes).forEach(tr=>{
+          // Get cell text — each cell may have multiple <a:t> nodes
+          const tcNodes=tr.getElementsByTagNameNS(ns,'tc');
+          const cellTexts=Array.from(tcNodes).map(tc=>{
+            const tNodes=tc.getElementsByTagNameNS(ns,'t');
+            return Array.from(tNodes).map(t=>t.textContent.trim()).join(' ');
+          });
+          tblRows.push(cellTexts);
+        });
+        if(tblRows.length>=2){
+          const headers=tblRows[0];
+          tblRows.slice(1).forEach(r=>{
+            const obj={};
+            headers.forEach((h,i)=>{obj[h]=r[i]||'';});
+            if(Object.values(obj).some(v=>v))rows.push(obj);
+          });
+        }else if(tblRows.length===1){
+          // Single-row table (e.g. KPI metrics) — capture as body text
+          const line=tblRows[0].filter(c=>c.trim()).join(' — ');
+          if(line.trim())singleRowTexts.push(line.trim());
+        }
+      });
+    }
+    // Extract body text from ALL shapes (sp, graphicFrame, etc.)
+    let bodyTexts=[];
+    const pNS='http://schemas.openxmlformats.org/presentationml/2006/main';
+    // Collect shapes to exclude: titles, footers, slide numbers, dates
+    const skipShapes=new Set();
+    const skipTypes=new Set(['title','ctrTitle','ftr','sldNum','dt','hdr']);
+    for(const sp of Array.from(spNodes)){
+      const nvPr=sp.getElementsByTagNameNS(pNS,'nvSpPr')[0];
+      const ph=nvPr?.getElementsByTagNameNS(pNS,'ph')[0];
+      const phType=ph?.getAttribute('type')||'';
+      if(skipTypes.has(phType))skipShapes.add(sp);
+    }
+    // Get all shapes including sp and any other containers
+    const allShapes=[...Array.from(spNodes),...Array.from(doc.getElementsByTagNameNS(pNS,'graphicFrame')||[])];
+    for(const shape of allShapes){
+      if(skipShapes.has(shape))continue;
+      // Skip if contains a table
+      if(shape.getElementsByTagNameNS(ns,'tbl').length)continue;
+      const pNodes=shape.getElementsByTagNameNS(ns,'p');
+      Array.from(pNodes).forEach(p=>{
+        const line=Array.from(p.getElementsByTagNameNS(ns,'t')).map(t=>t.textContent.trim()).join(' ');
+        if(line.trim())bodyTexts.push(line.trim());
+      });
+    }
+    // Fallback: if no body text from shapes, grab all non-title text from the slide
+    if(!bodyTexts.length&&!rows.length){
+      const allParagraphs=doc.getElementsByTagNameNS(ns,'p');
+      const titleText=title.toLowerCase();
+      Array.from(allParagraphs).forEach(p=>{
+        // Skip paragraphs inside tables
+        if(p.closest&&p.closest('tbl'))return;
+        let parent=p.parentNode;
+        while(parent){if(parent.localName==='tbl')return;parent=parent.parentNode;}
+        const line=Array.from(p.getElementsByTagNameNS(ns,'t')).map(t=>t.textContent.trim()).join(' ');
+        if(line.trim()&&line.trim().toLowerCase()!==titleText)bodyTexts.push(line.trim());
+      });
+    }
+    // Merge single-row table text into body texts
+    if(singleRowTexts.length)bodyTexts.push(...singleRowTexts);
+    // Filter noise from body text
+    bodyTexts=_filterSlideNoise(bodyTexts,title);
+    // If no table rows, try parsing body text as structured data
+    if(!rows.length&&bodyTexts.length){
+      rows=_parseSlideText(bodyTexts);
+    }
+    if(rows.length||bodyTexts.length){
+      sections.push({title,slideNum:si+1,rows,bodyTexts,source:'Slide '+(si+1)});
+    }
+  }
+  // Return sections for smart classification
+  return sections;
+}
+// Filter common PPTX noise: footers, page numbers, confidentiality notices, dates
+function _filterSlideNoise(lines,title){
+  const noisePatterns=[
+    /^\|?\s*\d+\s*\|?$/,                    // page numbers like "| 41" or "3"
+    /^page\s+\d+/i,                          // "Page 3"
+    /confidential/i,                         // confidentiality notices
+    /for internal use only/i,
+    /privileged/i,
+    /do not distribute/i,
+    /proprietary/i,
+    /all rights reserved/i,
+    /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/,  // dates like 01/15/2026
+    /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2},?\s+\d{4}$/i, // "Jun 01, 2026"
+    /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+    /^\d+$/,                                 // bare numbers
+    /^dc\s+government/i,                     // government headers
+    /^(draft|final|version)\s*\d*/i,         // document status labels
+    /^©/,                                    // copyright
+  ];
+  const titleLower=(title||'').toLowerCase();
+  return lines.filter(line=>{
+    const t=line.trim();
+    if(t.length<3)return false;               // too short to be meaningful
+    if(t.toLowerCase()===titleLower)return false; // duplicate of title
+    return!noisePatterns.some(p=>p.test(t));
+  });
+}
+
+// Parse slide body text into structured rows
+function _parseSlideText(lines){
+  const rows=[];
+  // Try key:value pairs (bullet points like "Name: John Smith")
+  let current={};let kvCount=0;
+  lines.forEach(line=>{
+    const kv=line.match(/^[\s•\-*►▪◦‣→]*(.+?):\s*(.+)/);
+    if(kv){
+      current[kv[1].trim()]=kv[2].trim();kvCount++;
+    }else if(Object.keys(current).length>0){
+      rows.push(current);current={};
+    }
+  });
+  if(Object.keys(current).length>0)rows.push(current);
+  if(rows.length)return rows;
+  // Try comma/tab delimited
+  if(lines.length>=2){
+    const delim=lines[0].includes('\t')?'\t':lines[0].includes(',')?',':null;
+    if(delim){
+      const headers=lines[0].split(delim).map(h=>h.trim());
+      lines.slice(1).forEach(l=>{
+        const vals=l.split(delim);
+        const obj={};
+        headers.forEach((h,i)=>{obj[h]=vals[i]?.trim()||'';});
+        if(Object.values(obj).some(v=>v))rows.push(obj);
+      });
+      if(rows.length)return rows;
+    }
+  }
+  // No structured format found — return empty, let classifyDocumentSections
+  // handle the bodyTexts directly via _textLinesToEntries
+  return[];
+}
+// Legacy flat PPTX parsing for non-smart imports
+async function _parsePPTXFlat(zip,slideFiles){
+  const ns='http://schemas.openxmlformats.org/drawingml/2006/main';
+  let allText='';
+  for(const sf of slideFiles){
+    const xml=await zip.files[sf].async('text');
+    const parser=new DOMParser();
+    const doc=parser.parseFromString(xml,'application/xml');
+    const textNodes=doc.getElementsByTagNameNS(ns,'t');
     const slideTexts=[];
     Array.from(textNodes).forEach(n=>{if(n.textContent.trim())slideTexts.push(n.textContent.trim());});
     allText+=slideTexts.join('\n')+'\n';
   }
-  // Also check for tables in slides
   for(const sf of slideFiles){
     const xml=await zip.files[sf].async('text');
     const parser=new DOMParser();
     const doc=parser.parseFromString(xml,'application/xml');
-    const tblNodes=doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','tbl');
+    const tblNodes=doc.getElementsByTagNameNS(ns,'tbl');
     if(tblNodes.length){
-      // Extract table rows
       const rows=[];
       Array.from(tblNodes).forEach(tbl=>{
-        const trNodes=tbl.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','tr');
+        const trNodes=tbl.getElementsByTagNameNS(ns,'tr');
         Array.from(trNodes).forEach(tr=>{
-          const cells=tr.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','t');
+          const cells=tr.getElementsByTagNameNS(ns,'t');
           const row=Array.from(cells).map(c=>c.textContent.trim());
           rows.push(row);
         });
@@ -3735,7 +4743,6 @@ async function parsePPTX(data){
       }
     }
   }
-  // Fallback to text parsing
   return parseTXT(allText);
 }
 
@@ -3781,13 +4788,13 @@ function parseTXT(text){
 // Fuzzy column header matching
 const FIELD_ALIASES={
   // Impact fields
-  name:['name','group','stakeholder','audience','team','department','population','group name','stakeholder group','stakeholder name','topic description','topic','change/ topic description','change/topic description','change/ topic'],
+  name:['name','group','stakeholder','audience','team','department','population','group name','stakeholder group','stakeholder name','topic description','topic','change/ topic description','change/topic description','change/ topic','ocm activities','ocm activity'],
   level:['level','impact','impact level','severity','priority','impact rating'],
-  currentState:['current','current state','as-is','as is','current process','from','business need'],
-  futureState:['future','future state','to-be','to be','target state','to','desired state','users impact'],
+  currentState:['current','current state','as-is','as is','current process','from','users impact','user impact','impact on users','impact to users'],
+  futureState:['future','future state','to-be','to be','target state','to','desired state','system impact','impact on system','system change','system changes'],
   changeTypes:['change type','change types','type','types','impact type','impact area','area'],
   // Gap fields
-  description:['description','gap','gap description','issue','finding','detail','details','gap detail','identified gaps','identified gap'],
+  description:['description','gap','gap description','issue','finding','detail','details','gap detail','identified gaps','identified gap','objective'],
   severity:['severity','priority','level','risk','rating','criticality','risk level'],
   trainingImpact:['training','training impact','impact','adoption impact','recommendation','mitigation','remediation','system impact'],
   status:['status','state','progress','resolution'],
@@ -3795,41 +4802,104 @@ const FIELD_ALIASES={
   role:['role','title','position','job title','function','interests'],
   influence:['influence','power','authority'],
   sentiment:['sentiment','attitude','disposition','readiness'],
-  needs:['needs','expectations','requirements']
+  needs:['needs','expectations','requirements'],
+  agency:['agency','organization','org','department','dept','division'],
+  stakeholderType:['stakeholder type','type','category','classification'],
+  roleCategory:['role category','role type','job category','job family'],
+  // CRAID fields
+  mitigation:['mitigation','mitigation strategy','mitigation plan','response','action','corrective action'],
+  probability:['probability','likelihood','chance'],
+  impact:['impact','business impact','impact description'],
+  // Training/Comms/Reinforcement/SuccessCriteria/Engagement fields
+  text:['text','content','activity','item','task','action item','deliverable'],
+  audience:['audience','target','target audience','recipients','who','group'],
+  method:['method','approach','measurement','how','evaluation method'],
+  channel:['channel','medium','vehicle','format'],
+  timing:['timing','when','timeline','due date','target date'],
+  date:['date','event date','activity date','schedule'],
+  owner:['owner','responsible','assigned to','lead','poc','responsible party'],
+  frequency:['frequency','cadence','interval','how often'],
+  metric:['metric','measure','kpi','indicator','success measure'],
+  target:['target','goal','threshold','benchmark','target value'],
+  outcome:['outcome','result','finding','observation']
 };
 
 function fuzzyMatch(header,fieldAliases){
   const h=header.toLowerCase().trim();
+  // Pass 1: exact match (highest priority)
   for(const[field,aliases] of Object.entries(fieldAliases)){
-    if(aliases.some(a=>h===a||h.includes(a)||a.includes(h)))return field;
+    if(aliases.some(a=>h===a))return field;
+  }
+  // Pass 2: word-boundary match
+  for(const[field,aliases] of Object.entries(fieldAliases)){
+    for(const a of aliases){
+      const re=new RegExp('\\b'+a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b');
+      if(re.test(h))return field;
+    }
   }
   return null;
 }
 
+// Target-scoped alias sets: prioritize the right fields per target
+const TARGET_FIELDS={
+  impact:['name','level','currentState','futureState','changeTypes'],
+  gaps:['name','description','severity','trainingImpact','status'],
+  stakeholders:['name','role','influence','sentiment','needs','agency','stakeholderType','roleCategory'],
+  craid:['name','description','severity','status','type','owner','mitigation','probability','impact'],
+  training:['name','description','audience','method','schedule'],
+  comms:['name','description','audience','channel','timing','owner'],
+  reinforcement:['name','description','owner','timing','frequency'],
+  successcriteria:['name','description','metric','target','method'],
+  engagement:['name','description','date','type','outcome','audience']
+};
+
 function mapImportRows(rows,target){
   if(!rows.length)return[];
-  // Get headers from first row
   const headers=Object.keys(rows[0]);
   const fieldMap={};
+  const targetFields=TARGET_FIELDS[target]||[];
+  // Build target-scoped aliases: only include fields relevant to this target
+  const scopedAliases={};
+  targetFields.forEach(f=>{if(FIELD_ALIASES[f])scopedAliases[f]=FIELD_ALIASES[f];});
+  // Pass 1: match headers against target-scoped aliases first
   headers.forEach(h=>{
+    const match=fuzzyMatch(h,scopedAliases);
+    if(match)fieldMap[h]=match;
+  });
+  // Pass 2: remaining unmatched headers against full aliases (for cross-target columns)
+  headers.forEach(h=>{
+    if(fieldMap[h])return;
     const match=fuzzyMatch(h,FIELD_ALIASES);
     if(match)fieldMap[h]=match;
   });
   // If no name column found, try first column
   const hasName=Object.values(fieldMap).includes('name');
   if(!hasName&&headers.length>0)fieldMap[headers[0]]='name';
+  // For gaps: if no description but has name, copy name to description
+  if(target==='gaps'&&!Object.values(fieldMap).includes('description')){
+    const nameHeader=Object.entries(fieldMap).find(([_,f])=>f==='name');
+    if(nameHeader)fieldMap[nameHeader[0]]='description';
+  }
 
+  // Deduplicate: if multiple headers map to same field, keep the first (target-scoped) match
+  const usedFields=new Set();
+  const finalMap={};
+  Object.entries(fieldMap).forEach(([header,field])=>{
+    if(!usedFields.has(field)){
+      finalMap[header]=field;
+      usedFields.add(field);
+    }
+  });
   return rows.map((row,idx)=>{
     const mapped={_selected:true,_idx:idx};
-    Object.entries(fieldMap).forEach(([header,field])=>{
+    Object.entries(finalMap).forEach(([header,field])=>{
       mapped[field]=row[header]||'';
     });
-    // Also preserve unmapped columns for display
     headers.forEach(h=>{
-      if(!fieldMap[h])mapped['_raw_'+h]=row[h]||'';
+      if(!finalMap[h])mapped['_raw_'+h]=row[h]||'';
     });
     return mapped;
-  }).filter(m=>m.name);
+  }).filter(m=>m.name||m.description||m.text);
 }
 
 function renderImportPreview(container,items,target){
@@ -3858,8 +4928,14 @@ function renderImportPreview(container,items,target){
 function getPreviewColumns(target){
   if(target==='impact')return[{key:'name',label:'Group Name'},{key:'level',label:'Impact Level'},{key:'currentState',label:'Current State'},{key:'futureState',label:'Future State'}];
   if(target==='gaps')return[{key:'description',label:'Description'},{key:'severity',label:'Severity'},{key:'trainingImpact',label:'Training Impact'},{key:'status',label:'Status'}];
-  if(target==='stakeholders')return[{key:'name',label:'Group Name'},{key:'role',label:'Role'},{key:'influence',label:'Influence'},{key:'sentiment',label:'Sentiment'}];
-  return[{key:'name',label:'Name'}];
+  if(target==='stakeholders')return[{key:'name',label:'Group Name'},{key:'agency',label:'Agency'},{key:'role',label:'Role'},{key:'influence',label:'Influence'},{key:'sentiment',label:'Sentiment'}];
+  if(target==='craid')return[{key:'text',label:'Description'},{key:'name',label:'Title'},{key:'type',label:'Type'},{key:'severity',label:'Severity'},{key:'status',label:'Status'}];
+  if(target==='training')return[{key:'text',label:'Training Activity'},{key:'name',label:'Title'},{key:'description',label:'Details'},{key:'audience',label:'Audience'}];
+  if(target==='comms')return[{key:'text',label:'Communication'},{key:'name',label:'Title'},{key:'description',label:'Details'},{key:'audience',label:'Audience'}];
+  if(target==='reinforcement')return[{key:'text',label:'Activity'},{key:'name',label:'Title'},{key:'description',label:'Details'},{key:'owner',label:'Owner'}];
+  if(target==='successcriteria')return[{key:'text',label:'Criterion'},{key:'name',label:'Title'},{key:'description',label:'Details'},{key:'metric',label:'Metric'}];
+  if(target==='engagement')return[{key:'text',label:'Activity'},{key:'name',label:'Title'},{key:'description',label:'Details'},{key:'date',label:'Date'}];
+  return[{key:'name',label:'Name'},{key:'text',label:'Content'}];
 }
 
 function toggleImportRow(idx,checked){if(_importParsed[idx])_importParsed[idx]._selected=checked;}
@@ -3906,10 +4982,15 @@ function commitImport(){
       p.stakeholders.push({
         id:uid(),
         name:item.name||'Imported Group',
+        agency:item.agency||'',
+        stakeholderType:item.stakeholderType||'end_user_group',
+        roleCategory:item.roleCategory||'',
         factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},
         objectives:[],
         kirk:{L1:{},L2:{},L3:{},L4:{}},
-        rein:{owner:'',activities:'',intervals:[],escalation:''}
+        rein:{owner:'',activities:'',intervals:[],escalation:''},
+        trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
+        anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}
       });
     });
     renderPSH();renderPKPIs();
@@ -3946,16 +5027,16 @@ function bulkClear(target){
 function normalizeLevel(val){
   if(!val)return'Medium';
   const v=val.toLowerCase().trim();
-  if(v.includes('high')||v.includes('3')||v.includes('major'))return'High';
-  if(v.includes('low')||v.includes('1')||v.includes('minor'))return'Low';
+  if(/\bhigh\b/.test(v)||v==='3'||/\bmajor\b/.test(v))return'High';
+  if(/\blow\b/.test(v)||v==='1'||/\bminor\b/.test(v))return'Low';
   return'Medium';
 }
 function normalizeSeverity(val){
   if(!val)return'Medium';
   const v=val.toLowerCase().trim();
-  if(v.includes('critical')||v.includes('4')||v.includes('blocker'))return'Critical';
-  if(v.includes('high')||v.includes('3')||v.includes('major'))return'High';
-  if(v.includes('low')||v.includes('1')||v.includes('minor'))return'Low';
+  if(/\bcritical\b/.test(v)||v==='4'||/\bblocker\b/.test(v))return'Critical';
+  if(/\bhigh\b/.test(v)||v==='3'||/\bmajor\b/.test(v))return'High';
+  if(/\blow\b/.test(v)||v==='1'||/\bminor\b/.test(v))return'Low';
   return'Medium';
 }
 
@@ -4120,7 +5201,7 @@ function renderVCCriteria(vc,postGL){
 }
 function updateVC(field,val){const p=getProj();if(!p)return;if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};p.valueCase[field]=val;if(field==='impactLevel')renderValueCase(p);touch('proj');schedSave();}
 function addVCCriterion(){const p=getProj();if(!p)return;if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};p.valueCase.successCriteria.push({id:uid(),criterion:'',metStatus:null,actualOutcome:'',notes:''});renderValueCase(p);touch('proj');schedSave();}
-function removeVCCriterion(i){const p=getProj();if(!p||!p.valueCase)return;p.valueCase.successCriteria.splice(i,1);renderValueCase(p);touch('proj');schedSave();}
+function removeVCCriterion(i){const p=getProj();if(!p||!p.valueCase)return;if(!confirm('Remove this success criterion?'))return;p.valueCase.successCriteria.splice(i,1);renderValueCase(p);touch('proj');schedSave();}
 function updateVCCriterion(i,field,val){const p=getProj();if(!p||!p.valueCase)return;if(p.valueCase.successCriteria[i])p.valueCase.successCriteria[i][field]=val;renderValueCase(p);touch('proj');schedSave();}
 
 // ════════════════════════════════════════════════════════
@@ -4190,7 +5271,7 @@ function saveProofPoint(){
   document.getElementById('add-pp-modal')?.remove();
   renderProofPoints(p);touch('proj');schedSave();showSuccess('Evidence attached.');
 }
-function removeProofPoint(i){const p=getProj();if(!p||!p.proofPoints)return;p.proofPoints.splice(i,1);renderProofPoints(p);touch('proj');schedSave();}
+function removeProofPoint(i){const p=getProj();if(!p||!p.proofPoints)return;if(!confirm('Remove this proof point?'))return;p.proofPoints.splice(i,1);renderProofPoints(p);touch('proj');schedSave();}
 
 // ════════════════════════════════════════════════════════
 // LIFECYCLE SIGNALS TAB
@@ -4722,7 +5803,7 @@ function generateWhatDataTells(){
   if(!insights.length)insights.push({severity:'good',icon:'—',text:'No critical signals detected across the portfolio. Continue monitoring as projects approach key milestones.',source:'Portfolio Analytics',link:null});
   return insights.slice(0,8);
 }
-let _wdtCollapsed=false;
+let _wdtCollapsed=true;
 function renderWhatDataTells(){
   const el=document.getElementById('what-data-tells');if(!el)return;
   if(sessionStorage.getItem('wdt_dismissed')==='1'){el.innerHTML='';return;}
@@ -5199,6 +6280,8 @@ function addImpactGroup(){
 }
 function removeImpactGroup(gi){
   const p=getProj();if(!p)return;
+  const g=p.impactAssessment.groups[gi];const label=g?g.name:'this group';
+  if(!confirm('Remove impact group "'+label+'"? This will delete the group and all its readiness actions.'))return;
   p.impactAssessment.groups.splice(gi,1);touch('proj');schedSave();renderPImpact();
 }
 function syncImpactField(gi,field,val){
@@ -5229,6 +6312,7 @@ function syncImpactAction(gi,ai,val){
 }
 function removeImpactAction(gi,ai){
   const p=getProj();if(!p)return;
+  if(!confirm('Remove this readiness action?'))return;
   p.impactAssessment.groups[gi].actions.splice(ai,1);touch('proj');schedSave();renderPImpact();
 }
 
@@ -5255,6 +6339,8 @@ function updateGap(gapId,field,value){
 }
 function removeGap(gapId){
   const p=getProj();if(!p||!p.gapAnalysis)return;
+  const gap=p.gapAnalysis.gaps.find(g=>g.id===gapId);const label=gap?(gap.description||'').substring(0,60):'this gap';
+  if(!confirm('Remove gap "'+label+'"?'))return;
   p.gapAnalysis.gaps=p.gapAnalysis.gaps.filter(g=>g.id!==gapId);
   touch('proj');schedSave();renderPGaps();
 }
@@ -5346,6 +6432,8 @@ function removeCraidEntry(entryId){
   const idx=(p.craid||[]).findIndex(e=>e.id===entryId);
   if(idx<0)return;
   const entry=p.craid[idx];
+  const label=(entry.title||entry.description||'').substring(0,60);
+  if(!confirm('Remove CRAID entry "'+label+'"?'))return;
   p.craid.splice(idx,1);
   touch('proj');schedSave();renderPCraid();
   logAudit('craid_removed',entry.type,p.name,{title:entry.title});

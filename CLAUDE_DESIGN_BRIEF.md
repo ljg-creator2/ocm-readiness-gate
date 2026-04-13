@@ -576,9 +576,9 @@ All charts must have `aria-label` or `<figcaption>`:
 Use this single prompt to apply everything at once:
 
 ```
-@CLAUDE_DESIGN_BRIEF.md @css/design-tokens.css @css/adoptiq.css @index.html @js/adoptiq.js
+@CLAUDE_DESIGN_BRIEF.md @css/design-tokens.css @css/adoptiq.css @index.html @js/adoptiq.js @js/readiness-radar.js @MICROCOPY.md @ADKAR_GUIDED_SCORING.md @Performance_Audit.md @SEO_META_TAGS.md
 
-Read both the design brief and the design tokens file completely before making any changes.
+Read ALL reference files completely before making any changes.
 
 Apply all of the following in one pass:
 
@@ -602,8 +602,9 @@ HTML (index.html):
 - Add class="overline" to section label elements above headings
 - Add density switcher to the main toolbar
 - Add data-density="comfortable" to <body>
+- Verify all SEO meta tags from SEO_META_TAGS.md are present
 
-JavaScript (adoptiq.js):
+JavaScript (adoptiq.js + readiness-radar.js):
 - Add Chart.js global defaults (PCF_COLORS, grid, tooltip) at app init
 - Add showSuccess() toast function and wire to all save/update actions
 - Add setDensity() function with localStorage persistence
@@ -612,7 +613,24 @@ JavaScript (adoptiq.js):
 - Redesign the AIQ panel markup to use aiq-panel, aiq-messages, aiq-response, aiq-finding classes
 - Add page-enter animation class on all view transitions
 - Add stagger-children class to all card grids and release lists
+- Apply readiness-radar.js PCF color theming consistent with adoptiq.js
+
+Microcopy (MICROCOPY.md):
+- Replace all generic loading text with copy from MICROCOPY.md
+- Replace all empty state text with copy from MICROCOPY.md
+- Replace all error/validation messages with copy from MICROCOPY.md
+- Verify button labels, tooltips, and CTAs match MICROCOPY.md
+
+ADKAR Guided Scoring (ADKAR_GUIDED_SCORING.md):
+- Verify the guided scoring flow matches the spec (one dimension at a time, barrier flags, sequential logic)
+- Confirm framing copy and score anchors are implemented as specified
+- Check that the ADKAR journey horizontal flow visual is present
+
+Performance (Performance_Audit.md):
+- Defer Chart.js loading until needed
+- Add lazy loading to below-fold content
+- Verify hero image is optimized (<100KB) and served in WebP
 
 Do not change application logic, Supabase calls, or data fetching.
-After all changes, review against the "What NOT to Do" list and fix any violations.
+After all changes, review against the "What NOT to Do" list in CLAUDE_DESIGN_BRIEF.md and fix any violations.
 ```
