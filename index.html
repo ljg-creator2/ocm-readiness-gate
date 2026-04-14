@@ -935,6 +935,10 @@
           <button id="tr-no"  style="font-family:var(--font-b);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;border-left:1px solid rgba(255,255,255,0.20);transition:all .14s" onclick="setProjTR(false)">No</button>
         </div>
       </div>
+      <div class="ib-field" id="ib-train-start" style="max-width:150px">
+        <div class="ib-label">Training Start</div>
+        <input class="ib-input" id="p-train-start" type="date" aria-label="Project training start date" onchange="syncProj('trainingStartDate',this.value)">
+      </div>
       <div class="ib-field" style="max-width:150px">
         <div class="ib-label">Go-Live Date</div>
         <input class="ib-input" id="p-golive" type="date" aria-label="Project go-live date" onchange="syncProj('golive',this.value)">

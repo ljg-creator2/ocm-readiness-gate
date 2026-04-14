@@ -796,7 +796,7 @@ function newRelease(name,agencies,golive,phase){
 function newProject(name,agencies,users){
   const res={};RES_ROLES.forEach(r=>{res[r.key]=[];});
   return{id:uid(),name:name||'Untitled Project',agencies:agencies||[],estimatedUsers:users||0,
-    trainingRequired:true,status:'Not Started',golive:'',
+    trainingRequired:true,trainingStartDate:'',status:'Not Started',golive:'',
     gateState:{},depHM:{},depNotes:{},stakeholders:[],
     adkarScores:{A1:3,D:3,K:3,Ab:3,R:3},adkarNotes:{A1:'',D:'',K:'',Ab:'',R:''},
     resources:res,
@@ -940,6 +940,26 @@ function facTier(v){if(v>=4)return'low';if(v>=3)return'mod';if(v>=2)return'high'
 function kirkReady(sh){if(!sh?.kirk)return'needed';let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100)>=75?'ready':Math.round(f/8*100)>=40?'partial':'needed';}
 function reinReady(sh){if(!sh?.rein)return'needed';let f=0;if(sh.rein.owner)f++;if(sh.rein.activities)f++;if(sh.rein.intervals?.length)f++;if(sh.rein.escalation)f++;return f>=3?'ready':f>=1?'partial':'needed';}
 function badgeLabel(r){return r==='ready'?'Ready':r==='partial'?'In Progress':'Not Started';}
+// Training readiness is only meaningful once training has actually started.
+// Before the trainingStartDate is set or reached, Kirkpatrick design
+// completeness should be excluded from adoption scoring rather than dragging
+// it down as a "0% ready" signal.
+function trainingActive(p){
+  if(!p||!p.trainingRequired)return false;
+  if(!p.trainingStartDate)return false;
+  const now=new Date();now.setHours(0,0,0,0);
+  const start=new Date(p.trainingStartDate+'T00:00:00');
+  return start<=now;
+}
+// Canonical adoption-score weights used by every weighted roll-up. When
+// training is not yet active the training dimension is dropped and the
+// remaining 80% is renormalized back to 100%.
+function adoptionWeights(trActive){
+  const base={fw:0.30,sent:0.20,train:0.20,comms:0.15,risk:0.15};
+  if(trActive)return base;
+  const k=1/(1-base.train);
+  return{fw:base.fw*k,sent:base.sent*k,train:0,comms:base.comms*k,risk:base.risk*k};
+}
 
 // ════════════════════════════════════════════════════════
 // LIFECYCLE HEALTH SCORING
@@ -1221,7 +1241,12 @@ function calcCompositeScore(p){
   const gs=projGateScore(p);
   const flagCount=getProjFlagCount(p);
   const riskPct=Math.max(0,Math.min(100,gs!==null?Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)):50));
-  return Math.round(fwPct*0.25+sentPct*0.20+trainPct*0.20+lcPct*0.10+commsPct*0.10+riskPct*0.15);
+  // When training has not yet started, drop the 20% training weight and
+  // redistribute it proportionally across the other five dimensions.
+  const trActive=trainingActive(p);
+  const k=trActive?1:1/0.80;
+  const w={fw:0.25*k,sent:0.20*k,train:trActive?0.20:0,lc:0.10*k,comms:0.10*k,risk:0.15*k};
+  return Math.round(fwPct*w.fw+sentPct*w.sent+trainPct*w.train+lcPct*w.lc+commsPct*w.comms+riskPct*w.risk);
 }
 
 // ════════════════════════════════════════════════════════
@@ -1292,6 +1317,7 @@ function openProject(pid){
   document.getElementById('bc-proj').textContent=p.name||'Project';
   document.getElementById('p-name').value=p.name||'';
   document.getElementById('p-golive').value=p.golive||'';
+  const tsEl=document.getElementById('p-train-start');if(tsEl)tsEl.value=p.trainingStartDate||'';
   document.getElementById('p-users').value=p.estimatedUsers||0;
   document.getElementById('p-status').value=p.status||'Not Started';
   renderProjAgencyChips();
@@ -2050,6 +2076,8 @@ function updateTRButtons(){
   const yes=document.getElementById('tr-yes');const no=document.getElementById('tr-no');
   if(yes){yes.style.background=p.trainingRequired?'var(--green)':'transparent';yes.style.color=p.trainingRequired?'#fff':'rgba(255,255,255,0.40)';}
   if(no){no.style.background=!p.trainingRequired?'var(--red)':'transparent';no.style.color=!p.trainingRequired?'#fff':'rgba(255,255,255,0.40)';}
+  const tsField=document.getElementById('ib-train-start');
+  if(tsField)tsField.style.display=p.trainingRequired?'':'none';
 }
 function setProjTR(val){const p=getProj();if(!p)return;p.trainingRequired=val;updateTRButtons();touch('proj');schedSave();}
 function updateProjGateScoreBand(){
@@ -2975,8 +3003,12 @@ function openScoreExplainer(){
   const flagCount=getProjFlagCount(p);
   const riskPct=Math.max(0,Math.min(100, gs!==null ? Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)) : 50));
 
-  // Weighted total (new weights)
-  const totalScore=Math.round(fwPct*0.25 + sentPct*0.20 + trainPct*0.20 + lcPct*0.10 + commsPct*0.10 + riskPct*0.15);
+  // Weighted total — when training is not yet active, drop the 20% training
+  // weight and renormalize the remaining five dimensions back to 100%.
+  const trActive=trainingActive(p);
+  const k=trActive?1:1/0.80;
+  const wTot={fw:0.25*k,sent:0.20*k,train:trActive?0.20:0,lc:0.10*k,comms:0.10*k,risk:0.15*k};
+  const totalScore=Math.round(fwPct*wTot.fw + sentPct*wTot.sent + trainPct*wTot.train + lcPct*wTot.lc + commsPct*wTot.comms + riskPct*wTot.risk);
 
   // Data confidence
   const conf=calcDataConfidence(p);
@@ -2987,13 +3019,14 @@ function openScoreExplainer(){
   else if(totalScore>=65)tierKey='ontrack';
   else if(totalScore>=40)tierKey='atrisk';
 
+  const pctLabel=w=>Math.round(w*100)+'%';
   const components=[
-    {label:'Change Readiness',weight:'25%',pct:fwPct,color:'var(--navy)',dsType:getDataSourceType('framework',p)},
-    {label:'People & Trust',weight:'20%',pct:sentPct,color:'var(--gold)',dsType:getDataSourceType('sentiment',p)},
-    {label:'Training & Preparedness',weight:'20%',pct:trainPct,color:'var(--green)',dsType:getDataSourceType('training',p)},
-    {label:'Project Health',weight:'10%',pct:lcPct,color:'#6B5EA8',dsType:getDataSourceType('lifecycle',p)},
-    {label:'Communication',weight:'10%',pct:commsPct,color:'#4A6FA5',dsType:getDataSourceType('comms',p)},
-    {label:'Open Issues',weight:'15%',pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)',dsType:getDataSourceType('risk',p)}
+    {label:'Change Readiness',weight:pctLabel(wTot.fw),pct:fwPct,color:'var(--navy)',dsType:getDataSourceType('framework',p)},
+    {label:'People & Trust',weight:pctLabel(wTot.sent),pct:sentPct,color:'var(--gold)',dsType:getDataSourceType('sentiment',p)},
+    {label:'Training & Preparedness',weight:trActive?pctLabel(wTot.train):'—',pct:trActive?trainPct:null,color:'var(--green)',dsType:getDataSourceType('training',p),pending:!trActive,pendingLabel:'Training not yet started'},
+    {label:'Project Health',weight:pctLabel(wTot.lc),pct:lcPct,color:'#6B5EA8',dsType:getDataSourceType('lifecycle',p)},
+    {label:'Communication',weight:pctLabel(wTot.comms),pct:commsPct,color:'#4A6FA5',dsType:getDataSourceType('comms',p)},
+    {label:'Open Issues',weight:pctLabel(wTot.risk),pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)',dsType:getDataSourceType('risk',p)}
   ];
 
   const modal=document.createElement('div');
@@ -3021,7 +3054,11 @@ function openScoreExplainer(){
 
     <h3>Formula Breakdown</h3>
     <div class="score-composite-val">Overall Score: ${totalScore}%</div>
-    ${components.map(c=>`<div class="score-bar-row">
+    ${components.map(c=>c.pending?`<div class="score-bar-row" style="opacity:.55">
+      <div class="score-bar-label">${c.label} ${dataSourceBadge(c.dsType)}</div>
+      <div class="score-bar-track" style="background:rgba(255,255,255,0.04)"><div class="score-bar-val" style="padding:4px 8px;font-style:italic;color:var(--ink-60)">${c.pendingLabel}</div></div>
+      <div class="score-bar-weight">${c.weight}</div>
+    </div>`:`<div class="score-bar-row">
       <div class="score-bar-label">${c.label} ${dataSourceBadge(c.dsType)}</div>
       <div class="score-bar-track"><div class="score-bar-fill" style="width:${c.pct}%;background:${c.color}"><span class="score-bar-val">${c.pct}%</span></div></div>
       <div class="score-bar-weight">${c.weight}</div>
@@ -3155,9 +3192,18 @@ function collectTrajectoryData(p){
   const completedGates=gateScores.filter(g=>g.score!==null&&g.notStarted===0&&g.incomplete===0);
   const upcomingGates=gateScores.filter(g=>g.score===null||g.notStarted>0||g.incomplete>0);
 
-  // Confidence calculation
-  const dataPoints=completedGates.length + (stakeholderData.length>0?1:0) + (gaps.length>0?1:0) + (impactGroups.length>0?1:0) + (trainRate>0?1:0);
-  const confidence=dataPoints>=5?'High':dataPoints>=3?'Medium':'Low';
+  // Confidence reflects how much of the expected data has been filled in with
+  // meaningful answers — not whether arrays exist. A project with 5 empty
+  // data areas should not report High Confidence.
+  const totalGateItems=GATE_DEFS.reduce((a,g)=>a+g.items.length,0);
+  const answeredItems=GATE_DEFS.reduce((a,g)=>a+g.items.filter((_,i)=>{
+    const v=p.gateState[g.id+'_'+i];return v&&v!=='gray';
+  }).length,0);
+  const gatePct=totalGateItems?answeredItems/totalGateItems:0;
+  const shDepth=Math.min(1,stakeholderData.length/3);
+  const fwTouched=dims.length?dims.filter(d=>(p.adkarScores?.[d.key]??3)!==3).length/dims.length:0;
+  const completeness=gatePct*0.5 + shDepth*0.25 + fwTouched*0.25;
+  const confidence=completeness>=0.70?'High':completeness>=0.40?'Medium':'Low';
 
   // Overall adoption score (from explainer formula)
   const sentPct=stakeholderData.length?Math.round(stakeholderData.reduce((a,s)=>a+s.adoptionScore,0)/stakeholderData.length):0;
@@ -3175,7 +3221,9 @@ function collectTrajectoryData(p){
   const flagCount=flags.length;
   const riskPct=Math.max(0,Math.min(100,gs!==null?Math.round(gs*(flagCount===0?1:flagCount<=2?0.8:0.5)):50));
   const fwPct=Math.round(fwAvg/5*100);
-  const currentAdoptionScore=Math.round(fwPct*0.30+sentPct*0.20+trainPctCalc*0.20+commsPct*0.15+riskPct*0.15);
+  const trActive=trainingActive(p);
+  const w=adoptionWeights(trActive);
+  const currentAdoptionScore=Math.round(fwPct*w.fw+sentPct*w.sent+trainPctCalc*w.train+commsPct*w.comms+riskPct*w.risk);
 
   return{
     projectName:p.name,
@@ -3191,7 +3239,9 @@ function collectTrajectoryData(p){
     frameworkAverage:Math.round(fwAvg*100)/100,
     stakeholders:stakeholderData,
     avgStakeholderSentiment:sentPct,
-    trainingCompletionRate:trainRate,
+    trainingCompletionRate:trActive?trainRate:null,
+    trainingActive:trActive,
+    trainingStartDate:p.trainingStartDate||null,
     reinforcementRate:reinRate,
     riskFlags:flags.map(f=>({gate:f.gate,sub:f.sub,item:f.item})),
     gaps,
@@ -3806,6 +3856,18 @@ function classifyDocumentSections(sections){
       // For multi-target text, process for each target
       const textTargets=uniqueTargets.length>1?uniqueTargets:[target];
       textTargets.forEach(tgt=>{
+        // Sanity check: if routing to 'gaps' but the body is dominated by
+        // name-shaped lines, it's almost certainly a stakeholder/roster slide
+        // that matched 'gap' in the title (e.g. "Stakeholder Engagement Gaps").
+        // Demote to skipped rather than pollute the gap list.
+        if(tgt==='gaps'){
+          const nameLike=sec.bodyTexts.filter(l=>/^[A-Z][a-z]+(?:\s+[A-Z][a-z'\u2019-]+){1,2}$/.test((l||'').trim())).length;
+          const ratio=sec.bodyTexts.length?nameLike/sec.bodyTexts.length:0;
+          if(ratio>0.4){
+            result.skipped.push({title:sec.title,source:sec.source,rowCount:sec.bodyTexts.length,reason:'ambiguous (name-dominant body)'});
+            return;
+          }
+        }
         const entries=_textLinesToEntries(sec.bodyTexts,tgt);
         if(entries.length){
           result[tgt].push(...entries.map(r=>Object.assign(r,{_selected:true,_source:sec.source,_title:sec.title})));
@@ -3817,12 +3879,38 @@ function classifyDocumentSections(sections){
   _assignAgenciesFromHeaders(result.stakeholders);
   // Post-process: filter noise entries (dates, bare numbers, etc.) from all targets
   _filterNoiseEntries(result);
-  // Deduplicate entries within each target (same name/description)
+  // Deduplicate entries within each target (same name/description).
+  // Key selection is target-specific: for gaps/craid the meaningful content lives
+  // in `description`/`text`, not `name` (which is a short topic label from table
+  // rows like "Notices"). Using `name` first would let three rows with the same
+  // long description but different short labels all survive.
+  // Normalize aggressively: lowercase, collapse whitespace, strip leading/trailing
+  // punctuation so "Work and Work activity: X" and "Work and Work activity: X " match.
+  const keyFieldOrder={
+    gaps:['description','text','name'],
+    craid:['description','text','name'],
+    impact:['name','description','text'],
+    stakeholders:['name','description','text'],
+    training:['text','name','description'],
+    comms:['text','name','description'],
+    reinforcement:['text','name','description'],
+    successcriteria:['text','name','description'],
+    engagement:['text','name','description']
+  };
+  function normalizeKey(s){
+    return(s||'')
+      .toLowerCase()
+      .replace(/\s+/g,' ')
+      .replace(/^[\s\W_]+|[\s\W_]+$/g,'')
+      .trim();
+  }
   IMPORT_TARGETS.forEach(t=>{
     const seen=new Set();
+    const order=keyFieldOrder[t]||['name','description','text'];
     result[t]=result[t].filter(r=>{
-      const key=(r.name||r.description||r.text||'').toLowerCase().trim();
-      if(!key||seen.has(key))return false;
+      let key='';
+      for(const f of order){if(r[f]){key=normalizeKey(r[f]);if(key)break;}}
+      if(!key||key.length<4||seen.has(key))return false;
       seen.add(key);return true;
     });
   });
@@ -3889,10 +3977,24 @@ function _filterNoiseEntries(result){
   ];
   function isNoise(val){return noiseRe.some(re=>re.test(val.trim()));}
   function isLabel(val){return labelPatterns.some(re=>re.test(val.trim()));}
-  // Check if a value looks like a person's name (Title. First Last pattern)
+  // Check if a value looks like a person's name
   function isPersonName(val){
     const v=val.trim();
-    return/^(mr|mrs|ms|dr|miss|prof)\.?\s+\w+/i.test(v)&&v.split(/\s+/).length<=4;
+    // Title + name: "Mr. Smith", "Dr. Jane Doe"
+    if(/^(mr|mrs|ms|dr|miss|prof)\.?\s+\w+/i.test(v)&&v.split(/\s+/).length<=4)return true;
+    // Bare First Last or First Middle Last — 2–3 capitalized words, no trailing punctuation
+    if(/^[A-Z][a-z]+(?:\s+[A-Z][a-z'\u2019-]+){1,2}$/.test(v))return true;
+    return false;
+  }
+  // Check if a value is a label/heading stub rather than a gap description.
+  // Real gap descriptions should have predicate structure (multiple words or
+  // a colon/em-dash separator). Bare acronyms and single words are headings.
+  function looksLikeLabelNotGap(val){
+    const v=val.trim();
+    if(/^[A-Z]{2,8}$/.test(v))return true;              // bare acronym
+    if(v.length<4)return true;                          // too short to be a gap
+    if(v.split(/\s+/).length<3&&!/[:\u2013\u2014\u2015\-]/.test(v))return true;
+    return false;
   }
   // Impact: filter noise and entries with no meaningful content fields
   result.impact=result.impact.filter(r=>{
@@ -3901,12 +4003,13 @@ function _filterNoiseEntries(result){
     if(isNoise(name)||isLabel(name))return false;
     return true;
   });
-  // Gaps: filter noise and entries that are clearly person names, not gap descriptions
+  // Gaps: filter noise, person names, and heading stubs
   result.gaps=result.gaps.filter(r=>{
     const desc=(r.description||r.name||'').trim();
     if(!desc)return false;
     if(isNoise(desc)||isLabel(desc))return false;
     if(isPersonName(desc))return false;
+    if(looksLikeLabelNotGap(desc))return false;
     return true;
   });
   // Stakeholders: filter noise, generic labels, section sub-headers, and scope descriptions
@@ -4246,16 +4349,22 @@ function commitMultiSectionImport(){
   }
 
   // ── Success Criteria → Value Case ──
-  const scItems=sel('successcriteria');
+  // Cap to 3 — the Value Case section is meant to track a small set of
+  // meaningful outcomes, not every bullet point in the source document.
+  const scItems=sel('successcriteria').slice(0,3);
   if(scItems.length){
     if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};
     if(mergeMode==='replace')p.valueCase.successCriteria=[];
     scItems.forEach(item=>{
       p.valueCase.successCriteria.push({
-        metric:item.name||item.text||item.description||'',
-        target:item.target||'',method:item.method||''
+        id:uid(),
+        criterion:item.name||item.text||item.description||'',
+        metStatus:null,
+        actualOutcome:'',
+        notes:''
       });
     });
+    p.valueCase._scSeeded=true;
     totalImported+=scItems.length;breakdown.push(scItems.length+' success criteria');
   }
 
@@ -4491,6 +4600,10 @@ function _parseDOCXFlat(div){
 async function parsePDF(data){
   if(!window.pdfjsLib){showSuccess('PDF parser is loading. Try again in a moment.');return[];}
   const pdf=await pdfjsLib.getDocument({data}).promise;
+  // Smart mode: extract by headings (using font size) → sections
+  if(_smartImportMode){
+    return _parsePDFSections(pdf);
+  }
   // For complex PDFs (multi-page tables, change plans), browser-based extraction
   // struggles with table detection. Extract text and try structured parsing.
   let fullText='';
@@ -4527,6 +4640,87 @@ async function parsePDF(data){
     return[];
   }
   return rows;
+}
+
+// Smart-mode PDF: extract sections by detecting headings via font-size.
+// Groups text items into lines, determines the body-text font size,
+// and treats anything notably larger as a section heading. Lines between
+// headings become bodyTexts for that section.
+async function _parsePDFSections(pdf){
+  // Collect lines from every page with their font size.
+  const allLines=[];  // {text, size, page}
+  for(let pi=1;pi<=pdf.numPages;pi++){
+    const page=await pdf.getPage(pi);
+    const content=await page.getTextContent();
+    const vp=page.getViewport({scale:1});
+    // Each item: position + font height (transform[3] is Y scale ≈ font size)
+    const items=content.items.filter(it=>it.str.trim()).map(it=>({
+      text:it.str,
+      x:Math.round(it.transform[4]),
+      y:Math.round(vp.height-it.transform[5]),
+      size:Math.round(Math.abs(it.transform[3]||it.transform[0]||10))
+    })).sort((a,b)=>a.y-b.y||a.x-b.x);
+    // Group items into visual lines by Y-position proximity
+    let lastY=null;let lineText='';let lineMaxSize=0;
+    items.forEach(it=>{
+      if(lastY!==null&&Math.abs(it.y-lastY)>5){
+        if(lineText.trim())allLines.push({text:lineText.trim(),size:lineMaxSize,page:pi});
+        lineText='';lineMaxSize=0;
+      }
+      lineText+=(lineText?' ':'')+it.text;
+      if(it.size>lineMaxSize)lineMaxSize=it.size;
+      lastY=it.y;
+    });
+    if(lineText.trim())allLines.push({text:lineText.trim(),size:lineMaxSize,page:pi});
+  }
+  if(!allLines.length)return[];
+  // Determine body-text size: the most common font size across all lines.
+  const sizeCount={};
+  allLines.forEach(l=>{sizeCount[l.size]=(sizeCount[l.size]||0)+1;});
+  let bodySize=0,bodyCount=0;
+  Object.entries(sizeCount).forEach(([s,c])=>{if(c>bodyCount){bodySize=+s;bodyCount=c;}});
+  // Heading threshold: 20% larger than body (rounded). Also require the line
+  // to be reasonably short — long paragraphs in a heading font are unusual.
+  const headingThreshold=Math.max(bodySize+1,Math.ceil(bodySize*1.2));
+  function isHeading(l){
+    if(l.size<headingThreshold)return false;
+    if(l.text.length>120)return false;
+    return true;
+  }
+  // Split into sections on heading lines.
+  const sections=[];
+  let currentTitle='';let currentBody=[];let currentPage=1;let secIdx=0;
+  function flushSection(){
+    if(!currentBody.length&&!currentTitle)return;
+    // Filter trivially noisy lines (page numbers, dates, confidentiality)
+    const body=_filterSlideNoise(currentBody.map(l=>l.text),currentTitle);
+    if(body.length||currentTitle){
+      secIdx++;
+      sections.push({title:currentTitle,slideNum:secIdx,rows:[],bodyTexts:body,source:'Page '+currentPage});
+    }
+    currentTitle='';currentBody=[];
+  }
+  allLines.forEach(l=>{
+    if(isHeading(l)){
+      flushSection();
+      currentTitle=l.text;
+      currentPage=l.page;
+    }else{
+      if(!currentBody.length)currentPage=l.page;
+      currentBody.push(l);
+    }
+  });
+  flushSection();
+  // Fallback: if no headings detected at all, treat each page as one section.
+  if(!sections.length||sections.length===1&&!sections[0].title){
+    const byPage={};
+    allLines.forEach(l=>{if(!byPage[l.page])byPage[l.page]=[];byPage[l.page].push(l.text);});
+    return Object.entries(byPage).map(([p,lines],i)=>({
+      title:'Page '+p,slideNum:i+1,rows:[],
+      bodyTexts:_filterSlideNoise(lines,''),source:'Page '+p
+    }));
+  }
+  return sections;
 }
 
 async function parsePPTX(data){
@@ -5108,7 +5302,8 @@ function getWeakestComponent(p){
   const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
   const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
   const lhScore=calcLifecycleHealth(p).score;
-  const scored={'Change Readiness':fwPct,'People & Trust':sentPct,'Training & Preparedness':trainPct,'Project Health':lhScore};
+  const scored={'Change Readiness':fwPct,'People & Trust':sentPct,'Project Health':lhScore};
+  if(trainingActive(p))scored['Training & Preparedness']=trainPct;
   const min=Object.entries(scored).sort((a,b)=>a[1]-b[1])[0];
   return min?min[0]:'people and trust';
 }
@@ -5140,6 +5335,16 @@ function renderValueCase(p){
   const el=document.getElementById('p-value-case-wrap');if(!el||el.dataset.dismissed==='1')return;
   if(!p.valueCase)p.valueCase={statement:'',requestor:'',impactLevel:'',successCriteria:[],unintendedConsequences:''};
   const vc=p.valueCase;
+  if(!Array.isArray(vc.successCriteria))vc.successCriteria=[];
+  // Seed 3 default empty rows for new projects so users aren't starting from
+  // zero. _scSeeded guards against re-seeding after intentional deletes.
+  if(vc.successCriteria.length===0 && !vc._scSeeded){
+    for(let i=0;i<3;i++){
+      vc.successCriteria.push({id:uid(),criterion:'',metStatus:null,actualOutcome:'',notes:''});
+    }
+    vc._scSeeded=true;
+    touch('proj');schedSave();
+  }
   const postGL=isPostGoLive(p);
   const vr=calcValueRealization(vc);
   const impactLevels=['High','Medium','Low'];
@@ -5304,12 +5509,12 @@ function renderPLifecycle(){
             <button class="sig-yn ${ls.requirements.onSchedule===true?'active-yes':''}" onclick="updateLS('requirements','onSchedule',true)">Yes</button>
             <button class="sig-yn ${ls.requirements.onSchedule===false?'active-no':''}" onclick="updateLS('requirements','onSchedule',false)">No</button>
           </div>
-          ${ls.requirements.onSchedule===false?`<div class="sig-sub-field"><label>Days variance</label><input class="inp-sm" type="number" min="0" value="${ls.requirements.daysVariance||0}" oninput="updateLS('requirements','daysVariance',+this.value)"></div>`:''}
+          ${ls.requirements.onSchedule===false?`<div class="sig-sub-field"><label>Days variance</label><input class="inp-sm" type="number" min="0" value="${ls.requirements.daysVariance||0}" onchange="updateLS('requirements','daysVariance',+this.value)"></div>`:''}
           ${signalStrengthBadge(ls.requirements.onSchedule===true?'green':ls.requirements.onSchedule===false?(ls.requirements.daysVariance>5?'red':'yellow'):'green')}
         </div>
         <div class="sig-row">
           <div class="sig-label">Number of review cycles required</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.requirements.reviewCycles||0}" oninput="updateLS('requirements','reviewCycles',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.requirements.reviewCycles||0}" onchange="updateLS('requirements','reviewCycles',+this.value)">
           ${ls.requirements.reviewCycles>=4?signalStrengthBadge('red'):ls.requirements.reviewCycles>=3?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
         </div>
         <div class="sig-row">
@@ -5320,7 +5525,7 @@ function renderPLifecycle(){
           </div>
           ${signalStrengthBadge(ls.requirements.disputes?'red':'green')}
         </div>
-        ${ls.requirements.disputes?`<div class="sig-row"><div class="sig-label">Dispute notes</div><textarea class="inp-ta-sm" placeholder="Describe the nature of disputes..." oninput="updateLS('requirements','disputeNotes',this.value)">${esc(ls.requirements.disputeNotes)}</textarea></div>`:''}
+        ${ls.requirements.disputes?`<div class="sig-row"><div class="sig-label">Dispute notes</div><textarea class="inp-ta-sm" placeholder="Describe the nature of disputes..." onchange="updateLS('requirements','disputeNotes',this.value)">${esc(ls.requirements.disputeNotes)}</textarea></div>`:''}
         ${ls.requirements.disputes?`<div class="sig-redNote">Unresolved disputes at requirements phase are a leading indicator of resistance and rework.</div>`:''}
       </div>
     </div>
@@ -5334,21 +5539,21 @@ function renderPLifecycle(){
             <button class="sig-yn ${ls.design.reviewsDelayed===true?'active-no':''}" onclick="updateLS('design','reviewsDelayed',true)">Yes</button>
             <button class="sig-yn ${ls.design.reviewsDelayed===false?'active-yes':''}" onclick="updateLS('design','reviewsDelayed',false)">No</button>
           </div>
-          ${ls.design.reviewsDelayed?`<div class="sig-sub-field"><label>Days delayed</label><input class="inp-sm" type="number" min="0" value="${ls.design.delayDays||0}" oninput="updateLS('design','delayDays',+this.value)"></div>`:''}
+          ${ls.design.reviewsDelayed?`<div class="sig-sub-field"><label>Days delayed</label><input class="inp-sm" type="number" min="0" value="${ls.design.delayDays||0}" onchange="updateLS('design','delayDays',+this.value)"></div>`:''}
           ${signalStrengthBadge(ls.design.reviewsDelayed?(ls.design.delayDays>5?'red':'yellow'):'green')}
         </div>
         <div class="sig-row">
           <div class="sig-label">Scope change requests from stakeholders</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.design.scopeChangeRequests||0}" oninput="updateLS('design','scopeChangeRequests',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.design.scopeChangeRequests||0}" onchange="updateLS('design','scopeChangeRequests',+this.value)">
           ${ls.design.scopeChangeRequests>=3?signalStrengthBadge('red'):ls.design.scopeChangeRequests>=1?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
         </div>
         <div class="sig-row">
           <div class="sig-label">Stakeholder workaround requests</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.design.workaroundRequests||0}" oninput="updateLS('design','workaroundRequests',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.design.workaroundRequests||0}" onchange="updateLS('design','workaroundRequests',+this.value)">
           ${ls.design.workaroundRequests>=3?signalStrengthBadge('red'):ls.design.workaroundRequests>=1?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
         </div>
         ${ls.design.workaroundRequests>0?`<div class="sig-redNote">Stakeholders requesting workarounds during design is a leading indicator of adoption resistance. Each request represents a stakeholder who does not believe the system will meet their needs. Document the underlying concern for each request.</div>`:''}
-        ${ls.design.workaroundRequests>0?`<div class="sig-row"><div class="sig-label">Workaround notes</div><textarea class="inp-ta-sm" placeholder="Describe each workaround request and the underlying concern..." oninput="updateLS('design','workaroundNotes',this.value)">${esc(ls.design.workaroundNotes)}</textarea></div>`:''}
+        ${ls.design.workaroundRequests>0?`<div class="sig-row"><div class="sig-label">Workaround notes</div><textarea class="inp-ta-sm" placeholder="Describe each workaround request and the underlying concern..." onchange="updateLS('design','workaroundNotes',this.value)">${esc(ls.design.workaroundNotes)}</textarea></div>`:''}
       </div>
     </div>
 
@@ -5357,11 +5562,11 @@ function renderPLifecycle(){
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">QA defects found</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.testing.qaDefects||0}" oninput="updateLS('testing','qaDefects',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.testing.qaDefects||0}" onchange="updateLS('testing','qaDefects',+this.value)">
         </div>
         <div class="sig-row">
           <div class="sig-label">UAT defects found</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.testing.uatDefects||0}" oninput="updateLS('testing','uatDefects',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.testing.uatDefects||0}" onchange="updateLS('testing','uatDefects',+this.value)">
         </div>
         ${(ls.testing.qaDefects>0||ls.testing.uatDefects>0)?`<div class="sig-row">
           <div class="sig-label">QA-to-UAT defect ratio (auto-calculated)</div>
@@ -5373,7 +5578,7 @@ function renderPLifecycle(){
         `:''}
         <div class="sig-row">
           <div class="sig-label">UAT participation rate (%)</div>
-          <input class="inp-sm" type="number" min="0" max="100" value="${ls.testing.uatParticipationRate||0}" oninput="updateLS('testing','uatParticipationRate',+this.value)">
+          <input class="inp-sm" type="number" min="0" max="100" value="${ls.testing.uatParticipationRate||0}" onchange="updateLS('testing','uatParticipationRate',+this.value)">
           ${ls.testing.uatParticipationRate?signalStrengthBadge(ls.testing.uatParticipationRate<60?'red':ls.testing.uatParticipationRate<80?'yellow':'green'):''}
         </div>
         <div class="sig-row">
@@ -5393,7 +5598,7 @@ function renderPLifecycle(){
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">Training start date changes</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.training?.startDateChanges||0}" oninput="updateLS('training','startDateChanges',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.training?.startDateChanges||0}" onchange="updateLS('training','startDateChanges',+this.value)">
           ${(ls.training?.startDateChanges||0)>=3?signalStrengthBadge('red'):(ls.training?.startDateChanges||0)>=1?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
         </div>
         ${(ls.training?.startDateChanges||0)>0?`<div class="sig-row" style="flex-direction:column;align-items:flex-start">
@@ -5406,7 +5611,7 @@ function renderPLifecycle(){
         `:''}
         <div class="sig-row">
           <div class="sig-label">Training environment defects</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.training?.envDefects||0}" oninput="updateLS('training','envDefects',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.training?.envDefects||0}" onchange="updateLS('training','envDefects',+this.value)">
           ${(ls.training?.envDefects||0)>0?signalStrengthBadge((ls.training?.envDefects||0)>3?'red':'yellow'):''}
         </div>
         <div class="sig-row">
@@ -5418,10 +5623,10 @@ function renderPLifecycle(){
           ${ls.training?.scopeUnderestimated?signalStrengthBadge('yellow'):''}
         </div>
         ${ls.training?.scopeUnderestimated?`<div class="sig-yellowNote">Underestimated training scope leads to compressed timelines, reduced reinforcement planning, and lower confidence in L3/L4 behavior transfer outcomes.</div>`:''}
-        ${ls.training?.scopeUnderestimated?`<div class="sig-row"><div class="sig-label">Scope notes</div><textarea class="inp-ta-sm" placeholder="What was underestimated? (e.g. not enough time for end-user practice, UAT participation overlapped with training window)" oninput="updateLS('training','scopeNotes',this.value)">${esc(ls.training?.scopeNotes||'')}</textarea></div>`:''}
+        ${ls.training?.scopeUnderestimated?`<div class="sig-row"><div class="sig-label">Scope notes</div><textarea class="inp-ta-sm" placeholder="What was underestimated? (e.g. not enough time for end-user practice, UAT participation overlapped with training window)" onchange="updateLS('training','scopeNotes',this.value)">${esc(ls.training?.scopeNotes||'')}</textarea></div>`:''}
         <div class="sig-row">
           <div class="sig-label">Training material rework cycles</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.training?.materialReworkCycles||0}" oninput="updateLS('training','materialReworkCycles',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.training?.materialReworkCycles||0}" onchange="updateLS('training','materialReworkCycles',+this.value)">
           ${(ls.training?.materialReworkCycles||0)>=3?signalStrengthBadge('red'):(ls.training?.materialReworkCycles||0)>=2?signalStrengthBadge('yellow'):''}
         </div>
       </div>
@@ -5432,7 +5637,7 @@ function renderPLifecycle(){
       <div class="pb">
         <div class="sig-row">
           <div class="sig-label">Number of go-live date changes</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.deployment.goliveDateChanges||0}" oninput="updateLS('deployment','goliveDateChanges',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.goliveDateChanges||0}" onchange="updateLS('deployment','goliveDateChanges',+this.value)">
           ${signalStrengthBadge(ls.deployment.goliveDateChanges>=2?'red':ls.deployment.goliveDateChanges>=1?'yellow':'green')}
         </div>
         <div class="sig-row">
@@ -5441,21 +5646,21 @@ function renderPLifecycle(){
             <button class="sig-yn ${ls.deployment.parallelOpsExtended?'active-no':''}" onclick="updateLS('deployment','parallelOpsExtended',true)">Yes</button>
             <button class="sig-yn ${!ls.deployment.parallelOpsExtended?'active-yes':''}" onclick="updateLS('deployment','parallelOpsExtended',false)">No</button>
           </div>
-          ${ls.deployment.parallelOpsExtended?`<div class="sig-sub-field"><label>Additional days</label><input class="inp-sm" type="number" min="0" value="${ls.deployment.parallelOpsDays||0}" oninput="updateLS('deployment','parallelOpsDays',+this.value)"></div>`:''}
+          ${ls.deployment.parallelOpsExtended?`<div class="sig-sub-field"><label>Additional days</label><input class="inp-sm" type="number" min="0" value="${ls.deployment.parallelOpsDays||0}" onchange="updateLS('deployment','parallelOpsDays',+this.value)"></div>`:''}
           ${signalStrengthBadge(ls.deployment.parallelOpsExtended?'yellow':'green')}
         </div>
         <div class="sig-row">
           <div class="sig-label">Support tickets — first week</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.deployment.supportTicketsWeek1||0}" oninput="updateLS('deployment','supportTicketsWeek1',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.supportTicketsWeek1||0}" onchange="updateLS('deployment','supportTicketsWeek1',+this.value)">
           ${ls.deployment.supportTicketsWeek1?signalStrengthBadge(ls.deployment.supportTicketsWeek1>50?'red':ls.deployment.supportTicketsWeek1>20?'yellow':'green'):''}
         </div>
         <div class="sig-row">
           <div class="sig-label">Support tickets — first month</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.deployment.supportTicketsMonth1||0}" oninput="updateLS('deployment','supportTicketsMonth1',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.supportTicketsMonth1||0}" onchange="updateLS('deployment','supportTicketsMonth1',+this.value)">
         </div>
         <div class="sig-row">
           <div class="sig-label">Post-go-live workaround requests</div>
-          <input class="inp-sm" type="number" min="0" value="${ls.deployment.workaroundRequestsPostGL||0}" oninput="updateLS('deployment','workaroundRequestsPostGL',+this.value)">
+          <input class="inp-sm" type="number" min="0" value="${ls.deployment.workaroundRequestsPostGL||0}" onchange="updateLS('deployment','workaroundRequestsPostGL',+this.value)">
           ${ls.deployment.workaroundRequestsPostGL?signalStrengthBadge(ls.deployment.workaroundRequestsPostGL>2?'red':ls.deployment.workaroundRequestsPostGL>0?'yellow':'green'):''}
         </div>
         ${ls.deployment.workaroundRequestsPostGL>0?`<div class="sig-redNote">${ls.deployment.workaroundRequestsPostGL} post-go-live workaround request${ls.deployment.workaroundRequestsPostGL!==1?'s':''} indicate users are not adopting the intended process. Targeted coaching intervention recommended.</div>`:''}
@@ -6066,8 +6271,10 @@ function collectSmartRecsData(p){
   const gs=projGateScore(p);
   const riskPct=Math.max(0,Math.min(100,gs!==null?Math.round(gs*(flags.length===0?1:flags.length<=2?0.8:0.5)):50));
 
-  // Composite adoption score
-  const currentAdoptionScore=Math.round(fwPct*0.30+sentPct*0.20+trainPct*0.20+commsPct*0.15+riskPct*0.15);
+  // Composite adoption score — drop training weight until it's active.
+  const trActive=trainingActive(p);
+  const w=adoptionWeights(trActive);
+  const currentAdoptionScore=Math.round(fwPct*w.fw+sentPct*w.sent+trainPct*w.train+commsPct*w.comms+riskPct*w.risk);
   let tier='Critical';
   if(currentAdoptionScore>=85)tier='Champion';
   else if(currentAdoptionScore>=65)tier='On Track';
@@ -6075,18 +6282,21 @@ function collectSmartRecsData(p){
 
   // Gaps
   const gaps=(p.gapAnalysis?.gaps||[]).map(g=>({description:g.description||'',severity:g.severity||'Medium',status:g.status||'Open'}));
+  const pctLabel=v=>Math.round(v*100)+'%';
 
   return{
     projectName:p.name,
     frameworkName:fwName(),
     goLiveDate:p.golive||null,
+    trainingActive:trActive,
+    trainingStartDate:p.trainingStartDate||null,
     currentAdoptionScore,tier,
     scoringComponents:{
-      frameworkAssessment:{score:fwPct,weight:'30%',scores:fwScores},
-      stakeholderSentiment:{score:sentPct,weight:'20%',supporters,neutral,resistant,total:shs.length},
-      trainingEffectiveness:{score:trainPct,weight:'20%',kirkpatrickDetails:stakeholderBreakdown.map(s=>({name:s.name,kirkReady:s.kirkpatrickReady,reinReady:s.reinforcementReady}))},
-      commsCompletion:{score:commsPct,weight:'15%'},
-      riskAdjustment:{score:riskPct,weight:'15%',activeFlags:flags.length}
+      frameworkAssessment:{score:fwPct,weight:pctLabel(w.fw),scores:fwScores},
+      stakeholderSentiment:{score:sentPct,weight:pctLabel(w.sent),supporters,neutral,resistant,total:shs.length},
+      trainingEffectiveness:{score:trActive?trainPct:null,weight:trActive?pctLabel(w.train):'—',pending:!trActive,pendingLabel:'Training not yet started',kirkpatrickDetails:stakeholderBreakdown.map(s=>({name:s.name,kirkReady:s.kirkpatrickReady,reinReady:s.reinforcementReady}))},
+      commsCompletion:{score:commsPct,weight:pctLabel(w.comms)},
+      riskAdjustment:{score:riskPct,weight:pctLabel(w.risk),activeFlags:flags.length}
     },
     stakeholders:stakeholderBreakdown,
     gateHistory,
@@ -6339,8 +6549,6 @@ function updateGap(gapId,field,value){
 }
 function removeGap(gapId){
   const p=getProj();if(!p||!p.gapAnalysis)return;
-  const gap=p.gapAnalysis.gaps.find(g=>g.id===gapId);const label=gap?(gap.description||'').substring(0,60):'this gap';
-  if(!confirm('Remove gap "'+label+'"?'))return;
   p.gapAnalysis.gaps=p.gapAnalysis.gaps.filter(g=>g.id!==gapId);
   touch('proj');schedSave();renderPGaps();
 }
@@ -6367,14 +6575,14 @@ function renderPGaps(){
       h+='<div class="gap-row">';
       h+='<div class="gap-row-head">';
       h+='<span class="sev-badge '+sevCls(g.severity)+'">'+g.severity+'</span>';
-      h+='<select class="gap-sev-sel" onchange="updateGap(\''+g.id+'\',\'severity\',this.value)">';
+      h+='<select class="gap-sev-sel" onchange="updateGap('+g.id+',\'severity\',this.value)">';
       GAP_SEVERITIES.forEach(sv=>{h+='<option'+(sv===g.severity?' selected':'')+'>'+sv+'</option>';});
       h+='</select>';
-      h+='<button class="btn-del-sm" onclick="removeGap(\''+g.id+'\')" title="Remove gap">&times;</button>';
+      h+='<button class="btn-del-sm" onclick="removeGap('+g.id+')" title="Remove gap">&times;</button>';
       h+='</div>';
       h+='<div class="gap-row-fields">';
-      h+='<div class="gap-field gap-field-desc"><label>Gap Description</label><textarea rows="2" oninput="updateGap(\''+g.id+'\',\'description\',this.value)" placeholder="What gap was identified by the implementation team?">'+esc(g.description)+'</textarea></div>';
-      h+='<div class="gap-field gap-field-impact"><label>Training / Adoption Impact</label><textarea rows="2" oninput="updateGap(\''+g.id+'\',\'trainingImpact\',this.value)" placeholder="How does this affect training or adoption? How will OCM address it?">'+esc(g.trainingImpact)+'</textarea></div>';
+      h+='<div class="gap-field gap-field-desc"><label>Gap Description</label><textarea rows="2" oninput="updateGap('+g.id+',\'description\',this.value)" placeholder="What gap was identified by the implementation team?">'+esc(g.description)+'</textarea></div>';
+      h+='<div class="gap-field gap-field-impact"><label>Training / Adoption Impact</label><textarea rows="2" oninput="updateGap('+g.id+',\'trainingImpact\',this.value)" placeholder="How does this affect training or adoption? How will OCM address it?">'+esc(g.trainingImpact)+'</textarea></div>';
       h+='</div></div>';
     });
   }
@@ -9860,15 +10068,20 @@ function genReadinessRec(aiNarrative,audience){
   const commsPctP=Math.round(commsAvgP/5*100);
   const gsP=projGateScore(p);const flagsP=getProjFlagCount(p);
   const riskPctP=Math.max(0,Math.min(100,gsP!==null?Math.round(gsP*(flagsP===0?1:flagsP<=2?0.8:0.5)):50));
-  compScores.push({label:fwName()+' Assessment',score:fwPctP,weight:'25%',ds:getDataSourceType('framework',p)});
-  compScores.push({label:'People & Trust',score:sentPctP,weight:'20%',ds:getDataSourceType('sentiment',p)});
-  compScores.push({label:'Training & Preparedness',score:trainPctP,weight:'20%',ds:getDataSourceType('training',p)});
-  compScores.push({label:'Project Health',score:lcPctP,weight:'10%',ds:getDataSourceType('lifecycle',p)});
-  compScores.push({label:'Communication',score:commsPctP,weight:'10%',ds:getDataSourceType('comms',p)});
-  compScores.push({label:'Open Issues',score:riskPctP,weight:'15%',ds:getDataSourceType('risk',p)});
+  // Drop training weight until it's active; renormalize remaining 80% to 100%.
+  const trActiveP=trainingActive(p);
+  const kP=trActiveP?1:1/0.80;
+  const wP={fw:0.25*kP,sent:0.20*kP,train:trActiveP?0.20:0,lc:0.10*kP,comms:0.10*kP,risk:0.15*kP};
+  const pctLabelP=v=>Math.round(v*100)+'%';
+  compScores.push({label:fwName()+' Assessment',score:fwPctP,weight:pctLabelP(wP.fw),ds:getDataSourceType('framework',p)});
+  compScores.push({label:'People & Trust',score:sentPctP,weight:pctLabelP(wP.sent),ds:getDataSourceType('sentiment',p)});
+  compScores.push({label:'Training & Preparedness',score:trActiveP?trainPctP:null,weight:trActiveP?pctLabelP(wP.train):'—',ds:getDataSourceType('training',p),pending:!trActiveP});
+  compScores.push({label:'Project Health',score:lcPctP,weight:pctLabelP(wP.lc),ds:getDataSourceType('lifecycle',p)});
+  compScores.push({label:'Communication',score:commsPctP,weight:pctLabelP(wP.comms),ds:getDataSourceType('comms',p)});
+  compScores.push({label:'Open Issues',score:riskPctP,weight:pctLabelP(wP.risk),ds:getDataSourceType('risk',p)});
   doc.autoTable({startY:y,margin:{left:mg,right:mg},headStyles:{fillColor:[12,31,63],fontSize:7,cellPadding:3},bodyStyles:{fontSize:7,cellPadding:2.5},
     head:[['Component','Score','Weight','Data Source']],
-    body:compScores.map(c=>[c.label,c.score+'%',c.weight,c.ds])
+    body:compScores.map(c=>[c.label,c.pending?'Not yet started':c.score+'%',c.weight,c.ds])
   });y=doc.lastAutoTable.finalY+6;
   // Confidence level
   const confP=calcDataConfidence(p);
@@ -9877,8 +10090,8 @@ function genReadinessRec(aiNarrative,audience){
   doc.text('Confidence Level: '+confLevel,mg,y+2);y+=5;
   doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
   doc.text('Measured: '+confP.measured+'%  |  Observed: '+confP.observed+'%  |  Estimated: '+confP.estimated+'%',mg,y+2);y+=7;
-  // Strongest + weakest
-  const sorted=[...compScores].sort((a,b)=>b.score-a.score);
+  // Strongest + weakest — exclude components that are pending (e.g. pre-training)
+  const sorted=[...compScores].filter(c=>!c.pending&&typeof c.score==='number').sort((a,b)=>b.score-a.score);
   doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(29,104,64);
   doc.text('Strongest Indicators:',mg,y+2);y+=5;
   doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
