@@ -5263,6 +5263,7 @@ function normalizeSeverity(val){
 
 function renderPOverview(){
   const p=getProj();if(!p)return;
+  renderPilotOverview(p);
   renderPKPIs();
   renderTrajectoryCard();
   renderDataConfidenceBar(p);
@@ -8181,6 +8182,110 @@ function importTTStd(input){
   rd.readAsText(file);
 }
 
+
+// ════════════════════════════════════════════════════════
+// PILOT OVERVIEW + STATUS REPORT
+// In pilot view the Overview shows pilot numbers (timeline, buffer,
+// sustainment, size expectations, next actions) instead of KPIs that
+// come from hidden tabs (gates, ADKAR, open issues).
+// ════════════════════════════════════════════════════════
+function pilotStatus(p){
+  const t=calcTrainingTimeline(p);
+  const dx=(p.stakeholders||[]).map(sh=>({sh,d:diagnoseSustainment(p,sh)}));
+  const se=sizeExpectations(p);
+  const seScored=se?se.rows.filter(r=>r.total>0):[];
+  const seMet=seScored.filter(r=>r.met>=r.total).length;
+  const cnt=k=>dx.filter(x=>x.d.status===k).length;
+  const trainers=((p.resources||{}).ocm_train||[]).filter(x=>(x.name||'').trim()).map(x=>x.name.trim());
+  const impl=((p.resources||{}).ocm_impl||[]).filter(x=>(x.name||'').trim()).map(x=>x.name.trim());
+  const actions=[];
+  const act=(sev,text,tab)=>actions.push({sev,text,tab});
+  if(!p.size)act('amber','Set the project’s T-shirt size in the header.',null);
+  else if(t.error==='noaud')act('amber','Select the audiences in scope in Training Timeline.','trainplan');
+  if(!t.error&&!t.dt.uatComplete)act('amber','Enter the UAT complete date (on the release, or override on this project).','trainplan');
+  if(!t.error&&t.gateBreach)act('red','Hard gate: Training Start is before UAT complete. Move training or confirm UAT.','trainplan');
+  if(!t.error&&t.vsGolive!==null&&t.vsGolive<0)act('red','Training finishes '+Math.abs(t.vsGolive)+' business days after go-live. Rescope the course or audience, or move dates.','trainplan');
+  if(!trainers.length)act('amber','Name the OCM training lead.','resources');
+  dx.filter(x=>x.d.status==='intervene').forEach(x=>{
+    const g=SUS_GAPS[x.d.primary];
+    const ivs=(((p.sustainment||{})[x.sh.id]||{}).interventions||[]).filter(i=>i.type===x.d.primary&&i.status!=='Verified');
+    act('red',x.sh.name+': '+g.label.toLowerCase()+'. '+(ivs.length?g.tag+' '+ivs[ivs.length-1].status.toLowerCase()+'; confirm it at the next checkpoint.':'Log a '+g.tag.toLowerCase()+' intervention.'),'sustain');
+  });
+  // Pulse is deferred until the Microsoft Forms import exists, so it stays in the checklist but not in actions.
+  if(se)se.rows.filter(r=>r.total>0&&r.met<r.total&&!/Pulse/.test(r.label)).forEach(r=>act('amber',r.label+' ('+r.met+' of '+r.total+').',/checkpoint/i.test(r.label)?'postlaunch':'adoption'));
+  let rag='green';
+  if(actions.some(a=>a.sev==='red'))rag='red';else if(actions.length||cnt('watch')||(t.vsGolive!==null&&t.vsGolive<5))rag='amber';
+  return{t,dx,se,seScored,seMet,cnt,trainers,impl,actions,rag};
+}
+function goPTab(id){const b=[...document.querySelectorAll('#proj-nav-tabs .nav-btn')].find(x=>(x.getAttribute('onclick')||'').includes("'"+id+"'"));if(b)showProjTab(id,b);}
+function renderPilotOverview(p){
+  const ov=document.getElementById('psec-overview');if(!ov)return;
+  const on=pilotOn();
+  ov.classList.toggle('pilot-ov',on);
+  let box=document.getElementById('pilot-ov');
+  if(!box){box=document.createElement('div');box.id='pilot-ov';ov.insertBefore(box,ov.firstChild);}
+  if(!on){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='';
+  const s=pilotStatus(p);const t=s.t;
+  const ragLbl={green:'On Track',amber:'Watch',red:'Action Needed'}[s.rag];
+  const kc=(cls,l,v,sub)=>'<div class="kc '+cls+'"><div class="kc-l">'+l+'</div><div class="kc-v sm">'+v+'</div><div class="kc-s">'+sub+'</div></div>';
+  let h='<div class="pilot-ov-hd"><span class="pilot-rag pilot-rag-'+s.rag+'">'+ragLbl+'</span>';
+  h+='<span class="pilot-owner">Training lead: <strong>'+(s.trainers.length?esc(s.trainers.join(', ')):'not assigned')+'</strong>'+(s.impl.length?' · OCM: <strong>'+esc(s.impl.join(', '))+'</strong>':'')+'</span>';
+  h+='<button class="btn-outline" onclick="exportStatusReport()"><i class="ph ph-file-text"></i> Status report</button></div>';
+  h+='<div class="kpi-strip">';
+  if(t.error){h+=kc('cn','Last Cohort','—',t.error==='nosize'?'Set the size':'Select audiences');}
+  else h+=kc('cn','Last Cohort',t.finishHi?ttFmt(t.finishHi):'—',t.finishHi?(t.lo===t.hi?t.hi:t.lo+'–'+t.hi)+' business days from UAT':'Enter UAT complete');
+  const buf=t.error||t.vsGolive===null?'—':(t.vsGolive<0?Math.abs(t.vsGolive)+' bus. days late':t.vsGolive+' bus. days');
+  h+=kc(t.vsGolive!==null&&t.vsGolive<0?'cr':'cg','Buffer to Go-Live',buf,projGoLive(p)?'Go-live '+fmtDate(projGoLive(p)):'No go-live date');
+  h+=kc('cb','Delivery Starts',!t.error&&t.deliveryStart?ttFmt(t.deliveryStart):'—',!t.error?esc(t.course.label)+(t.binding?' · '+esc(t.binding.a.name):''):'From Training Timeline');
+  h+=kc(s.cnt('intervene')?'cr':'cg','Groups to Intervene',String(s.cnt('intervene')),s.cnt('watch')+' watch · '+s.cnt('ontrack')+' on track');
+  h+=kc('ca','Size Expectations',s.se?s.seMet+' of '+s.seScored.length:'—',s.se?'Size '+esc(p.size)+' standard':'Set the size');
+  h+='</div>';
+  h+='<div class="panel"><div class="panel-hd"><div><div class="pt">Next Actions</div><div class="ps-text">Generated from the timeline, sustainment diagnosis, and size expectations.</div></div></div><div class="pb">';
+  if(!s.actions.length)h+='<div class="sus-ok">Nothing outstanding. Keep the scheduled checkpoints.</div>';
+  else{h+='<ul class="pilot-actions">';s.actions.slice(0,10).forEach(a=>{h+='<li class="pilot-act-'+a.sev+'"><i class="ph '+(a.sev==='red'?'ph-warning-circle':'ph-arrow-circle-right')+'"></i><span>'+esc(a.text)+'</span>'+(a.tab?'<button class="btn-sm" onclick="goPTab(\''+a.tab+'\')">Open</button>':'')+'</li>';});h+='</ul>';}
+  h+='</div></div>';
+  box.innerHTML=h;
+}
+function exportStatusReport(){
+  const p=getProj();const r=relOfProj(p);if(!p)return;
+  const s=pilotStatus(p);const t=s.t;
+  const e=esc;const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const ragLbl={green:'On Track',amber:'Watch',red:'Action Needed'}[s.rag];
+  const row=(k,v)=>'<tr><th>'+k+'</th><td>'+v+'</td></tr>';
+  let b='<h1>'+e(p.name)+' <span class="rag rag-'+s.rag+'">'+ragLbl+'</span></h1>';
+  b+='<div class="meta">'+e(r?r.name:'')+' · Status as of '+today+(p.size?' · Size '+e(p.size):'')+'</div>';
+  b+='<table class="kv">'+row('Training lead',e(s.trainers.join(', ')||'Not assigned'))+(s.impl.length?row('OCM lead',e(s.impl.join(', '))):'')+row('Go-live',projGoLive(p)?fmtDate(projGoLive(p)):'—')+'</table>';
+  b+='<h2>Training timeline</h2>';
+  if(t.error)b+='<p class="muted">'+(t.error==='nosize'?'Project size not set.':'Audiences not selected.')+'</p>';
+  else{
+    b+='<table class="kv">'+row('Course',e(t.course.label)+(t.binding?' · binding audience '+e(t.binding.a.name)+' ('+t.binding.cohorts+' cohorts)':''))
+      +(t.dt.techTransfer?row('Tech Transfer',fmtDate(t.dt.techTransfer)):'')+row('UAT complete',t.dt.uatComplete?fmtDate(t.dt.uatComplete):'Not set')
+      +(t.deliveryStart?row('Delivery starts',ttFmt(t.deliveryStart)):'')+(t.finishHi?row('Last cohort',ttFmt(t.finishLo)+(t.lo===t.hi?'':' to '+ttFmt(t.finishHi))):'')
+      +row('UAT to last cohort',(t.lo===t.hi?t.hi:t.lo+' to '+t.hi)+' business days')
+      +(t.vsGolive!==null?row('Buffer to go-live',t.vsGolive<0?'<strong class="red">'+Math.abs(t.vsGolive)+' business days late</strong>':t.vsGolive+' business days'):'')
+      +(t.checkpoints.length?row('30 / 60 / 90 follow-ups',t.checkpoints.map(c=>ttFmt(c.d)).join(' · ')):'')+'</table>';
+  }
+  b+='<h2>Adoption by group</h2>';
+  if(!s.dx.length)b+='<p class="muted">No stakeholder groups yet.</p>';
+  else{
+    b+='<table class="grid"><tr><th>Group</th><th>Status</th><th>Latest</th><th>Gap / action</th><th>Intervention</th></tr>';
+    s.dx.forEach(({sh,d})=>{
+      const l=d.latest;const lat=l?[l.adoption!==undefined?'Adoption '+l.adoption+'%':'',l.proficiency!==undefined?'Prof. '+l.proficiency+'%':''].filter(Boolean).join(', ')+' ('+e(l.label)+')':'—';
+      const ivs=(((p.sustainment||{})[sh.id]||{}).interventions||[]);const last=ivs[ivs.length-1];
+      b+='<tr><td>'+e(sh.name)+'</td><td>'+SUS_STATUS[d.status].label+'</td><td>'+lat+'</td><td>'+(d.primary?SUS_GAPS[d.primary].label+': '+e(SUS_GAPS[d.primary].actions[0]):'—')+'</td><td>'+(last?e(SUS_GAPS[last.type].tag)+' · '+e(last.status)+(last.note?' · '+e(last.note):''):'—')+'</td></tr>';
+    });
+    b+='</table>';
+  }
+  b+='<h2>Next actions</h2>';
+  b+=s.actions.length?'<ol>'+s.actions.map(a=>'<li'+(a.sev==='red'?' class="red"':'')+'>'+e(a.text)+'</li>').join('')+'</ol>':'<p class="muted">Nothing outstanding.</p>';
+  if(s.se){b+='<h2>Size '+e(p.size)+' expectations ('+s.seMet+' of '+s.seScored.length+' met)</h2><ul>'+s.se.rows.map(x=>'<li>'+(x.total===0?'○':x.met>=x.total?'✓':'✗')+' '+e(x.label)+(x.total?' ('+x.met+'/'+x.total+')':'')+'</li>').join('')+'</ul>';}
+  const css='body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1a2a3a;max-width:820px;margin:24px auto;padding:0 16px;font-size:13px;line-height:1.45;background:#fff}h1{font-size:20px;color:#0b1c3f;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#0b1c3f;border-bottom:2px solid #0b1c3f;padding-bottom:3px;margin:22px 0 8px}.meta{color:#4a5568;margin-bottom:12px}.rag{font-size:11px;padding:2px 8px;border-radius:4px;vertical-align:middle;margin-left:6px}.rag-green{background:#f0f7f0;color:#2f7b2e}.rag-amber{background:#fdf3ee;color:#a44918}.rag-red{background:#fef2f2;color:#b91c1c}table{border-collapse:collapse;width:100%}.kv th{text-align:left;width:190px;color:#4a5568;font-weight:600;padding:3px 8px 3px 0;vertical-align:top}.kv td{padding:3px 0}.grid th,.grid td{border:1px solid #ddd8d0;padding:5px 7px;text-align:left;vertical-align:top;font-size:12px}.grid th{background:#f7f6f4}.red{color:#b91c1c}.muted{color:#8a96a3}.bar{position:sticky;top:0;background:#fff;padding:8px 0;margin-bottom:8px;border-bottom:1px solid #eee}.bar button{font:inherit;padding:6px 12px;margin-right:6px;cursor:pointer}@media print{.bar{display:none}body{margin:0}}';
+  const html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+e(p.name)+' status</title><style>'+css+'</style></head><body><div class="bar"><button onclick="window.print()">Print / Save as PDF</button><span class="muted">Or select all and paste into an email.</span></div>'+b+'</body></html>';
+  const w=window.open('','_blank');
+  if(!w){showSuccess('Allow pop-ups to open the status report.');return;}
+  w.document.open();w.document.write(html);w.document.close();
+}
 // Expected OCM intensity by project T-shirt size
 const SIZE_OCM={
   XS:{iv:['d30'],pulse:'one',l3:false,rein:false,esc:false},
@@ -9048,6 +9153,7 @@ function pdfCheckPage(doc,y,w,h,pg,needed){
 }
 
 function exportProjectPDF(){
+  if(pilotOn()){exportStatusReport();return;}
   if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   migrateResources(p);
@@ -10780,7 +10886,7 @@ function aiFetch(url,opts){
 function applyAIMode(){document.body.classList.toggle('ai-off',!aiAllowed());}
 
 // ── Pilot view: live projects show only the pilot tabs unless "All tabs" is chosen ──
-const PILOT_TABS=['overview','trainplan','adoption','postlaunch','sustain'];
+const PILOT_TABS=['overview','trainplan','adoption','postlaunch','sustain','resources'];
 function pilotOn(){
   let pref=null;try{pref=localStorage.getItem('adoptiq_pilot_view');}catch(e){}
   return pref?pref==='on':!isDemoMode;
@@ -10802,6 +10908,7 @@ function applyPilotView(){
 function togglePilotView(){
   try{localStorage.setItem('adoptiq_pilot_view',pilotOn()?'off':'on');}catch(e){}
   applyPilotView();
+  if(getProj())renderPOverview();
 }
 
 function setDemoMode(on){

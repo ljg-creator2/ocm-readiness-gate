@@ -2687,3 +2687,22 @@ body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-ca
 #proj-nav-tabs .nav-btn.pilot-hidden{display:none!important}
 .btn-pilot{white-space:nowrap}
 .tt-inherit{display:inline-block;margin-left:4px;padding:0 4px;border-radius:3px;border:1px solid var(--border);font-size:8px;letter-spacing:0.04em;color:var(--ink-60);text-transform:none}
+
+/* ── Pilot Overview ── */
+#psec-overview.pilot-ov>.kpi-strip,#psec-overview.pilot-ov>#p-benchmark-card,#psec-overview.pilot-ov>.exec-dash-grid,
+#psec-overview.pilot-ov>#p-data-confidence-bar,#psec-overview.pilot-ov>.panel:has(#p-ov-flags){display:none!important}
+.pilot-ov-hd{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:12px;font-family:var(--font-body)}
+.pilot-ov-hd .btn-outline{margin-left:auto}
+.pilot-rag{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;border-radius:4px}
+.pilot-rag-green{color:var(--green);background:var(--green-bg)}
+.pilot-rag-amber{color:var(--amber);background:var(--amber-bg)}
+.pilot-rag-red{color:var(--red-bright);background:var(--red-bg)}
+.pilot-owner{font-size:12px;color:var(--ink-60)}
+.pilot-owner strong{color:var(--ink)}
+.pilot-actions{list-style:none;margin:0;padding:0;font-family:var(--font-body)}
+.pilot-actions li{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--ink)}
+.pilot-actions li:last-child{border-bottom:none}
+.pilot-actions li span{flex:1}
+.pilot-actions li i{font-size:15px}
+.pilot-act-red i{color:var(--red-bright)}
+.pilot-act-amber i{color:var(--amber)}
