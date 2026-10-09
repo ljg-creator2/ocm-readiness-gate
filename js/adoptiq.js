@@ -7950,7 +7950,13 @@ function calcTrainingTimeline(p){
     if(p.golive&&finishHi)vsGolive=bizDaysBetween(finishHi.toISOString().split('T')[0],p.golive);
   }
   const gateBreach=!!(tt.uatComplete&&p.trainingStartDate&&p.trainingStartDate<tt.uatComplete);
-  return{st,sz,course,auds,perAud,binding,phases,lo,hi,finishLo,finishHi,vsGolive,gateBreach};
+  // Project Acclimation: Tech Transfer through UAT, before the clock starts
+  let accl=null;
+  if(tt.techTransfer&&tt.uatComplete){
+    const d=bizDaysBetween(tt.techTransfer,tt.uatComplete);
+    accl=d<0?{invalid:true}:{days:d,commitLo:d+lo,commitHi:d+hi};
+  }
+  return{st,sz,course,auds,perAud,binding,phases,lo,hi,finishLo,finishHi,vsGolive,gateBreach,accl};
 }
 function syncTT(field,val){
   const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
@@ -7967,6 +7973,7 @@ function renderPTrainPlan(){
   const tt=p.trainingTimeline||{};const st=getTTStd();
   let h='<div class="tt-inputs">';
   h+='<div class="tt-field"><label>Size</label><div class="tt-static">'+(p.size?'<span class="size-badge size-badge-lg">'+esc(p.size)+'</span>':'<em>Set in header</em>')+'</div></div>';
+  h+='<div class="tt-field"><label for="tt-tech">Tech Transfer Start</label><input type="date" id="tt-tech" value="'+esc(tt.techTransfer||'')+'" onchange="syncTT(\'techTransfer\',this.value)"></div>';
   h+='<div class="tt-field"><label for="tt-uat">UAT Complete</label><input type="date" id="tt-uat" value="'+esc(tt.uatComplete||'')+'" onchange="syncTT(\'uatComplete\',this.value)"></div>';
   h+='<div class="tt-field"><label for="tt-course">Course Length</label><select id="tt-course" onchange="syncTT(\'course\',this.value)">';
   TT_COURSES.forEach(c=>{h+='<option value="'+c.key+'"'+((tt.course||'full')===c.key?' selected':'')+'>'+esc(c.label)+'</option>';});
@@ -7987,21 +7994,27 @@ function renderPTrainPlan(){
       if(r.vsGolive<0)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-calendar-x"></i><div><strong>Training finishes after go-live.</strong> At the upper end, the last cohort completes '+Math.abs(r.vsGolive)+' business days after the '+fmtDate(p.golive)+' go-live. Options: move UAT earlier, shorten the course, narrow the audience, or move go-live.</div></div>';
       else h+='<div class="tt-alert tt-alert-green"><i class="ph ph-calendar-check"></i><div><strong>'+r.vsGolive+' business days of buffer</strong> between the last cohort (upper end) and the '+fmtDate(p.golive)+' go-live.</div></div>';
     }
+    if(r.accl&&r.accl.invalid)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning"></i><div><strong>Check dates.</strong> Tech Transfer start ('+fmtDate(tt.techTransfer)+') is after UAT complete ('+fmtDate(tt.uatComplete)+').</div></div>';
     h+='<div class="tt-total"><div><div class="tt-total-l">UAT complete to last cohort</div><div class="tt-total-v">'+(r.lo===r.hi?r.hi:r.lo+' to '+r.hi)+' business days</div><div class="tt-total-s">about '+(Math.round(r.lo/5*2)/2)+(r.lo===r.hi?'':' to '+(Math.round(r.hi/5*2)/2))+' weeks</div></div>';
     if(r.finishHi)h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-v">'+ttFmt(r.finishLo)+(r.lo===r.hi?'':' to '+ttFmt(r.finishHi))+'</div><div class="tt-total-s">from UAT complete '+fmtDate(tt.uatComplete)+'</div></div>';
     else h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-s">Enter the UAT complete date to see calendar dates.</div></div>';
+    if(r.accl&&!r.accl.invalid)h+='<div><div class="tt-total-l">Training staff committed</div><div class="tt-total-v">'+(r.accl.commitLo===r.accl.commitHi?r.accl.commitHi:r.accl.commitLo+' to '+r.accl.commitHi)+' business days</div><div class="tt-total-s">Tech Transfer to last cohort, incl. '+r.accl.days+' days of acclimation</div></div>';
+    else if(!tt.techTransfer)h+='<div><div class="tt-total-l">Training staff committed</div><div class="tt-total-s">Enter the Tech Transfer start to include Project Acclimation.</div></div>';
     h+='</div>';
     // Bar
-    const scale=Math.max(r.hi,1);
+    const acclDays=r.accl&&!r.accl.invalid?r.accl.days:0;
+    const scale=Math.max(r.hi+acclDays,1);
     h+='<div class="tt-bar" role="img" aria-label="Training timeline by phase">';
+    if(acclDays)h+='<div class="tt-seg tt-seg-accl" style="flex:'+(acclDays/scale)+'" title="Project Acclimation: '+acclDays+' d (Tech Transfer through UAT)"><span>Acclimation</span></div><div class="tt-clock" title="UAT complete: the clock starts"></div>';
     r.phases.filter(x=>x.r[1]>0).forEach(x=>{
       const cls=x.deliver?'tt-seg-deliver':x.fixed?'tt-seg-fixed':'tt-seg-scale';
       h+='<div class="tt-seg '+cls+'" style="flex:'+(x.r[1]/scale)+'" title="'+esc(x.label)+': '+(x.r[0]===x.r[1]?x.r[1]:x.r[0]+'–'+x.r[1])+' d"><span>'+esc(x.label.split(' ')[0])+'</span></div>';
     });
-    h+='</div><div class="tt-leg"><span><i class="tt-sw tt-seg-scale"></i>Scales with size</span><span><i class="tt-sw tt-seg-fixed"></i>Fixed floor</span><span><i class="tt-sw tt-seg-deliver"></i>Delivery: audience × course length</span></div>';
+    h+='</div><div class="tt-leg"><span><i class="tt-sw tt-seg-scale"></i>Scales with size</span><span><i class="tt-sw tt-seg-fixed"></i>Fixed floor</span><span><i class="tt-sw tt-seg-deliver"></i>Delivery: audience × course length</span>'+(acclDays?'<span><i class="tt-sw tt-seg-accl"></i>Acclimation (before the clock)</span>':'')+'</div>';
     // Phase table
     let cum=0;
     h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Phase</th><th>Business Days</th><th>Ends (upper)</th><th>Note</th></tr></thead><tbody>';
+    if(tt.techTransfer)h+='<tr class="tt-row-accl"><td>Project Acclimation</td><td>'+(r.accl&&!r.accl.invalid?r.accl.days:'—')+'</td><td>'+(tt.uatComplete?fmtDate(tt.uatComplete):'—')+'</td><td class="tt-note">Tech Transfer through UAT. Fixed floor before the clock; trainers learn the change and provide QA test scenarios.</td></tr>';
     r.phases.forEach(x=>{
       cum+=x.r[1];const end=tt.uatComplete&&x.r[1]>0?ttFmt(addBizDays(tt.uatComplete,cum)):'—';
       const note=x.skip||(x.deliver&&r.binding?'Binding audience: '+esc(r.binding.a.name)+' ('+r.binding.cohorts+' cohorts'+(r.course.makeup?', incl. '+r.st.makeupDays+'-day make-up':'')+')':x.fixed&&x.r[1]?'Fixed floor':'');
