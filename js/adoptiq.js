@@ -1727,7 +1727,7 @@ async function askAdoptIQ(){
 
   try{
     const portfolioData=collectPortfolioData();
-    const response=await fetch(ASK_AIQ_URL,{
+    const response=await aiFetch(ASK_AIQ_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({question,portfolioData})
@@ -2104,7 +2104,7 @@ function renderProjAll(){
   if(p&&p.golive&&new Date(p.golive)<=new Date()){if(plBtn)plBtn.style.display='';if(plSec)plSec.style.display='';}
   else{if(plBtn)plBtn.style.display='none';if(plSec)plSec.style.display='none';}
   if(isReadOnly)applyReadOnlyRestrictions();
-  checkNavOverflow();
+  applyPilotView();
 }
 function checkNavOverflow(){
   const nav=document.getElementById('proj-nav-tabs');
@@ -3255,7 +3255,7 @@ function collectTrajectoryData(p){
 }
 
 async function callAnthropicPrediction(data){
-  const response=await fetch(TRAJ_EDGE_URL,{
+  const response=await aiFetch(TRAJ_EDGE_URL,{
     method:'POST',
     headers:{
       'Content-Type':'application/json',
@@ -3276,6 +3276,7 @@ function renderTrajectoryCard(){
   const p=getProj();if(!p)return;
   const card=document.getElementById('p-trajectory-card');
   if(!card)return;
+  if(!aiAllowed()){card.style.display='none';return;}
 
   card.style.display='block';
 
@@ -6314,7 +6315,7 @@ function collectSmartRecsData(p){
 }
 
 async function callSmartRecommendations(data){
-  const response=await fetch(SMART_RECS_URL,{
+  const response=await aiFetch(SMART_RECS_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
     body:JSON.stringify(data)
@@ -6331,6 +6332,7 @@ function renderSmartRecs(){
   const panel=document.getElementById('smart-recs-panel');
   const fab=document.getElementById('smart-fab');
   if(!panel)return;
+  if(!aiAllowed()){panel.style.display='none';if(fab)fab.style.display='none';return;}
 
   panel.style.display='block';
   if(fab)fab.style.display='flex';
@@ -7322,7 +7324,7 @@ async function runSaturationForecast(){
   el.innerHTML='<div class="sf-loading"><div class="sf-spinner"></div><div>Analyzing saturation patterns and forecasting change load…</div></div>';
   try{
     const satData=collectSaturationData();
-    const response=await fetch(SAT_FORECAST_URL,{
+    const response=await aiFetch(SAT_FORECAST_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({saturationData:satData,mode:'forecast'})
@@ -7492,7 +7494,7 @@ async function runWhatIfComparison(){
   adjusted.groups=Object.values(groupMap).filter(g=>g.projects.length>=2);
 
   try{
-    const response=await fetch(SAT_FORECAST_URL,{
+    const response=await aiFetch(SAT_FORECAST_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({saturationData:{original,adjusted},mode:'whatif'})
@@ -7589,7 +7591,7 @@ async function runSequencingAnalysis(){
   el.innerHTML='<div class="sf-loading"><div class="sf-spinner"></div><div>Analyzing optimal sequencing strategy…</div></div>';
   try{
     const satData=collectSaturationData();
-    const response=await fetch(SAT_FORECAST_URL,{
+    const response=await aiFetch(SAT_FORECAST_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({saturationData:satData,mode:'sequencing'})
@@ -8630,7 +8632,7 @@ function collectPulseInsightsData(p){
 }
 
 async function callPulseInsights(data){
-  const response=await fetch(PULSE_INSIGHTS_URL,{
+  const response=await aiFetch(PULSE_INSIGHTS_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
     body:JSON.stringify(data)
@@ -9332,7 +9334,7 @@ function collectNarrativeData(p){
 }
 
 async function fetchNarrative(type,audience,data){
-  const response=await fetch(NARRATIVE_URL,{
+  const response=await aiFetch(NARRATIVE_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
     body:JSON.stringify({deliverableType:type,audience,projectData:data})
@@ -9351,7 +9353,7 @@ async function executeGenerate(){
 
   let narrative=null;
 
-  if(_genAIEnabled){
+  if(_genAIEnabled&&aiAllowed()){
     if(status){status.style.display='block';status.className='gen-status';status.textContent='Generating AI narrative…';}
     if(btn){btn.disabled=true;btn.textContent='Generating…';}
     try{
@@ -10675,8 +10677,41 @@ function genFullPackage(){
 let currentUserRole='owner'; // default for own releases
 let isDemoMode=false;
 
+// ── AI features: demo only. Live project data is never sent to AI endpoints. ──
+function aiAllowed(){return isDemoMode;}
+function aiFetch(url,opts){
+  if(!aiAllowed())return Promise.reject(new Error('AI features are turned off for live data'));
+  return fetch(url,opts);
+}
+function applyAIMode(){document.body.classList.toggle('ai-off',!aiAllowed());}
+
+// ── Pilot view: live projects show only the pilot tabs unless "All tabs" is chosen ──
+const PILOT_TABS=['overview','trainplan','adoption','postlaunch','sustain'];
+function pilotOn(){
+  let pref=null;try{pref=localStorage.getItem('adoptiq_pilot_view');}catch(e){}
+  return pref?pref==='on':!isDemoMode;
+}
+function applyPilotView(){
+  const on=pilotOn();
+  let activeHidden=false;
+  document.querySelectorAll('#proj-nav-tabs .nav-btn').forEach(b=>{
+    const m=(b.getAttribute('onclick')||'').match(/showProjTab\('(\w+)'/);if(!m)return;
+    const hide=on&&!PILOT_TABS.includes(m[1]);
+    b.classList.toggle('pilot-hidden',hide);
+    if(hide&&b.classList.contains('active'))activeHidden=true;
+  });
+  const t=document.getElementById('pilot-toggle');
+  if(t){t.textContent=on?'All tabs':'Pilot view';t.title=on?'Show every project tab':'Show only the pilot tabs';}
+  if(activeHidden){const first=document.querySelector('#proj-nav-tabs .nav-btn');if(first)showProjTab('overview',first);}
+  checkNavOverflow();
+}
+function togglePilotView(){
+  try{localStorage.setItem('adoptiq_pilot_view',pilotOn()?'off':'on');}catch(e){}
+  applyPilotView();
+}
+
 function setDemoMode(on){
-  isDemoMode=on;
+  isDemoMode=on;applyAIMode();applyPilotView();
   ['demo-banner-p','demo-banner-r','demo-banner-proj'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display=on?'inline-block':'none';
   });
@@ -10812,7 +10847,7 @@ function applyRoleRestrictions(){
   if(role==='viewer'){
     document.querySelectorAll('#v-release input,#v-release select,#v-release textarea,#v-project input,#v-project select,#v-project textarea').forEach(el=>{el.disabled=true;});
     document.querySelectorAll('#v-release button,#v-project button').forEach(el=>{
-      if(!el.textContent.includes('Export')&&!el.textContent.includes('Back')&&!el.textContent.includes('Team'))el.disabled=true;
+      if(!el.textContent.includes('Export')&&!el.textContent.includes('Back')&&!el.textContent.includes('Team')&&el.id!=='pilot-toggle')el.disabled=true;
     });
   }
 }
@@ -11321,7 +11356,7 @@ function applyReadOnlyRestrictions(){
   // Disable action buttons (but keep navigation, export, and theme buttons)
   document.querySelectorAll('#v-portfolio button,#v-release button,#v-project button').forEach(el=>{
     const txt=el.textContent||'';
-    const isNav=el.classList.contains('nav-btn')||el.classList.contains('theme-btn')||el.classList.contains('btn-profile');
+    const isNav=el.classList.contains('nav-btn')||el.classList.contains('theme-btn')||el.classList.contains('btn-profile')||el.id==='pilot-toggle';
     const isExport=txt.includes('Export')||txt.includes('Audit');
     const isBack=txt.includes('Back')||txt.includes('Portfolio');
     const isOpen=txt.includes('Open')||el.classList.contains('btn-sm');
@@ -11786,3 +11821,5 @@ if(checkReadOnlyParam()){
   });
 }
 initAuth();
+
+applyAIMode();

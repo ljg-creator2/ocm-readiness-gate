@@ -2679,3 +2679,10 @@ body.focus-mode .focus-mode-hint{opacity:0.7}
 .tt-seg-accl{background:repeating-linear-gradient(135deg,var(--red-bg),var(--red-bg) 6px,transparent 6px,transparent 10px);color:var(--red-bright);border:1px dashed var(--red-bright)}
 .tt-clock{width:2px;min-width:2px;background:var(--gold);margin:-4px 2px;border-radius:1px}
 .tt-row-accl td{font-style:italic}
+
+/* ── AI off for live data (demo keeps AI) ── */
+body.ai-off #aiq-bar,body.ai-off #aiq-answer-area,body.ai-off #sat-forecast-sec,body.ai-off #pulse-ai-panel,
+body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-card,body.ai-off #smart-recs-panel,body.ai-off #smart-fab{display:none!important}
+/* ── Pilot view ── */
+#proj-nav-tabs .nav-btn.pilot-hidden{display:none!important}
+.btn-pilot{white-space:nowrap}

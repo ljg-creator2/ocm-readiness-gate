@@ -891,6 +891,7 @@
     <div class="sub-nav-i">
       <nav class="nav-tabs" id="proj-nav-tabs" aria-label="Project navigation">
         <button class="nav-btn active" onclick="showProjTab('overview',this)">Overview</button>
+        <button class="nav-btn" onclick="showProjTab('trainplan',this)">Training Timeline</button>
         <button class="nav-btn" onclick="showProjTab('impact',this)">Impact</button>
         <button class="nav-btn" onclick="showProjTab('gaps',this)">Gaps</button>
         <button class="nav-btn" id="nav-adkar-btn" onclick="showProjTab('adkar',this)">ADKAR</button>
@@ -902,11 +903,11 @@
         <button class="nav-btn" onclick="showProjTab('heatmap',this)">Dependency Map</button>
         <button class="nav-btn" onclick="showProjTab('craid',this)">CRAID Log</button>
         <button class="nav-btn" onclick="showProjTab('resources',this)">Resources</button>
-        <button class="nav-btn" onclick="showProjTab('trainplan',this)">Training Timeline</button>
         <button class="nav-btn" onclick="showProjTab('pulse',this)">Pulse</button>
         <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)" style="display:none">Post-Launch</button>
         <button class="nav-btn" onclick="showProjTab('sustain',this)">Sustainment</button>
       </nav>
+      <button class="btn-outline btn-pilot" id="pilot-toggle" onclick="togglePilotView()">All tabs</button>
       <button class="btn-gold" onclick="exportProjectPDF()">Export Report</button>
       <div class="dropdown-gen">
         <button class="btn-gold btn-gen" onclick="toggleGenMenu()">Generate ▾</button>
