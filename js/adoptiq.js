@@ -796,7 +796,7 @@ function newRelease(name,agencies,golive,phase){
 function newProject(name,agencies,users){
   const res={};RES_ROLES.forEach(r=>{res[r.key]=[];});
   return{id:uid(),name:name||'Untitled Project',agencies:agencies||[],estimatedUsers:users||0,
-    trainingRequired:true,trainingStartDate:'',status:'Not Started',golive:'',
+    trainingRequired:true,trainingStartDate:'',status:'Not Started',golive:'',size:'',
     gateState:{},depHM:{},depNotes:{},stakeholders:[],
     adkarScores:{A1:3,D:3,K:3,Ab:3,R:3},adkarNotes:{A1:'',D:'',K:'',Ab:'',R:''},
     resources:res,
@@ -1321,6 +1321,7 @@ function openProject(pid){
   const tsEl=document.getElementById('p-train-start');if(tsEl)tsEl.value=p.trainingStartDate||'';
   document.getElementById('p-users').value=p.estimatedUsers||0;
   document.getElementById('p-status').value=p.status||'Not Started';
+  document.getElementById('p-size').value=p.size||'';
   renderProjAgencyChips();
   updateTRButtons();
   const mvBtn=document.getElementById('ib-move-proj');
@@ -1539,7 +1540,7 @@ function renderPortfolio(){
       <button class="btn-gold" onclick="openAddRelease()" style="padding:14px 32px;font-size:13px">Add Your First Release</button>
       <div class="hero-cred">Providence Consulting Firm &middot; CPTM &middot; ATD Master Trainer &middot; ADKAR-Aligned</div>
     </div>`;
-    document.getElementById('tl-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
+    document.getElementById('tl-sec').style.display='none';document.getElementById('size-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
   }
   wrap.innerHTML=`<div class="card-grid stagger-children">${releases.map(r=>{
     const rl=relRollup(r);const d=daysTo(r.golive);const modStr=fmtMod(r.modified);
@@ -1571,6 +1572,7 @@ function renderPortfolio(){
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('people-cap-sec').style.display=releases.length>=1?'block':'none';
+  document.getElementById('size-sec').style.display=releases.length>=1?'block':'none';renderSizePortfolio();
   requestAnimationFrame(()=>{
     renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
     if(isReadOnly)applyReadOnlyRestrictions();
@@ -2010,7 +2012,7 @@ function renderRelProjCards(){
     const ocmGapHtml=(noTrain||noImpl)?`<div class="pc-ocm-gaps">${noTrain?'<span class="pc-ocm-gap">No OCM Training</span>':''}${noImpl?'<span class="pc-ocm-gap">No OCM Impl</span>':''}</div>`:'';
     return`<div class="pc" tabindex="0" draggable="true" data-proj-id="${p.id}" onclick="openProject(${p.id})" onkeydown="if(event.key==='Enter')openProject(${p.id})" role="button" aria-label="Open project ${esc(p.name)}">
       <div class="pc-hd">
-        <div style="display:flex;align-items:center;justify-content:space-between"><div class="pc-name">${esc(p.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div class="pc-name">${esc(p.name)}${p.size?` <span class="size-badge" title="T-shirt size">${esc(p.size)}</span>`:''}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
         <div class="chip-row">${(p.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}</span>`).join('')}</div>
         <div class="pc-tr-badge ${p.trainingRequired?'pc-tr-yes':'pc-tr-no'}">${p.trainingRequired?'Training Required':'No Training'}</div>${ocmGapHtml}
       </div>
@@ -7031,6 +7033,13 @@ function openResourceInProject(relId,projId){
 // ════════════════════════════════════════════════════════
 // FEATURE: OCM WORKLOAD BALANCE DASHBOARD
 // ════════════════════════════════════════════════════════
+// ── T-shirt sizing: load points per project size ──
+const PROJ_SIZES=[{key:'XS',pts:1},{key:'S',pts:2},{key:'M',pts:3},{key:'L',pts:5},{key:'XL',pts:8}];
+const SIZE_UNSIZED_PTS=3;// unsized projects count as M until sized
+const LOAD_OVER=10,LOAD_NEAR=6;
+function sizePts(p){const s=PROJ_SIZES.find(x=>x.key===p.size);return s?s.pts:SIZE_UNSIZED_PTS;}
+function isActiveProj(p){return !/^complete/i.test(p.status||'');}
+
 function collectOcmWorkloadData(){
   const OCM_ROLES=[{key:'ocm_train',label:'OCM Training',abbr:'Train'},{key:'ocm_impl',label:'OCM Implementation',abbr:'Impl'}];
   const personMap={};
@@ -7050,7 +7059,7 @@ function collectOcmWorkloadData(){
             const nm=res.name.trim();const norm=nm.toLowerCase();
             relResources.add(norm);
             if(!personMap[norm])personMap[norm]={name:nm,assignments:[],projIds:new Set(),relIds:new Set()};
-            personMap[norm].assignments.push({roleKey:role.key,roleLabel:role.label,roleAbbr:role.abbr,projId:p.id,projName:p.name,relName:r.name,relId:r.id,relGoLive:r.golive});
+            personMap[norm].assignments.push({roleKey:role.key,roleLabel:role.label,roleAbbr:role.abbr,projId:p.id,projName:p.name,relName:r.name,relId:r.id,relGoLive:r.golive,size:p.size||'',pts:sizePts(p),active:isActiveProj(p)});
             personMap[norm].projIds.add(p.id);
             personMap[norm].relIds.add(r.id);
           });
@@ -7067,8 +7076,15 @@ function collectOcmWorkloadData(){
   });
 
   const people=Object.values(personMap);
+  people.forEach(person=>{
+    const seen=new Set();person.load=0;person.unsized=0;person.activeProjs=0;
+    person.assignments.forEach(a=>{
+      if(seen.has(a.projId)||!a.active)return;seen.add(a.projId);
+      person.load+=a.pts;person.activeProjs++;if(!a.size)person.unsized++;
+    });
+  });
   const totalUnique=people.length;
-  const overAllocated=people.filter(p=>p.projIds.size>=3).length;
+  const overAllocated=people.filter(p=>p.load>=LOAD_OVER).length;
   const crossRelease=people.filter(p=>p.relIds.size>=2).length;
   const totalGaps=projectGaps.length;
   projectGaps.sort((a,b)=>b.missingCount-a.missingCount);
@@ -7089,7 +7105,7 @@ function renderOcmWorkloadBalance(){
     const parts=[];
     if(data.summary.totalGaps)parts.push(data.summary.totalGaps+' gap'+(data.summary.totalGaps!==1?'s':''));
     if(data.summary.crossRelease)parts.push(data.summary.crossRelease+' cross-release');
-    if(data.summary.overAllocated)parts.push(data.summary.overAllocated+' over-allocated');
+    if(data.summary.overAllocated)parts.push(data.summary.overAllocated+' over capacity');
     if(!parts.length)parts.push('All balanced');
     statEl.textContent=parts.join(' · ');
   }
@@ -7100,7 +7116,7 @@ function renderOcmWklSummary(data){
   const s=data.summary;
   el.innerHTML=`<div class="sat-alert-strip">
     <div class="sat-alert-item"><span class="sat-alert-val">${s.totalUnique}</span><span class="sat-alert-lbl">Total OCM Resources</span></div>
-    <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over-Allocated (3+)</span></div>
+    <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over Capacity (${LOAD_OVER}+ pts)</span></div>
     <div class="sat-alert-item"><span class="sat-alert-val${s.crossRelease?' sev-high':''}">${s.crossRelease}</span><span class="sat-alert-lbl">Cross-Release Overlap</span></div>
     <div class="sat-alert-item"${data.projectGaps.length?` style="cursor:pointer" onclick="openRelease(${data.projectGaps[0].relId})" title="Go to ${esc(data.projectGaps[0].relName)}"`:''}>
       <span class="sat-alert-val${s.totalGaps?' sev-crit':''}">${s.totalGaps}</span><span class="sat-alert-lbl">Projects w/ Gaps</span></div>
@@ -7113,27 +7129,26 @@ function renderOcmWklRoster(data){
   // Bucket people by utilization level
   const heavy=[],active=[],available=[];
   data.people.forEach(person=>{
-    const pc=person.projIds.size;
-    if(pc>=3)heavy.push(person);
-    else if(pc===2)active.push(person);
+    if(person.load>=LOAD_OVER)heavy.push(person);
+    else if(person.load>=LOAD_NEAR)active.push(person);
     else available.push(person);
   });
-  [heavy,active,available].forEach(arr=>arr.sort((a,b)=>b.projIds.size-a.projIds.size||a.name.localeCompare(b.name)));
+  [heavy,active,available].forEach(arr=>arr.sort((a,b)=>b.load-a.load||a.name.localeCompare(b.name)));
 
   function renderPersonRow(person){
     const projGroups={};
     person.assignments.forEach(a=>{
-      if(!projGroups[a.projId])projGroups[a.projId]={projName:a.projName,relName:a.relName,relId:a.relId,projId:a.projId,roles:[]};
+      if(!projGroups[a.projId])projGroups[a.projId]={projName:a.projName,relName:a.relName,relId:a.relId,projId:a.projId,size:a.size,active:a.active,roles:[]};
       projGroups[a.projId].roles.push(a.roleAbbr);
     });
     const projs=Object.values(projGroups);
     let r='<div class="wkl-roster-row">';
-    r+='<div class="wkl-roster-name">'+esc(person.name)+'</div>';
+    r+='<div class="wkl-roster-name">'+esc(person.name)+'<span class="wkl-load" title="Load points across active projects (XS 1 · S 2 · M 3 · L 5 · XL 8)">'+person.load+' pts</span>'+(person.unsized?'<span class="wkl-unsized" title="Unsized projects count as M (3 pts)">'+person.unsized+' unsized</span>':'')+'</div>';
     r+='<div class="wkl-roster-tags">';
     projs.forEach(pr=>{
       const roles=pr.roles.join(' + ');
       const showRel=releases.length>1;
-      r+='<span class="wkl-roster-tag" title="'+esc(pr.relName)+' → '+esc(pr.projName)+'" onclick="openResourceInProject('+pr.relId+','+pr.projId+')">'+(showRel?'<span class="wkl-roster-rel">'+esc(pr.relName)+'</span> ':'')+esc(pr.projName)+' <span class="wkl-roster-role">'+esc(roles)+'</span></span>';
+      r+='<span class="wkl-roster-tag" title="'+esc(pr.relName)+' → '+esc(pr.projName)+'" onclick="openResourceInProject('+pr.relId+','+pr.projId+')">'+(showRel?'<span class="wkl-roster-rel">'+esc(pr.relName)+'</span> ':'')+(pr.size?'<span class="size-badge">'+esc(pr.size)+'</span> ':'')+(pr.active?'':'<span class="wkl-roster-role">Complete</span> ')+esc(pr.projName)+' <span class="wkl-roster-role">'+esc(roles)+'</span></span>';
     });
     r+='</div></div>';
     return r;
@@ -7153,9 +7168,9 @@ function renderOcmWklRoster(data){
   }
 
   let h='';
-  h+=renderGroup('Over-Allocated — 3+ Projects','wkl-grp-heavy',heavy,false);
-  h+=renderGroup('Multi-Project — 2 Projects','wkl-grp-active',active,false);
-  h+=renderGroup('Single Project','wkl-grp-available',available,heavy.length>0||active.length>0);
+  h+=renderGroup('Over Capacity — '+LOAD_OVER+'+ Load Points','wkl-grp-heavy',heavy,false);
+  h+=renderGroup('Near Capacity — '+LOAD_NEAR+'–'+(LOAD_OVER-1)+' Points','wkl-grp-active',active,false);
+  h+=renderGroup('Has Capacity — Under '+LOAD_NEAR+' Points','wkl-grp-available',available,heavy.length>0||active.length>0);
   el.innerHTML=h;
 }
 
@@ -7797,7 +7812,8 @@ function renderPSustain(){
   dx.sort((a,b)=>order[a.d.status]-order[b.d.status]);
   const count=s=>dx.filter(x=>x.d.status===s).length;
   const byGap=g=>dx.filter(x=>x.d.primary===g).length;
-  let h='<div class="pl-header">';
+  let h=renderSizeExpectations(p);
+  h+='<div class="pl-header">';
   ['intervene','watch','ontrack','nodata'].forEach(s=>{
     h+='<div class="pl-stat"><span class="pl-stat-val sus-stat-'+s+'">'+count(s)+'</span><span class="pl-stat-lbl">'+SUS_STATUS[s].label+'</span></div>';
   });
@@ -7849,6 +7865,76 @@ function renderPSustain(){
   });
   el.innerHTML=h;
   if(isReadOnly)applyReadOnlyRestrictions();
+}
+// Expected OCM intensity by project T-shirt size
+const SIZE_OCM={
+  XS:{iv:['d30'],pulse:'one',l3:false,rein:false,esc:false},
+  S:{iv:['d30'],pulse:'one',l3:false,rein:true,esc:false},
+  M:{iv:['d30','d60'],pulse:'each',l3:true,rein:true,esc:false},
+  L:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:false},
+  XL:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:true}
+};
+function sizeExpectations(p){
+  const exp=SIZE_OCM[p.size];if(!exp)return null;
+  const shs=p.stakeholders||[];const n=shs.length;
+  const pr=p.pulseResults||{};const pl=p.postLaunch||{};
+  const rows=[];
+  const withPulse=shs.filter(sh=>(pr[sh.id]||{}).responses>0).length;
+  if(exp.pulse==='one')rows.push({label:'Pulse survey collected (at least one group)',met:withPulse>0?1:0,total:1});
+  else rows.push({label:'Pulse survey collected for every group',met:withPulse,total:n});
+  if(exp.rein)rows.push({label:'Reinforcement owner named for every group',met:shs.filter(sh=>sh.rein&&sh.rein.owner).length,total:n});
+  if(exp.l3)rows.push({label:'Kirkpatrick L3 behavior defined for every group',met:shs.filter(sh=>sh.kirk&&sh.kirk.L3&&sh.kirk.L3.observable).length,total:n});
+  if(exp.esc)rows.push({label:'Escalation path defined for every group',met:shs.filter(sh=>sh.rein&&sh.rein.escalation).length,total:n});
+  const days=p.golive?Math.floor((new Date()-new Date(p.golive))/864e5):-1;
+  const due=exp.iv.filter(k=>days>=parseInt(k.substring(1)));
+  const ivLabel=exp.iv.map(k=>k.substring(1)).join('/')+'-day checkpoints';
+  if(due.length){
+    let met=0;shs.forEach(sh=>due.forEach(k=>{if(((pl[sh.id]||{})[k]||{}).adoption!==undefined)met++;}));
+    rows.push({label:'Post-launch '+ivLabel+' logged ('+due.length+' due so far)',met,total:n*due.length});
+  }else rows.push({label:'Post-launch '+ivLabel+' (start after go-live)',met:0,total:0});
+  return{exp,rows};
+}
+function renderSizeExpectations(p){
+  const se=sizeExpectations(p);
+  if(!se)return'<div class="size-exp size-exp-muted"><i class="ph ph-t-shirt"></i><div>Set this project\'s <strong>T-shirt size</strong> in the header to see the OCM intensity expected for its size.</div></div>';
+  const scored=se.rows.filter(r=>r.total>0);
+  const met=scored.filter(r=>r.met>=r.total).length;
+  let h='<div class="size-exp"><div class="size-exp-hd"><span class="size-badge size-badge-lg">'+esc(p.size)+'</span><span><strong>Expected OCM intensity for a size '+esc(p.size)+' project</strong> &middot; '+met+' of '+scored.length+' met</span></div><ul class="size-exp-list">';
+  se.rows.forEach(r=>{
+    const na=r.total===0;const ok=!na&&r.met>=r.total;
+    h+='<li class="'+(na?'size-exp-na':ok?'size-exp-ok':'size-exp-miss')+'"><i class="ph '+(na?'ph-clock':ok?'ph-check-circle':'ph-x-circle')+'"></i>'+esc(r.label)+(na?'':' <span class="size-exp-ct">'+r.met+'/'+r.total+'</span>')+'</li>';
+  });
+  return h+'</ul></div>';
+}
+function renderSizePortfolio(){
+  const el=document.getElementById('size-panel');if(!el)return;
+  const keys=PROJ_SIZES.map(x=>x.key).concat(['']);
+  const label=k=>k||'Unsized';
+  const tot={};keys.forEach(k=>tot[k]=0);
+  const unsized=[];let totalPts=0;
+  const rows=releases.map(r=>{
+    const c={};keys.forEach(k=>c[k]=0);let pts=0;
+    (r.projects||[]).filter(isActiveProj).forEach(p=>{
+      const k=PROJ_SIZES.some(x=>x.key===p.size)?p.size:'';
+      c[k]++;tot[k]++;pts+=sizePts(p);
+      if(!k)unsized.push({r,p});
+    });
+    totalPts+=pts;
+    return{r,c,pts};
+  }).filter(x=>keys.some(k=>x.c[k]));
+  if(!rows.length){el.innerHTML='<div class="wkl-empty">No active projects.</div>';return;}
+  let h='<div class="sat-alert-strip">';
+  keys.forEach(k=>{h+='<div class="sat-alert-item"><span class="sat-alert-val">'+tot[k]+'</span><span class="sat-alert-lbl">'+label(k)+'</span></div>';});
+  h+='<div class="sat-alert-item"><span class="sat-alert-val">'+totalPts+'</span><span class="sat-alert-lbl">Load Points</span></div></div>';
+  h+='<div class="hm-scroll"><table class="size-tbl"><thead><tr><th>Release</th>'+keys.map(k=>'<th>'+label(k)+'</th>').join('')+'<th>Load Pts</th></tr></thead><tbody>';
+  rows.forEach(({r,c,pts})=>{
+    h+='<tr><td><a href="#" onclick="openRelease('+r.id+');return false">'+esc(r.name)+'</a></td>'+keys.map(k=>'<td'+(c[k]?'':' class="size-zero"')+'>'+(c[k]||'·')+'</td>').join('')+'<td><strong>'+pts+'</strong></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  if(unsized.length){
+    h+='<div class="size-unsized"><strong>'+unsized.length+' unsized</strong> (counted as M until sized): '+unsized.map(({r,p})=>'<a href="#" onclick="openProjectFromPortfolio('+r.id+','+p.id+');return false">'+esc(p.name)+'</a>').join(', ')+'</div>';
+  }
+  el.innerHTML=h;
 }
 function renderSusInterventions(p,sh,d){
   const ivs=((p.sustainment[sh.id]||{}).interventions)||[];
@@ -10863,6 +10949,9 @@ async function loadDemoData(){
   ];
   r6.projects=[p6a];
   releases.push(r6);
+  // T-shirt sizes (one left unsized to show the prompt)
+  const demoSizes={'Clinical Workflow':'XL','Nursing Documentation':'L','Teller Platform':'L','Online Banking':'M','Shop Floor MES':'M','Case Management System':'XL','Public Portal & Self-Service':'M','Payroll Engine':'M'};
+  releases.forEach(r=>r.projects.forEach(p=>{if(demoSizes[p.name])p.size=demoSizes[p.name];}));
 
   await saveData();setDemoMode(true);renderPortfolio();renderAlerts();showSuccess('You\u2019re in demo mode. Explore freely \u2014 nothing here is real data.');
   initTopBrand();

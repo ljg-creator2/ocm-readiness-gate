@@ -2603,3 +2603,29 @@ body.focus-mode .focus-mode-hint{opacity:0.7}
 .sus-iv-del{border:none;background:none;color:var(--ink-35);cursor:pointer;font-size:13px;padding:4px}
 .sus-iv-del:hover{color:var(--red-bright)}
 @media(max-width:768px){.sus-body{grid-template-columns:1fr}.sus-iv-row{flex-wrap:wrap}.sus-iv-note{flex-basis:100%}}
+
+/* ── T-shirt sizing ── */
+.size-badge{display:inline-block;min-width:18px;text-align:center;font-family:var(--font-body);font-size:8px;font-weight:700;letter-spacing:0.04em;padding:1px 4px;border-radius:3px;border:1px solid var(--gold);color:var(--gold-text)}
+.size-badge-lg{font-size:11px;padding:3px 8px;min-width:26px}
+.wkl-load{margin-left:8px;font-size:9px;font-weight:700;color:var(--ink-60);letter-spacing:0.04em}
+.wkl-unsized{margin-left:6px;font-size:9px;color:var(--amber)}
+.size-exp{border:1px solid var(--border);border-radius:var(--r6);padding:12px 14px;margin-bottom:14px;background:var(--surface);font-family:var(--font-body)}
+.size-exp-muted{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--ink-60)}
+.size-exp-muted>i{font-size:16px;color:var(--gold-text)}
+.size-exp-hd{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--ink);margin-bottom:8px}
+.size-exp-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}
+.size-exp-list li{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--ink)}
+.size-exp-ok i{color:var(--green)}
+.size-exp-miss i{color:var(--red-bright)}
+.size-exp-na{color:var(--ink-35)!important}
+.size-exp-ct{margin-left:auto;font-weight:700;color:var(--ink-60)}
+.size-tbl{width:100%;border-collapse:collapse;font-family:var(--font-body);font-size:11px;margin-top:12px}
+.size-tbl th{text-align:center;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-60);padding:6px 8px;border-bottom:1px solid var(--border)}
+.size-tbl th:first-child,.size-tbl td:first-child{text-align:left}
+.size-tbl td{text-align:center;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--ink)}
+.size-tbl a{color:var(--ink);text-decoration:none;font-weight:600}
+.size-tbl a:hover{text-decoration:underline}
+.size-zero{color:var(--ink-35)!important}
+.size-unsized{margin-top:10px;font-size:11px;color:var(--ink-60)}
+.size-unsized a{color:var(--gold-text)}
+@media(max-width:768px){.size-exp-list{grid-template-columns:1fr}}

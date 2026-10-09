@@ -523,6 +523,12 @@
         </div>
       </div>
     </div>
+    <div id="size-sec" style="display:none;margin-bottom:24px">
+      <div class="panel">
+        <div class="panel-hd"><div><div class="pt">Portfolio by Size</div><div class="ps-text">Active projects by T-shirt size. Load points weight each project by size (XS 1 · S 2 · M 3 · L 5 · XL 8); completed projects are excluded.</div></div></div>
+        <div class="pb" id="size-panel"></div>
+      </div>
+    </div>
     <!-- Portfolio Risk Dashboard — most actionable, shown first -->
     <div id="port-craid-sec" style="display:none">
       <details class="port-collapse">
@@ -952,6 +958,12 @@
         <div class="ib-label">Status</div>
         <select class="ib-select" id="p-status" aria-label="Project status" onchange="syncProj('status',this.value)">
           <option>Not Started</option><option>In Progress</option><option>Complete</option><option>On Hold</option><option>Blocked</option>
+        </select>
+      </div>
+      <div class="ib-field" style="max-width:110px">
+        <div class="ib-label">Size</div>
+        <select class="ib-select" id="p-size" aria-label="Project T-shirt size" onchange="syncProj('size',this.value);renderPSustain()">
+          <option value="">Unsized</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option>
         </select>
       </div>
       <div class="ib-field" id="ib-move-proj" style="max-width:120px;display:none">
