@@ -2562,3 +2562,44 @@ body.focus-mode #v-portfolio,body.focus-mode #v-release,body.focus-mode #v-proje
 }
 .focus-mode-hint{position:fixed;bottom:var(--space-6);left:50%;transform:translateX(-50%);background:var(--color-navy);color:var(--nav-active);font-size:var(--text-xs);padding:var(--space-2) var(--space-4);border-radius:var(--radius-pill);opacity:0;pointer-events:none;transition:opacity var(--duration-normal);font-family:var(--font-body);letter-spacing:var(--tracking-wide);z-index:var(--z-toast)}
 body.focus-mode .focus-mode-hint{opacity:0.7}
+
+/* ── Sustainment: Adoption Gap Diagnosis ── */
+.sus-stat-intervene{color:var(--red-bright)}
+.sus-stat-watch{color:var(--amber)}
+.sus-stat-ontrack{color:var(--green)}
+.sus-stat-nodata{color:var(--ink-35)}
+.sus-summary{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;margin-bottom:14px;border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--r6);background:var(--surface);font-family:var(--font-body);font-size:12px;line-height:1.5;color:var(--ink)}
+.sus-summary>i{font-size:16px;color:var(--gold-text);margin-top:1px}
+.sus-summary-muted{border-left-color:var(--border);color:var(--ink-60)}
+.sus-group{border:1px solid var(--border);border-radius:var(--r6);padding:14px;margin-bottom:10px;background:var(--surface)}
+.sus-group-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.sus-group-hd .pl-group-name{margin-right:auto}
+.sus-status{font-family:var(--font-body);font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;border-radius:4px}
+.sus-st-red{color:var(--red-bright);background:var(--red-bg)}
+.sus-st-amber{color:var(--amber);background:var(--amber-bg)}
+.sus-st-green{color:var(--green);background:var(--green-bg)}
+.sus-st-grey{color:var(--ink-60);background:transparent;border:1px solid var(--border)}
+.sus-gap-chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-body);font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;border:1px solid var(--border);color:var(--ink)}
+.sus-gap-knowledge{border-color:var(--gold);color:var(--gold-text)}
+.sus-gap-ability{border-color:var(--amber);color:var(--amber)}
+.sus-gap-reinforcement{border-color:var(--red-bright);color:var(--red-bright)}
+.sus-latest{font-size:10px;color:var(--ink-60);font-family:var(--font-body);margin-bottom:10px}
+.sus-body{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sus-col{border:1px solid var(--border);border-radius:var(--r6);padding:10px 12px}
+.sus-col-hd{font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold-text);margin-bottom:6px}
+.sus-meaning{font-size:11px;font-style:italic;color:var(--ink-60);margin-bottom:6px}
+.sus-ev,.sus-rx{margin:0;padding-left:16px;font-size:11px;line-height:1.55;color:var(--ink)}
+.sus-ev-sec{color:var(--ink-60)}
+.sus-ev-tag{display:inline-block;font-size:8px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-right:5px}
+.sus-avoid{display:flex;gap:6px;align-items:flex-start;margin-top:8px;padding:6px 8px;border-radius:4px;background:var(--amber-bg);color:var(--ink);font-size:10px;line-height:1.45}
+.sus-avoid i{color:var(--amber);font-size:12px;margin-top:1px}
+.sus-ok{font-size:11px;color:var(--ink-60);padding:4px 0}
+.sus-iv-sec{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
+.sus-iv-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-60)}
+.sus-iv-empty{font-size:10px;color:var(--ink-35)}
+.sus-iv-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.sus-iv-row input,.sus-iv-row select{padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-body);font-size:11px;color:var(--ink);background:var(--surface);box-sizing:border-box;min-width:0}
+.sus-iv-note{flex:1}
+.sus-iv-del{border:none;background:none;color:var(--ink-35);cursor:pointer;font-size:13px;padding:4px}
+.sus-iv-del:hover{color:var(--red-bright)}
+@media(max-width:768px){.sus-body{grid-template-columns:1fr}.sus-iv-row{flex-wrap:wrap}.sus-iv-note{flex-basis:100%}}

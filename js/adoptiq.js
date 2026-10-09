@@ -805,6 +805,7 @@ function newProject(name,agencies,users){
     pulseConfig:{},
     pulseResults:{},
     postLaunch:{},
+    sustainment:{},
     lifecycleSignals:{
       requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},
       design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},
@@ -1349,6 +1350,7 @@ function showProjTab(id,btn){
   if(id==='impact')renderPImpact();
   if(id==='gaps')renderPGaps();
   if(id==='postlaunch')renderPPostLaunch();
+  if(id==='sustain')renderPSustain();
   if(id==='pulse')renderPPulse();
   if(id==='lifecycle')renderPLifecycle();
   if(id==='craid')renderPCraid();
@@ -7708,6 +7710,191 @@ function updatePL(shId,interval,field,value){
 }
 
 // ════════════════════════════════════════════════════════
+// FEATURE: SUSTAINMENT — ADOPTION GAP DIAGNOSIS
+// Classifies each group's slippage as a Knowledge, Ability, or
+// Reinforcement gap and prescribes a targeted intervention, so the
+// answer is never "retrain everyone."
+// ════════════════════════════════════════════════════════
+const SUS_GAPS={
+  knowledge:{label:'Knowledge Gap',tag:'Refresher',icon:'ph-book-open',
+    meaning:'They never fully learned it, or they have forgotten it.',
+    actions:['Targeted refresher on the specific tasks they are missing, not the full course','Job aid or quick-reference guide at the point of need','Re-check proficiency at the next checkpoint to confirm the refresher worked'],
+    avoid:'Do not re-run the full training for everyone. Aim the refresher at this group and these tasks.'},
+  ability:{label:'Ability Gap',tag:'Hands-On Support',icon:'ph-hand-pointing',
+    meaning:'They know how in theory but cannot do it under real working conditions.',
+    actions:['Floor support or super-users at the elbow during live work','Practice in the sandbox using their real scenarios','Open office hours for in-the-moment questions'],
+    avoid:'More classroom time will not fix this. They need supported practice in the real environment.'},
+  reinforcement:{label:'Reinforcement Gap',tag:'Reinforcement',icon:'ph-arrows-clockwise',
+    meaning:'They can do it, but they are drifting back to the old way.',
+    actions:['Manager check-ins on usage, with the adoption data in hand','Recognize early adopters publicly within the group','Retire the old way: remove legacy access, forms, and workarounds'],
+    avoid:'Retraining will not help. They already know how. This needs accountability and visible leadership.'}
+};
+const SUS_STATUS={
+  intervene:{label:'Intervene',cls:'sus-st-red'},
+  watch:{label:'Watch',cls:'sus-st-amber'},
+  ontrack:{label:'On Track',cls:'sus-st-green'},
+  nodata:{label:'Needs Data',cls:'sus-st-grey'}
+};
+const SUS_IV_STATUSES=['Planned','Delivered','Verified'];
+
+function diagnoseSustainment(p,sh){
+  const pts={knowledge:0,ability:0,reinforcement:0};
+  const ev={knowledge:[],ability:[],reinforcement:[]};
+  const add=(type,n,msg)=>{pts[type]+=n;ev[type].push(msg);};
+  const pl=(p.postLaunch||{})[sh.id]||{};
+  const obs=PL_INTERVALS.map(iv=>Object.assign({label:iv.label},pl[iv.key]||{}))
+    .filter(o=>o.adoption!==undefined||o.proficiency!==undefined||o.tickets!==undefined);
+  const latest=obs[obs.length-1];const prev=obs.length>1?obs[obs.length-2]:null;
+  const has=v=>v!==undefined&&v!==null&&!isNaN(v);
+  if(latest){
+    const at=' at '+latest.label.toLowerCase();
+    if(has(latest.proficiency)){
+      if(latest.proficiency<60)add('knowledge',3,'Proficiency is '+latest.proficiency+'%'+at);
+      else if(latest.proficiency<75)add('knowledge',2,'Proficiency is '+latest.proficiency+'%'+at+', below the 75% bar');
+    }
+    if(prev&&has(prev.proficiency)&&has(latest.proficiency)&&latest.proficiency<=prev.proficiency-5)
+      add('knowledge',2,'Proficiency fell from '+prev.proficiency+'% to '+latest.proficiency+'%, a sign of skill decay');
+    if(prev&&has(prev.tickets)&&has(latest.tickets)&&latest.tickets>prev.tickets)
+      add('knowledge',1,'Support tickets rose from '+prev.tickets+' to '+latest.tickets);
+    if(prev&&has(prev.adoption)&&has(latest.adoption)&&latest.adoption<=prev.adoption-8)
+      add('reinforcement',3,'Adoption fell from '+prev.adoption+'% to '+latest.adoption+'%, so people are reverting');
+    else if(has(latest.adoption)&&has(latest.proficiency)&&latest.proficiency>=75&&latest.adoption<=latest.proficiency-10)
+      add('ability',latest.proficiency-latest.adoption>=25?3:2,'Proficient on assessment ('+latest.proficiency+'%) but only '+latest.adoption+'% adoption in live work');
+    else if(has(latest.adoption)&&latest.adoption<60&&!has(latest.proficiency))
+      add('ability',1,'Adoption is '+latest.adoption+'%'+at);
+  }
+  // Pulse survey signals (ADKAR only: d3 Knowledge, d4 Ability, d5 Reinforcement)
+  const pr=(p.pulseResults||{})[sh.id]||{};
+  const fwId=getBrand().frameworkId||'adkar';
+  if(fwId==='adkar'&&pr.responses>0&&pr.scores){
+    [['d3','knowledge','Knowledge'],['d4','ability','Ability'],['d5','reinforcement','Reinforcement']].forEach(([k,type,word])=>{
+      const s=+pr.scores[k];
+      if(has(s)&&s<=2.5)add(type,2,'Pulse survey rates '+word+' at '+s.toFixed(1)+'/5 ('+pr.responses+' responses)');
+    });
+  }
+  const postGL=p.golive&&new Date(p.golive)<=new Date();
+  if(postGL&&!(sh.rein&&sh.rein.owner))add('reinforcement',1,'No reinforcement owner assigned after go-live');
+  if((sh.anxietyIndicators||{}).whatDoesThisMeanFreq>=4)add('knowledge',1,'Frequent "what does this mean?" questions');
+
+  const ranked=Object.keys(pts).sort((a,b)=>pts[b]-pts[a]);
+  const top=pts[ranked[0]];
+  const hasData=!!latest||pr.responses>0;
+  let status;
+  if(top>=4)status='intervene';else if(top>=2)status='watch';else status=hasData?'ontrack':'nodata';
+  const primary=top>=2?ranked[0]:null;
+  const secondary=primary?ranked.slice(1).filter(t=>pts[t]>=2):[];
+  return{status,primary,secondary,pts,ev,latest};
+}
+
+function renderPSustain(){
+  const p=getProj();if(!p)return;
+  const el=document.getElementById('ptab-sustain');if(!el)return;
+  const shs=p.stakeholders||[];
+  if(!shs.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups first, then log post-launch observations or collect a pulse survey to diagnose adoption gaps.</p></div>';return;}
+  if(!p.sustainment)p.sustainment={};
+  const dx=shs.map(sh=>({sh,d:diagnoseSustainment(p,sh)}));
+  const order={intervene:0,watch:1,nodata:2,ontrack:3};
+  dx.sort((a,b)=>order[a.d.status]-order[b.d.status]);
+  const count=s=>dx.filter(x=>x.d.status===s).length;
+  const byGap=g=>dx.filter(x=>x.d.primary===g).length;
+  let h='<div class="pl-header">';
+  ['intervene','watch','ontrack','nodata'].forEach(s=>{
+    h+='<div class="pl-stat"><span class="pl-stat-val sus-stat-'+s+'">'+count(s)+'</span><span class="pl-stat-lbl">'+SUS_STATUS[s].label+'</span></div>';
+  });
+  h+='</div>';
+  const flagged=dx.filter(x=>x.d.primary);
+  if(flagged.length){
+    const parts=[];
+    if(byGap('knowledge'))parts.push('<strong>'+byGap('knowledge')+'</strong> need'+(byGap('knowledge')===1?'s':'')+' a targeted refresher');
+    if(byGap('ability'))parts.push('<strong>'+byGap('ability')+'</strong> need'+(byGap('ability')===1?'s':'')+' hands-on support');
+    if(byGap('reinforcement'))parts.push('<strong>'+byGap('reinforcement')+'</strong> need'+(byGap('reinforcement')===1?'s':'')+' reinforcement, not retraining');
+    h+='<div class="sus-summary"><i class="ph ph-target"></i><div><strong>Targeted plan, not blanket retraining.</strong> Of '+shs.length+' group'+(shs.length===1?'':'s')+': '+parts.join(', ')+'.'+(count('ontrack')?' '+count('ontrack')+' on track and should be left alone.':'')+'</div></div>';
+  }else if(count('nodata')===shs.length){
+    h+='<div class="sus-summary sus-summary-muted"><i class="ph ph-info"></i><div>No adoption signals yet. Log 30/60/90-day observations in <strong>Post-Launch</strong>, or collect a <strong>Pulse</strong> survey, and each group will be diagnosed here.</div></div>';
+  }
+  dx.forEach(({sh,d})=>{
+    const st=SUS_STATUS[d.status];
+    h+='<div class="sus-group">';
+    h+='<div class="sus-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span>';
+    if(d.primary)h+='<span class="sus-gap-chip sus-gap-'+d.primary+'"><i class="ph '+SUS_GAPS[d.primary].icon+'"></i>'+SUS_GAPS[d.primary].label+'</span>';
+    h+='<span class="sus-status '+st.cls+'">'+st.label+'</span></div>';
+    if(d.latest){
+      const l=d.latest;const bits=[];
+      if(l.adoption!==undefined)bits.push('Adoption '+l.adoption+'%');
+      if(l.proficiency!==undefined)bits.push('Proficiency '+l.proficiency+'%');
+      if(l.tickets!==undefined)bits.push(l.tickets+' tickets');
+      h+='<div class="sus-latest">Latest ('+esc(l.label)+'): '+bits.join(' · ')+'</div>';
+    }
+    if(d.primary){
+      const g=SUS_GAPS[d.primary];
+      h+='<div class="sus-body">';
+      h+='<div class="sus-col"><div class="sus-col-hd">Why</div><div class="sus-meaning">'+g.meaning+'</div><ul class="sus-ev">';
+      d.ev[d.primary].forEach(e=>{h+='<li>'+esc(e)+'</li>';});
+      d.secondary.forEach(t=>{d.ev[t].forEach(e=>{h+='<li class="sus-ev-sec"><span class="sus-ev-tag">'+SUS_GAPS[t].label+'</span>'+esc(e)+'</li>';});});
+      h+='</ul></div>';
+      h+='<div class="sus-col"><div class="sus-col-hd">Prescribed: '+g.tag+'</div><ul class="sus-rx">';
+      g.actions.forEach(a=>{h+='<li>'+esc(a)+'</li>';});
+      if(d.primary==='reinforcement'&&sh.rein&&sh.rein.escalation)h+='<li>Escalate per plan: '+esc(sh.rein.escalation)+'</li>';
+      if(d.primary==='reinforcement'&&sh.rein&&sh.rein.owner)h+='<li>Reinforcement owner: '+esc(sh.rein.owner)+'</li>';
+      h+='</ul><div class="sus-avoid"><i class="ph ph-warning"></i>'+esc(g.avoid)+'</div></div>';
+      h+='</div>';
+    }else if(d.status==='ontrack'){
+      h+='<div class="sus-ok">No gap signals. Keep the scheduled checkpoints and do not add extra training for this group.</div>';
+    }else{
+      const weak=Object.keys(d.ev).flatMap(t=>d.ev[t]);
+      h+='<div class="sus-ok">'+(weak.length?'Early signal: '+esc(weak.join('; '))+'. Not enough to act on yet.':'Log a post-launch observation or pulse survey for this group to diagnose it.')+'</div>';
+    }
+    h+=renderSusInterventions(p,sh,d);
+    h+='</div>';
+  });
+  el.innerHTML=h;
+  if(isReadOnly)applyReadOnlyRestrictions();
+}
+function renderSusInterventions(p,sh,d){
+  const ivs=((p.sustainment[sh.id]||{}).interventions)||[];
+  let h='<div class="sus-iv-sec"><div class="sus-iv-hd"><span>Interventions</span>';
+  const type=d.primary||'knowledge';
+  h+='<button class="btn-sm" onclick="addSusIntervention('+sh.id+',\''+type+'\')"><i class="ph ph-plus"></i> Log '+SUS_GAPS[type].tag+'</button></div>';
+  if(!ivs.length){h+='<div class="sus-iv-empty">None logged. Record what you deliver so the next checkpoint shows whether it worked.</div>';}
+  ivs.forEach(iv=>{
+    h+='<div class="sus-iv-row">';
+    h+='<select class="sus-iv-type" aria-label="Intervention type" onchange="updateSusIntervention('+sh.id+','+iv.id+',\'type\',this.value)">';
+    Object.keys(SUS_GAPS).forEach(k=>{h+='<option value="'+k+'"'+(iv.type===k?' selected':'')+'>'+SUS_GAPS[k].tag+'</option>';});
+    h+='</select>';
+    h+='<input type="date" aria-label="Intervention date" value="'+esc(iv.date||'')+'" onchange="updateSusIntervention('+sh.id+','+iv.id+',\'date\',this.value)">';
+    h+='<input type="text" class="sus-iv-note" aria-label="Intervention description" placeholder="What was delivered, to whom..." value="'+esc(iv.note||'')+'" oninput="updateSusIntervention('+sh.id+','+iv.id+',\'note\',this.value)">';
+    h+='<select aria-label="Intervention status" onchange="updateSusIntervention('+sh.id+','+iv.id+',\'status\',this.value)">';
+    SUS_IV_STATUSES.forEach(s=>{h+='<option'+(iv.status===s?' selected':'')+'>'+s+'</option>';});
+    h+='</select>';
+    h+='<button class="sus-iv-del" title="Remove intervention" aria-label="Remove intervention" onclick="removeSusIntervention('+sh.id+','+iv.id+')"><i class="ph ph-x"></i></button>';
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+function susIvList(shId){
+  const p=getProj();if(!p)return null;
+  if(!p.sustainment)p.sustainment={};
+  if(!p.sustainment[shId])p.sustainment[shId]={interventions:[]};
+  return p.sustainment[shId].interventions;
+}
+function addSusIntervention(shId,type){
+  const list=susIvList(shId);if(!list)return;
+  list.push({id:uid(),type,date:new Date().toISOString().split('T')[0],note:'',status:'Planned'});
+  touch('proj');schedSave();renderPSustain();
+}
+function updateSusIntervention(shId,ivId,field,value){
+  const list=susIvList(shId);if(!list)return;
+  const iv=list.find(x=>x.id===ivId);if(!iv)return;
+  iv[field]=value;touch('proj');schedSave();
+}
+function removeSusIntervention(shId,ivId){
+  const list=susIvList(shId);if(!list)return;
+  const i=list.findIndex(x=>x.id===ivId);if(i<0)return;
+  if(list[i].note&&!confirm('Remove this intervention record?'))return;
+  list.splice(i,1);touch('proj');schedSave();renderPSustain();
+}
+
+// ════════════════════════════════════════════════════════
 // FEATURE: CONFIGURABLE ASSESSMENT FRAMEWORKS
 // ════════════════════════════════════════════════════════
 const FRAMEWORK_PRESETS={
@@ -10625,7 +10812,12 @@ async function loadDemoData(){
   // Post-launch observation data
   p6a.postLaunch={};
   p6a.postLaunch[p6a.stakeholders[0].id]={d30:{adoption:82,tickets:14,proficiency:78,notes:'Strong adoption, minor issues with garnishment module.'},d60:{adoption:91,tickets:6,proficiency:88,notes:'Significant improvement. Team is self-sufficient.'}};
-  p6a.postLaunch[p6a.stakeholders[1].id]={d30:{adoption:68,tickets:22,proficiency:65,notes:'Struggling with new report builder. Additional coaching scheduled.'}};
+  p6a.postLaunch[p6a.stakeholders[1].id]={d30:{adoption:68,tickets:22,proficiency:65,notes:'Struggling with new report builder. Additional coaching scheduled.'},d60:{adoption:70,tickets:26,proficiency:58,notes:'Report builder errors persist. Several HRBPs exporting to Excel instead.'}};
+  // Third group: proficient but drifting back to the old process (reinforcement gap)
+  p6a.stakeholders.push({id:uid(),name:'People Managers',agency:'',stakeholderType:'end_user_group',roleCategory:'',factors:{resistance:3,env:4,window:3,complexity:2,saturation:4,leadership:3},objectives:['Approve timesheets in the new system','Review team payroll exceptions'],kirk:{L1:{method:'Manager briefing',timing:'1 week pre go-live'},L2:{method:'Approval walkthrough',assessment:'Pass/Fail'},L3:{observable:'In-system approvals vs email approvals',interval:'30'},L4:{outcome:'On-time approvals every cycle',metric:'Approval SLA'}},rein:{owner:'',activities:'',intervals:['30 Days'],escalation:'VP of HR via monthly ops review'},trust:3,trustHistory:[],preconceptions:[],touchpoints:[],anxietyIndicators:{whatDoesThisMeanFreq:1,extraReviewCycles:0,escalations:0,attendanceDrop:false}});
+  p6a.postLaunch[p6a.stakeholders[2].id]={d30:{adoption:86,tickets:5,proficiency:84,notes:'Strong start after go-live briefing.'},d60:{adoption:71,tickets:4,proficiency:83,notes:'Approvals drifting back to email. Payroll team chasing managers.'}};
+  p6a.sustainment={};
+  p6a.sustainment[p6a.stakeholders[1].id]={interventions:[{id:uid(),type:'knowledge',date:'2026-04-20',note:'Report builder refresher (45 min) for HRBPs who exported to Excel',status:'Planned'}]};
   // Lifecycle signals — healthy project
   p6a.lifecycleSignals={
     requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},

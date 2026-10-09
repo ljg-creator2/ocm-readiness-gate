@@ -898,6 +898,7 @@
         <button class="nav-btn" onclick="showProjTab('resources',this)">Resources</button>
         <button class="nav-btn" onclick="showProjTab('pulse',this)">Pulse</button>
         <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)" style="display:none">Post-Launch</button>
+        <button class="nav-btn" onclick="showProjTab('sustain',this)">Sustainment</button>
       </nav>
       <button class="btn-gold" onclick="exportProjectPDF()">Export Report</button>
       <div class="dropdown-gen">
@@ -1201,6 +1202,17 @@
         <div class="panel-hd"><div><div class="pt">Post-Go-Live Monitoring</div><div class="ps-text">Track adoption metrics at 30, 60, and 90-day intervals per stakeholder group. Compare predicted readiness against actual adoption outcomes.</div></div></div>
         <div class="pb" id="ptab-postlaunch">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Post-launch tracking activates after the project's go-live date.</p></div>
+        </div>
+      </div>
+    </div>
+    <!-- SUSTAINMENT -->
+    <div class="tab-sec" id="psec-sustain">
+      <div class="tab-eye">Adoption Sustainment</div>
+      <div class="tab-head">Adoption Gap Diagnosis</div>
+      <div class="panel">
+        <div class="panel-hd"><div><div class="pt">Where Adoption Is Slipping, and Why</div><div class="ps-text">Each group is diagnosed from post-launch observations, pulse surveys, and reinforcement planning as a Knowledge, Ability, or Reinforcement gap, with a targeted intervention instead of blanket retraining.</div></div></div>
+        <div class="pb" id="ptab-sustain">
+          <div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups and log adoption observations to diagnose gaps.</p></div>
         </div>
       </div>
     </div>
