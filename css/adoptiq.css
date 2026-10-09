@@ -2706,3 +2706,24 @@ body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-ca
 .pilot-actions li i{font-size:15px}
 .pilot-act-red i{color:var(--red-bright)}
 .pilot-act-amber i{color:var(--amber)}
+
+/* ── Stakeholder Quick setup ── */
+.shq-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:12px;font-family:var(--font-body)}
+.shq-seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.shq-seg button{border:none;background:var(--surface);color:var(--ink-60);font-family:var(--font-body);font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer}
+.shq-seg button.active{background:var(--navy);color:#fff}
+.shq-hint{font-size:11px;color:var(--ink-60)}
+.shq-sum{font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold-text);margin-bottom:8px}
+.shq-card{border:1px solid var(--border);border-radius:var(--r6);padding:12px 14px;margin-bottom:10px;background:var(--surface);font-family:var(--font-body)}
+.shq-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.shq-hd .pl-group-name{margin-right:auto}
+.shq-chip{font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:4px}
+.shq-chip-ok{color:var(--green);background:var(--green-bg)}
+.shq-chip-todo{color:var(--amber);background:var(--amber-bg)}
+.shq-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.shq-field{display:flex;flex-direction:column;gap:4px}
+.shq-field span{font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-60)}
+.shq-field em{color:var(--red-bright);font-style:normal}
+.shq-field input{padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-body);font-size:12px;color:var(--ink);background:var(--surface);box-sizing:border-box;width:100%}
+.shq-more{margin-top:10px;border:none;background:none;padding:0;color:var(--gold-text);font-family:var(--font-body);font-size:11px;font-weight:700;cursor:pointer}
+@media(max-width:768px){.shq-grid{grid-template-columns:1fr}}

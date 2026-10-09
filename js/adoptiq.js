@@ -2628,6 +2628,7 @@ function switchSHTab(shId,idx){
 }
 function renderPSH(){
   const p=getProj();if(!p)return;migrateStakeholders(p);const wrap=document.getElementById('p-sh-wrap');
+  if(p.stakeholders.length&&shQuickOn()){wrap.innerHTML=renderShQuick(p);renderPAHM();if(isReadOnly)applyReadOnlyRestrictions();return;}
   if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
   const adkarR=p.adkarScores['R'];
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
@@ -2716,6 +2717,7 @@ function renderPSH(){
     </div>
     </div>`;
   }).join('');
+  wrap.insertAdjacentHTML('afterbegin',shModeBar(false));
   renderPAHM();
 }
 
@@ -2900,6 +2902,62 @@ function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeho
   const badge=document.querySelector(`#plo-${id}`)?.closest('.exp-sec')?.querySelector('.exp-badge');
   if(badge){badge.textContent=loc>0?loc+' Defined':'Not Started';badge.className='exp-badge '+(loc>0?'ready':'needed');}
   touch('proj');schedSave();}
+
+// ── Quick setup: only the fields the pilot uses (reinforcement owner, the
+// observable L3 behavior, and an escalation path for XL/XXL). The full
+// assessment stays available and uses the same data. ──
+function shQuickOn(){
+  let m=null;try{m=localStorage.getItem('adoptiq_sh_mode');}catch(e){}
+  return m?m==='quick':!isDemoMode;
+}
+function setShMode(mode,shId){
+  try{localStorage.setItem('adoptiq_sh_mode',mode);}catch(e){}
+  if(shId!==undefined)_shActiveTab[shId]=1;
+  renderPSH();
+  if(shId!==undefined){const c=document.getElementById('shcard-'+shId);if(c)c.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+function shModeBar(quick){
+  return '<div class="shq-bar"><div class="shq-seg"><button class="'+(quick?'active':'')+'" onclick="setShMode(\'quick\')">Quick setup</button><button class="'+(quick?'':'active')+'" onclick="setShMode(\'full\')">Full assessment</button></div>'
+    +'<span class="shq-hint">'+(quick?'Only what the timeline, sustainment and status report need. Everything else is optional.':'All adoption factors, objectives, Kirkpatrick levels and reinforcement detail.')+'</span></div>';
+}
+function shQuickFields(p,sh){
+  const big=p.size==='XL'||p.size==='XXL';
+  const f=[
+    {key:'owner',label:'Reinforcement owner',ph:'Who keeps this group using it? e.g. unit supervisor',val:sh.rein.owner,req:true,
+      on:'updatePRein('+sh.id+',\'owner\',this.value)'},
+    {key:'l3',label:'What will they do differently? (L3 behavior)',ph:'e.g. Enters cases in the new system without assistance',val:sh.kirk.L3.observable,req:true,
+      on:'updatePKirk('+sh.id+',\'L3\',\'observable\',this.value)'},
+    {key:'esc',label:'Escalation path'+(big?'':' (optional below XL)'),ph:'e.g. Program manager if adoption drops below 70%',val:sh.rein.escalation,req:big,
+      on:'updatePRein('+sh.id+',\'escalation\',this.value)'}
+  ];
+  return f;
+}
+function shQuickProgress(p,sh){const f=shQuickFields(p,sh).filter(x=>x.req);return{done:f.filter(x=>(x.val||'').trim()).length,total:f.length};}
+function refreshShQuickChip(shId){
+  const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===shId);if(!sh)return;
+  const el=document.getElementById('shq-chip-'+shId);if(!el)return;
+  const pr=shQuickProgress(p,sh);el.textContent=pr.done===pr.total?'Ready':pr.done+' of '+pr.total+' set';
+  el.className='shq-chip '+(pr.done===pr.total?'shq-chip-ok':'shq-chip-todo');
+  const sum=document.getElementById('shq-sum');
+  if(sum)sum.textContent=p.stakeholders.filter(x=>{const q=shQuickProgress(p,x);return q.done===q.total;}).length+' of '+p.stakeholders.length+' groups set up';
+}
+function renderShQuick(p){
+  let h=shModeBar(true);
+  const ready=p.stakeholders.filter(sh=>{const pr=shQuickProgress(p,sh);return pr.done===pr.total;}).length;
+  h+='<div class="shq-sum" id="shq-sum">'+ready+' of '+p.stakeholders.length+' groups set up</div>';
+  p.stakeholders.forEach(sh=>{
+    const pr=shQuickProgress(p,sh);
+    h+='<div class="shq-card" id="shcard-'+sh.id+'"><div class="shq-hd"><span class="pl-group-name">'+esc(sh.name)+'</span>'
+      +(sh.audienceId?'<span class="tt-inherit">from audience</span>':'')
+      +'<span id="shq-chip-'+sh.id+'" class="shq-chip '+(pr.done===pr.total?'shq-chip-ok':'shq-chip-todo')+'">'+(pr.done===pr.total?'Ready':pr.done+' of '+pr.total+' set')+'</span>'
+      +'<button class="btn-rm-sh" title="Remove group" aria-label="Remove group" onclick="removePSH('+sh.id+')">&times;</button></div><div class="shq-grid">';
+    shQuickFields(p,sh).forEach(x=>{
+      h+='<label class="shq-field"><span>'+esc(x.label)+(x.req?' <em>*</em>':'')+'</span><input type="text" value="'+esc(x.val||'')+'" placeholder="'+esc(x.ph)+'" oninput="'+x.on+';refreshShQuickChip('+sh.id+')"></label>';
+    });
+    h+='</div><button class="shq-more" onclick="setShMode(\'full\','+sh.id+')">Add more detail (factors, objectives, Kirkpatrick) &rsaquo;</button></div>';
+  });
+  return h;
+}
 function updatePKirk(id,level,field,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.kirk[level][field]=val;touch('proj');schedSave();}
 function updatePRein(id,field,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.rein[field]=val;touch('proj');schedSave();}
 function updatePReinIv(id,iv,checked){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;if(checked&&!sh.rein.intervals.includes(iv))sh.rein.intervals.push(iv);if(!checked)sh.rein.intervals=sh.rein.intervals.filter(x=>x!==iv);touch('proj');schedSave();}
