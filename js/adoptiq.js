@@ -1352,6 +1352,7 @@ function showProjTab(id,btn){
   if(id==='gaps')renderPGaps();
   if(id==='postlaunch')renderPPostLaunch();
   if(id==='sustain')renderPSustain();
+  if(id==='trainplan')renderPTrainPlan();
   if(id==='pulse')renderPPulse();
   if(id==='lifecycle')renderPLifecycle();
   if(id==='craid')renderPCraid();
@@ -7034,7 +7035,7 @@ function openResourceInProject(relId,projId){
 // FEATURE: OCM WORKLOAD BALANCE DASHBOARD
 // ════════════════════════════════════════════════════════
 // ── T-shirt sizing: load points per project size ──
-const PROJ_SIZES=[{key:'XS',pts:1},{key:'S',pts:2},{key:'M',pts:3},{key:'L',pts:5},{key:'XL',pts:8}];
+const PROJ_SIZES=[{key:'XS',pts:1},{key:'S',pts:2},{key:'M',pts:3},{key:'L',pts:5},{key:'XL',pts:8},{key:'XXL',pts:13}];
 const SIZE_UNSIZED_PTS=3;// unsized projects count as M until sized
 const LOAD_OVER=10,LOAD_NEAR=6;
 function sizePts(p){const s=PROJ_SIZES.find(x=>x.key===p.size);return s?s.pts:SIZE_UNSIZED_PTS;}
@@ -7143,7 +7144,7 @@ function renderOcmWklRoster(data){
     });
     const projs=Object.values(projGroups);
     let r='<div class="wkl-roster-row">';
-    r+='<div class="wkl-roster-name">'+esc(person.name)+'<span class="wkl-load" title="Load points across active projects (XS 1 · S 2 · M 3 · L 5 · XL 8)">'+person.load+' pts</span>'+(person.unsized?'<span class="wkl-unsized" title="Unsized projects count as M (3 pts)">'+person.unsized+' unsized</span>':'')+'</div>';
+    r+='<div class="wkl-roster-name">'+esc(person.name)+'<span class="wkl-load" title="Load points across active projects (XS 1 · S 2 · M 3 · L 5 · XL 8 · XXL 13)">'+person.load+' pts</span>'+(person.unsized?'<span class="wkl-unsized" title="Unsized projects count as M (3 pts)">'+person.unsized+' unsized</span>':'')+'</div>';
     r+='<div class="wkl-roster-tags">';
     projs.forEach(pr=>{
       const roles=pr.roles.join(' + ');
@@ -7866,13 +7867,219 @@ function renderPSustain(){
   el.innerHTML=h;
   if(isReadOnly)applyReadOnlyRestrictions();
 }
+// ════════════════════════════════════════════════════════
+// FEATURE: TRAINING TIMELINE BY SIZE
+// UAT complete → build → review → edits → Train the Trainer →
+// trainer readiness → delivery, in business days. Delivery is a
+// throughput calculation from audience headcount and course length.
+// The standard (durations, audiences) is stored per browser and can be
+// imported from a JSON file, so client-specific values stay out of code.
+// ════════════════════════════════════════════════════════
+const TT_COURSES=[
+  {key:'micro',label:'On-demand micro-learning',noT3:true,noReady:true,noDelivery:true},
+  {key:'huddle',label:'Huddle (30 min or less)',perDay:9,noT3:true,noReady:true},
+  {key:'info',label:'Info session (up to 1.5 hr)',perDay:4,makeup:true,noT3:true,noReady:true},
+  {key:'half',label:'Half-day hands-on',perDay:2,makeup:true},
+  {key:'full',label:'Full-day hands-on',perDay:1,makeup:true},
+  {key:'two',label:'2-day hands-on',days:2,makeup:true},
+  {key:'three',label:'3-day hands-on',days:3,makeup:true}
+];
+const TT_DEFAULT={
+  cohortSize:20,makeupDays:5,readinessDays:0,reviewFloor:0,
+  sizes:{
+    XS:{build:[2,3],review:2,edits:1,t3:[0,1]},
+    S:{build:[4,6],review:3,edits:2,t3:[1,2]},
+    M:{build:[8,12],review:5,edits:3,t3:[2,3]},
+    L:{build:[15,20],review:5,edits:5,t3:[3,5]},
+    XL:{build:[20,25],review:7,edits:5,t3:[5,8]},
+    XXL:{build:[25,35],review:10,edits:5,t3:[8,10]}
+  },
+  audiences:[]
+};
+const TT_KEY='adoptiq_training_standard';
+function getTTStd(){
+  let st={};try{st=JSON.parse(localStorage.getItem(TT_KEY)||'{}')||{};}catch(e){}
+  const d=JSON.parse(JSON.stringify(TT_DEFAULT));
+  return{...d,...st,sizes:{...d.sizes,...(st.sizes||{})},audiences:Array.isArray(st.audiences)?st.audiences:d.audiences};
+}
+function saveTTStd(st){try{localStorage.setItem(TT_KEY,JSON.stringify(st));}catch(e){}}
+function ttRange(v){return Array.isArray(v)?[+v[0]||0,+(v[1]??v[0])||0]:[+v||0,+v||0];}
+function addBizDays(dateStr,n){
+  const d=new Date(dateStr+'T12:00:00');if(isNaN(d))return null;
+  let left=Math.ceil(n);
+  while(left>0){d.setDate(d.getDate()+1);const w=d.getDay();if(w!==0&&w!==6)left--;}
+  return d;
+}
+function bizDaysBetween(a,b){// business days from a to b (negative if b before a)
+  const s=new Date(a);const e=new Date(b);if(isNaN(s)||isNaN(e))return null;
+  const sign=e>=s?1:-1;const from=sign>0?s:e,to=sign>0?e:s;let n=0;const d=new Date(from);
+  while(d<to){d.setDate(d.getDate()+1);const w=d.getDay();if(w!==0&&w!==6&&d<=to)n++;}
+  return n*sign;
+}
+function ttFmt(d){return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';}
+function ttDeliveryDays(aud,course,st){
+  if(course.noDelivery)return{cohorts:0,days:0};
+  const cohorts=Math.max(1,Math.ceil((+aud.headcount||0)/(+st.cohortSize||20)));
+  const base=course.perDay?Math.ceil(cohorts/course.perDay):cohorts*course.days;
+  return{cohorts,days:base+(course.makeup?(+st.makeupDays||0):0)};
+}
+function calcTrainingTimeline(p){
+  const st=getTTStd();const tt=p.trainingTimeline||{};
+  const sz=st.sizes[p.size];if(!sz)return{error:'nosize'};
+  const course=TT_COURSES.find(c=>c.key===(tt.course||'full'))||TT_COURSES[4];
+  const auds=st.audiences.filter(a=>(tt.audiences||[]).includes(a.id));
+  if(!course.noDelivery&&!auds.length)return{error:'noaud',course,st};
+  const ownTrainers=auds.some(a=>a.ownTrainers);
+  const external=auds.some(a=>a.externalReview);
+  const perAud=auds.map(a=>({a,...ttDeliveryDays(a,course,st)}));
+  const binding=perAud.reduce((m,x)=>!m||x.days>m.days?x:m,null);
+  const review=Math.max(+sz.review||0,external?(+st.reviewFloor||0):0);
+  const phases=[
+    {key:'build',label:'Build',r:ttRange(sz.build),scales:true},
+    {key:'review',label:'Stakeholder Review',r:[review,review],fixed:external},
+    {key:'edits',label:'Revisions',r:ttRange(sz.edits),scales:true},
+    {key:'t3',label:'Train the Trainer',r:course.noT3?[0,0]:ttRange(sz.t3),scales:true,skip:course.noT3?'Not used for this course length':''},
+    {key:'ready',label:'Trainer Readiness',r:(ownTrainers&&!course.noReady)?[+st.readinessDays||0,+st.readinessDays||0]:[0,0],fixed:true,
+      skip:course.noReady?'Not used for this course length':!ownTrainers?'No audience in scope delivers with its own trainers':''},
+    {key:'deliver',label:'Delivery',r:binding?[binding.days,binding.days]:[0,0],deliver:true,skip:course.noDelivery?'Release and monitor; no scheduled delivery':''}
+  ];
+  const lo=phases.reduce((a,x)=>a+x.r[0],0),hi=phases.reduce((a,x)=>a+x.r[1],0);
+  let finishLo=null,finishHi=null,vsGolive=null;
+  if(tt.uatComplete){
+    finishLo=addBizDays(tt.uatComplete,lo);finishHi=addBizDays(tt.uatComplete,hi);
+    if(p.golive&&finishHi)vsGolive=bizDaysBetween(finishHi.toISOString().split('T')[0],p.golive);
+  }
+  const gateBreach=!!(tt.uatComplete&&p.trainingStartDate&&p.trainingStartDate<tt.uatComplete);
+  return{st,sz,course,auds,perAud,binding,phases,lo,hi,finishLo,finishHi,vsGolive,gateBreach};
+}
+function syncTT(field,val){
+  const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
+  p.trainingTimeline[field]=val;touch('proj');schedSave();renderPTrainPlan();
+}
+function toggleTTAud(id,on){
+  const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
+  const a=new Set(p.trainingTimeline.audiences||[]);on?a.add(id):a.delete(id);
+  p.trainingTimeline.audiences=[...a];touch('proj');schedSave();renderPTrainPlan();
+}
+function renderPTrainPlan(){
+  const p=getProj();if(!p)return;
+  const el=document.getElementById('ptab-trainplan');if(!el)return;
+  const tt=p.trainingTimeline||{};const st=getTTStd();
+  let h='<div class="tt-inputs">';
+  h+='<div class="tt-field"><label>Size</label><div class="tt-static">'+(p.size?'<span class="size-badge size-badge-lg">'+esc(p.size)+'</span>':'<em>Set in header</em>')+'</div></div>';
+  h+='<div class="tt-field"><label for="tt-uat">UAT Complete</label><input type="date" id="tt-uat" value="'+esc(tt.uatComplete||'')+'" onchange="syncTT(\'uatComplete\',this.value)"></div>';
+  h+='<div class="tt-field"><label for="tt-course">Course Length</label><select id="tt-course" onchange="syncTT(\'course\',this.value)">';
+  TT_COURSES.forEach(c=>{h+='<option value="'+c.key+'"'+((tt.course||'full')===c.key?' selected':'')+'>'+esc(c.label)+'</option>';});
+  h+='</select></div>';
+  h+='<div class="tt-field tt-aud-field"><label>Audiences in Scope</label><div class="tt-auds">';
+  if(!st.audiences.length)h+='<em class="tt-muted">Add audiences in the training standard below.</em>';
+  st.audiences.forEach(a=>{
+    const on=(tt.audiences||[]).includes(a.id);
+    h+='<label class="tt-aud"><input type="checkbox"'+(on?' checked':'')+' onchange="toggleTTAud(\''+esc(a.id)+'\',this.checked)">'+esc(a.name)+' <span class="tt-muted">~'+(+a.headcount||0)+'</span></label>';
+  });
+  h+='</div></div></div>';
+  const r=calcTrainingTimeline(p);
+  if(r.error==='nosize'){h+='<div class="size-exp size-exp-muted"><i class="ph ph-t-shirt"></i><div>Set this project\'s <strong>T-shirt size</strong> in the header to calculate its training timeline.</div></div>';}
+  else if(r.error==='noaud'){h+='<div class="size-exp size-exp-muted"><i class="ph ph-users-three"></i><div>Select the <strong>audiences in scope</strong>. Delivery time is set by who is trained and the course length, not by size.</div></div>';}
+  else{
+    if(r.gateBreach)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning-octagon"></i><div><strong>Hard gate breached.</strong> Training start ('+fmtDate(p.trainingStartDate)+') is before UAT complete ('+fmtDate(tt.uatComplete)+'). Building materials against an unstable system risks accuracy and forces rework.</div></div>';
+    if(r.vsGolive!==null){
+      if(r.vsGolive<0)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-calendar-x"></i><div><strong>Training finishes after go-live.</strong> At the upper end, the last cohort completes '+Math.abs(r.vsGolive)+' business days after the '+fmtDate(p.golive)+' go-live. Options: move UAT earlier, shorten the course, narrow the audience, or move go-live.</div></div>';
+      else h+='<div class="tt-alert tt-alert-green"><i class="ph ph-calendar-check"></i><div><strong>'+r.vsGolive+' business days of buffer</strong> between the last cohort (upper end) and the '+fmtDate(p.golive)+' go-live.</div></div>';
+    }
+    h+='<div class="tt-total"><div><div class="tt-total-l">UAT complete to last cohort</div><div class="tt-total-v">'+(r.lo===r.hi?r.hi:r.lo+' to '+r.hi)+' business days</div><div class="tt-total-s">about '+(Math.round(r.lo/5*2)/2)+(r.lo===r.hi?'':' to '+(Math.round(r.hi/5*2)/2))+' weeks</div></div>';
+    if(r.finishHi)h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-v">'+ttFmt(r.finishLo)+(r.lo===r.hi?'':' to '+ttFmt(r.finishHi))+'</div><div class="tt-total-s">from UAT complete '+fmtDate(tt.uatComplete)+'</div></div>';
+    else h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-s">Enter the UAT complete date to see calendar dates.</div></div>';
+    h+='</div>';
+    // Bar
+    const scale=Math.max(r.hi,1);
+    h+='<div class="tt-bar" role="img" aria-label="Training timeline by phase">';
+    r.phases.filter(x=>x.r[1]>0).forEach(x=>{
+      const cls=x.deliver?'tt-seg-deliver':x.fixed?'tt-seg-fixed':'tt-seg-scale';
+      h+='<div class="tt-seg '+cls+'" style="flex:'+(x.r[1]/scale)+'" title="'+esc(x.label)+': '+(x.r[0]===x.r[1]?x.r[1]:x.r[0]+'–'+x.r[1])+' d"><span>'+esc(x.label.split(' ')[0])+'</span></div>';
+    });
+    h+='</div><div class="tt-leg"><span><i class="tt-sw tt-seg-scale"></i>Scales with size</span><span><i class="tt-sw tt-seg-fixed"></i>Fixed floor</span><span><i class="tt-sw tt-seg-deliver"></i>Delivery: audience × course length</span></div>';
+    // Phase table
+    let cum=0;
+    h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Phase</th><th>Business Days</th><th>Ends (upper)</th><th>Note</th></tr></thead><tbody>';
+    r.phases.forEach(x=>{
+      cum+=x.r[1];const end=tt.uatComplete&&x.r[1]>0?ttFmt(addBizDays(tt.uatComplete,cum)):'—';
+      const note=x.skip||(x.deliver&&r.binding?'Binding audience: '+esc(r.binding.a.name)+' ('+r.binding.cohorts+' cohorts'+(r.course.makeup?', incl. '+r.st.makeupDays+'-day make-up':'')+')':x.fixed&&x.r[1]?'Fixed floor':'');
+      h+='<tr'+(x.r[1]?'':' class="size-zero"')+'><td>'+esc(x.label)+'</td><td>'+(x.r[0]===x.r[1]?x.r[1]:x.r[0]+' to '+x.r[1])+'</td><td>'+end+'</td><td class="tt-note">'+note+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    if(r.perAud.length>1){
+      h+='<div class="tt-sub">Delivery by audience</div><div class="hm-scroll"><table class="size-tbl"><thead><tr><th>Audience</th><th>Headcount</th><th>Cohorts</th><th>Delivery Days</th></tr></thead><tbody>';
+      r.perAud.forEach(x=>{h+='<tr><td>'+esc(x.a.name)+(x===r.binding?' <span class="size-badge">Binding</span>':'')+'</td><td>~'+(+x.a.headcount||0)+'</td><td>'+x.cohorts+'</td><td>'+x.days+'</td></tr>';});
+      h+='</tbody></table></div>';
+    }
+  }
+  h+=renderTTStdEditor(st);
+  el.innerHTML=h;
+  if(isReadOnly)applyReadOnlyRestrictions();
+}
+function renderTTStdEditor(st){
+  const sizes=PROJ_SIZES.map(x=>x.key);
+  let h='<details class="tt-std"><summary><i class="ph ph-sliders-horizontal"></i> Training standard <span class="tt-muted">(saved in this browser only)</span></summary><div class="tt-std-body">';
+  h+='<div class="tt-std-actions"><label class="btn-sm tt-file"><i class="ph ph-upload-simple"></i> Import standard (.json)<input type="file" accept=".json,application/json" onchange="importTTStd(this)"></label><button class="btn-sm" onclick="exportTTStd()"><i class="ph ph-download-simple"></i> Export</button><button class="btn-sm" onclick="resetTTStd()">Reset to defaults</button></div>';
+  h+='<div class="tt-std-grid">';
+  [['cohortSize','Cohort size'],['makeupDays','Make-up window (days)'],['readinessDays','Trainer readiness window (days)'],['reviewFloor','External review minimum (days)']].forEach(([k,l])=>{
+    h+='<div class="tt-field"><label>'+l+'</label><input type="number" min="0" step="0.5" value="'+(+st[k]||0)+'" onchange="setTTStd(\''+k+'\',this.value)"></div>';
+  });
+  h+='</div><div class="tt-sub">Effort by size (business days)</div><div class="hm-scroll"><table class="size-tbl tt-std-tbl"><thead><tr><th>Size</th><th>Build (low)</th><th>Build (high)</th><th>Review</th><th>Revisions</th><th>T3 (low)</th><th>T3 (high)</th></tr></thead><tbody>';
+  sizes.forEach(k=>{
+    const z=st.sizes[k]||{};const b=ttRange(z.build),t=ttRange(z.t3);
+    const inp=(field,idx,val)=>'<input type="number" min="0" step="0.5" value="'+val+'" onchange="setTTSize(\''+k+'\',\''+field+'\','+idx+',this.value)">';
+    h+='<tr><td><strong>'+k+'</strong></td><td>'+inp('build',0,b[0])+'</td><td>'+inp('build',1,b[1])+'</td><td>'+inp('review',-1,+z.review||0)+'</td><td>'+inp('edits',-1,ttRange(z.edits)[1])+'</td><td>'+inp('t3',0,t[0])+'</td><td>'+inp('t3',1,t[1])+'</td></tr>';
+  });
+  h+='</tbody></table></div><div class="tt-sub">Audiences</div>';
+  st.audiences.forEach(a=>{
+    h+='<div class="tt-aud-row"><input type="text" value="'+esc(a.name)+'" aria-label="Audience name" onchange="setTTAud(\''+esc(a.id)+'\',\'name\',this.value)"><input type="number" min="0" value="'+(+a.headcount||0)+'" aria-label="Headcount" onchange="setTTAud(\''+esc(a.id)+'\',\'headcount\',this.value)"><label><input type="checkbox"'+(a.ownTrainers?' checked':'')+' onchange="setTTAud(\''+esc(a.id)+'\',\'ownTrainers\',this.checked)"> Own trainers (T3 + readiness)</label><label><input type="checkbox"'+(a.externalReview?' checked':'')+' onchange="setTTAud(\''+esc(a.id)+'\',\'externalReview\',this.checked)"> External review</label><button class="sus-iv-del" title="Remove audience" aria-label="Remove audience" onclick="removeTTAud(\''+esc(a.id)+'\')"><i class="ph ph-x"></i></button></div>';
+  });
+  h+='<button class="btn-sm" onclick="addTTAud()"><i class="ph ph-plus"></i> Add audience</button>';
+  return h+'</div></details>';
+}
+function setTTStd(k,v){const st=getTTStd();st[k]=+v||0;saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function setTTSize(size,field,idx,v){
+  const st=getTTStd();const z={...(st.sizes[size]||{})};
+  if(idx<0)z[field]=+v||0;else{const r=ttRange(z[field]);r[idx]=+v||0;z[field]=r;}
+  st.sizes[size]=z;saveTTStd(st);renderPTrainPlan();keepTTStdOpen();
+}
+function addTTAud(){const st=getTTStd();st.audiences.push({id:'a'+uid(),name:'New audience',headcount:0,ownTrainers:false,externalReview:false});saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function setTTAud(id,field,v){const st=getTTStd();const a=st.audiences.find(x=>x.id===id);if(!a)return;a[field]=field==='headcount'?(+v||0):v;saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function removeTTAud(id){const st=getTTStd();const a=st.audiences.find(x=>x.id===id);if(!a||!confirm('Remove audience "'+a.name+'" from the training standard?'))return;st.audiences=st.audiences.filter(x=>x.id!==id);saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function resetTTStd(){if(!confirm('Reset the training standard to the built-in defaults? Your audiences and durations in this browser will be cleared.'))return;try{localStorage.removeItem(TT_KEY);}catch(e){}renderPTrainPlan();keepTTStdOpen();}
+function keepTTStdOpen(){const d=document.querySelector('#ptab-trainplan .tt-std');if(d)d.open=true;}
+function exportTTStd(){
+  const blob=new Blob([JSON.stringify(getTTStd(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='training-standard.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function importTTStd(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const raw=JSON.parse(rd.result);
+      if(!raw||typeof raw!=='object'||(raw.sizes&&typeof raw.sizes!=='object'))throw new Error('bad');
+      const st={};
+      ['cohortSize','makeupDays','readinessDays','reviewFloor'].forEach(k=>{if(raw[k]!==undefined)st[k]=+raw[k]||0;});
+      if(raw.sizes){st.sizes={};Object.keys(raw.sizes).forEach(k=>{if(PROJ_SIZES.some(x=>x.key===k)){const z=raw.sizes[k]||{};st.sizes[k]={build:ttRange(z.build),review:+z.review||0,edits:ttRange(z.edits),t3:ttRange(z.t3)};}});}
+      if(Array.isArray(raw.audiences))st.audiences=raw.audiences.map(a=>({id:String(a.id||('a'+uid())),name:String(a.name||'Audience'),headcount:+a.headcount||0,ownTrainers:!!a.ownTrainers,externalReview:!!a.externalReview}));
+      saveTTStd({...getTTStd(),...st,sizes:{...getTTStd().sizes,...(st.sizes||{})}});
+      renderPTrainPlan();keepTTStdOpen();showSuccess('Training standard imported.');
+    }catch(e){alert('That file is not a valid training standard.');}
+  };
+  rd.readAsText(file);
+}
+
 // Expected OCM intensity by project T-shirt size
 const SIZE_OCM={
   XS:{iv:['d30'],pulse:'one',l3:false,rein:false,esc:false},
   S:{iv:['d30'],pulse:'one',l3:false,rein:true,esc:false},
   M:{iv:['d30','d60'],pulse:'each',l3:true,rein:true,esc:false},
   L:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:false},
-  XL:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:true}
+  XL:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:true},
+  XXL:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:true}
 };
 function sizeExpectations(p){
   const exp=SIZE_OCM[p.size];if(!exp)return null;

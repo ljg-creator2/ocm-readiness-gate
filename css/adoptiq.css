@@ -2629,3 +2629,50 @@ body.focus-mode .focus-mode-hint{opacity:0.7}
 .size-unsized{margin-top:10px;font-size:11px;color:var(--ink-60)}
 .size-unsized a{color:var(--gold-text)}
 @media(max-width:768px){.size-exp-list{grid-template-columns:1fr}}
+
+/* ── Training Timeline by Size ── */
+.tt-inputs{display:flex;flex-wrap:wrap;gap:12px 16px;margin-bottom:14px;font-family:var(--font-body)}
+.tt-field{display:flex;flex-direction:column;gap:4px;min-width:120px}
+.tt-field label{font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-60)}
+.tt-field input,.tt-field select,.tt-aud-row input[type=text],.tt-aud-row input[type=number],.tt-std-tbl input{padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-body);font-size:11px;color:var(--ink);background:var(--surface);box-sizing:border-box}
+.tt-static{min-height:26px;display:flex;align-items:center;font-size:11px;color:var(--ink-60)}
+.tt-aud-field{flex:1;min-width:220px}
+.tt-auds{display:flex;flex-wrap:wrap;gap:6px 14px;min-height:26px;align-items:center}
+.tt-aud{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--ink);text-transform:none!important;letter-spacing:0!important;font-weight:600!important}
+.tt-muted{color:var(--ink-35);font-weight:400;font-size:10px}
+.tt-alert{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:var(--r6);margin-bottom:10px;font-family:var(--font-body);font-size:12px;line-height:1.5;color:var(--ink)}
+.tt-alert>i{font-size:16px;margin-top:1px}
+.tt-alert-red{background:var(--red-bg);border:1px solid var(--red-bright)}
+.tt-alert-red>i{color:var(--red-bright)}
+.tt-alert-green{background:var(--green-bg);border:1px solid var(--green)}
+.tt-alert-green>i{color:var(--green)}
+.tt-total{display:flex;flex-wrap:wrap;gap:12px 40px;padding:14px 16px;border-radius:var(--r6);background:var(--navy);color:#fff;margin-bottom:12px;font-family:var(--font-body)}
+.tt-total-l{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;opacity:0.7}
+.tt-total-v{font-family:var(--font-display);font-size:20px;font-weight:700;margin-top:2px}
+.tt-total-s{font-size:11px;opacity:0.75}
+.tt-bar{display:flex;gap:2px;height:30px;margin-bottom:6px}
+.tt-seg{display:flex;align-items:center;justify-content:center;min-width:6px;border-radius:3px;overflow:hidden;font-family:var(--font-body);font-size:9px;font-weight:700;white-space:nowrap}
+.tt-seg span{overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+.tt-seg-scale{background:var(--bg-deep,#eef1f8);color:var(--ink);border:1px solid var(--border)}
+.tt-seg-fixed{background:var(--red-bg);color:var(--red-bright);border-bottom:2px solid var(--red-bright)}
+.tt-seg-deliver{background:var(--navy);color:#fff}
+.tt-leg{display:flex;flex-wrap:wrap;gap:14px;font-size:10px;color:var(--ink-60);font-family:var(--font-body);margin-bottom:10px}
+.tt-leg span{display:flex;align-items:center;gap:5px}
+.tt-sw{display:inline-block;width:14px;height:10px;border-radius:2px}
+.tt-tbl td:nth-child(2),.tt-tbl td:nth-child(3){white-space:nowrap}
+.tt-note{text-align:left!important;color:var(--ink-60)!important;font-size:10px}
+.tt-sub{font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold-text);margin:14px 0 4px}
+.tt-std{margin-top:18px;border:1px solid var(--border);border-radius:var(--r6);padding:10px 12px;font-family:var(--font-body)}
+.tt-std summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink);display:flex;gap:6px;align-items:center}
+.tt-std-body{margin-top:10px}
+.tt-std-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.tt-file{position:relative;overflow:hidden;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.tt-file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.tt-std-grid{display:flex;flex-wrap:wrap;gap:10px 16px}
+.tt-std-tbl input{width:64px;text-align:center}
+.tt-aud-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px;font-size:11px;color:var(--ink)}
+.tt-aud-row input[type=text]{flex:1;min-width:140px}
+.tt-aud-row input[type=number]{width:80px}
+.tt-aud-row label{display:flex;gap:4px;align-items:center}
+@media(max-width:768px){.tt-total{gap:10px}.tt-seg span{display:none}}
+.tt-aud input[type=checkbox],.tt-aud-row input[type=checkbox]{width:14px!important;height:14px!important;min-width:0!important;min-height:0!important;flex:none;margin:0;padding:0}
