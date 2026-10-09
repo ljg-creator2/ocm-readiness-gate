@@ -740,6 +740,14 @@
         <div class="ib-label" title="The date this release enters production. All readiness timelines and ADKAR assessments are measured against this date.">Go-Live Date</div>
         <input class="ib-input" id="r-golive" type="date" aria-label="Release go-live date" onchange="updateRelDays();syncRel('golive',this.value)">
       </div>
+      <div class="ib-field" style="max-width:160px">
+        <div class="ib-label" title="Default Tech Transfer start for every project in this release. Projects can override it in Training Timeline.">Tech Transfer</div>
+        <input class="ib-input" id="r-techtransfer" type="date" aria-label="Release tech transfer start" onchange="syncRel('techTransfer',this.value)">
+      </div>
+      <div class="ib-field" style="max-width:160px">
+        <div class="ib-label" title="Default UAT complete date for every project in this release. Projects can override it in Training Timeline.">UAT Complete</div>
+        <input class="ib-input" id="r-uat" type="date" aria-label="Release UAT complete" onchange="syncRel('uatComplete',this.value)">
+      </div>
       <div class="ib-stat">
         <div class="ib-stat-n" id="rel-days-num">—</div>
         <div class="ib-stat-l">Days to Go-Live</div>
@@ -946,7 +954,7 @@
       </div>
       <div class="ib-field" id="ib-train-start" style="max-width:150px">
         <div class="ib-label">Training Start</div>
-        <input class="ib-input" id="p-train-start" type="date" aria-label="Project training start date" onchange="syncProj('trainingStartDate',this.value)">
+        <input class="ib-input" id="p-train-start" type="date" aria-label="Project training start date" onchange="syncProj('trainingStartAuto',false);syncProj('trainingStartDate',this.value)">
       </div>
       <div class="ib-field" style="max-width:150px">
         <div class="ib-label">Go-Live Date</div>
@@ -954,7 +962,7 @@
       </div>
       <div class="ib-field" style="max-width:130px">
         <div class="ib-label">Est. End Users</div>
-        <input class="ib-input" id="p-users" type="number" min="0" aria-label="Estimated end users" placeholder="0" oninput="syncProj('estimatedUsers',parseInt(this.value)||0)">
+        <input class="ib-input" id="p-users" type="number" min="0" aria-label="Estimated end users" placeholder="0" oninput="syncProj('estimatedUsersAuto',false);syncProj('estimatedUsers',parseInt(this.value)||0)">
       </div>
       <div class="ib-field" style="max-width:140px">
         <div class="ib-label">Status</div>

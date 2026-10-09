@@ -2686,3 +2686,4 @@ body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-ca
 /* ── Pilot view ── */
 #proj-nav-tabs .nav-btn.pilot-hidden{display:none!important}
 .btn-pilot{white-space:nowrap}
+.tt-inherit{display:inline-block;margin-left:4px;padding:0 4px;border-radius:3px;border:1px solid var(--border);font-size:8px;letter-spacing:0.04em;color:var(--ink-60);text-transform:none}

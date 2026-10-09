@@ -1265,8 +1265,16 @@ function calcValueRealization(vc){
   return Math.round(score/criteria.length*100);
 }
 function isPostGoLive(p){
-  if(!p?.golive)return false;
-  return new Date(p.golive)<=new Date();
+  const gl=projGoLive(p);if(!gl)return false;
+  return new Date(gl)<=new Date();
+}
+// Projects inherit release dates unless they set their own.
+function relOfProj(p){return releases.find(r=>(r.projects||[]).includes(p))||getRel();}
+function projGoLive(p){if(!p)return'';const r=relOfProj(p);return p.golive||(r&&r.golive)||'';}
+function projTTDates(p){
+  const tt=(p&&p.trainingTimeline)||{};const r=relOfProj(p)||{};
+  return{techTransfer:tt.techTransfer||r.techTransfer||'',uatComplete:tt.uatComplete||r.uatComplete||'',
+    ttFromRel:!tt.techTransfer&&!!r.techTransfer,uatFromRel:!tt.uatComplete&&!!r.uatComplete};
 }
 
 function daysTo(d){if(!d)return null;const t=new Date();t.setHours(0,0,0,0);const g=new Date(d);g.setHours(0,0,0,0);return Math.ceil((g-t)/86400000);}
@@ -1293,6 +1301,8 @@ function openRelease(id){
   document.getElementById('bc-rel').textContent=r.name||'Release';
   document.getElementById('r-name').value=r.name||'';
   document.getElementById('r-golive').value=r.golive||'';
+  const rtt=document.getElementById('r-techtransfer');if(rtt)rtt.value=r.techTransfer||'';
+  const ruat=document.getElementById('r-uat');if(ruat)ruat.value=r.uatComplete||'';
   document.getElementById('r-phase').value=r.phase||'';
   renderRelAgencyChips();updateRelDays();
   showView('v-release');
@@ -1317,7 +1327,8 @@ function openProject(pid){
   document.getElementById('bc-rel-p').textContent=r.name||'Release';
   document.getElementById('bc-proj').textContent=p.name||'Project';
   document.getElementById('p-name').value=p.name||'';
-  document.getElementById('p-golive').value=p.golive||'';
+  const glEl=document.getElementById('p-golive');glEl.value=projGoLive(p);
+  glEl.title=p.golive?'Project go-live':(projGoLive(p)?'Inherited from the release. Set a date here to override.':'');
   const tsEl=document.getElementById('p-train-start');if(tsEl)tsEl.value=p.trainingStartDate||'';
   document.getElementById('p-users').value=p.estimatedUsers||0;
   document.getElementById('p-status').value=p.status||'Not Started';
@@ -2101,8 +2112,9 @@ function renderProjAll(){
   renderPGates();renderPDepHM();renderPAdkar();renderPSH();renderPKPIs();renderPOverview();renderPResources();
   // Show Post-Launch tab if go-live is in the past
   const p=getProj();const plBtn=document.getElementById('nav-postlaunch');const plSec=document.getElementById('psec-postlaunch');
-  if(p&&p.golive&&new Date(p.golive)<=new Date()){if(plBtn)plBtn.style.display='';if(plSec)plSec.style.display='';}
+  if(p&&projGoLive(p)&&new Date(projGoLive(p))<=new Date()){if(plBtn)plBtn.style.display='';if(plSec)plSec.style.display='';}
   else{if(plBtn)plBtn.style.display='none';if(plSec)plSec.style.display='none';}
+  if(p&&!isReadOnly&&applyTTDerived(p))renderPKPIs();
   if(isReadOnly)applyReadOnlyRestrictions();
   applyPilotView();
 }
@@ -2554,6 +2566,15 @@ function renderGuidedSummary(){
   updatePAdkarSummary();
 }
 
+function newStakeholder(name){
+  return{id:uid(),name,
+    agency:'',stakeholderType:'end_user_group',roleCategory:'',
+    factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},objectives:[],
+    kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
+    rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''},
+    trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
+    anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}};
+}
 function addPSH(){
   const p=getProj();if(!p)return;
   const inp=document.getElementById('p-sh-inp');const name=inp.value.trim();if(!name)return;
@@ -7043,6 +7064,30 @@ const LOAD_OVER=10,LOAD_NEAR=6;
 function sizePts(p){const s=PROJ_SIZES.find(x=>x.key===p.size);return s?s.pts:SIZE_UNSIZED_PTS;}
 function isActiveProj(p){return !/^complete/i.test(p.status||'');}
 
+// Time-based load: a project occupies its trainers from Tech Transfer (or UAT
+// complete) through the last cohort. Peak load is the highest total of size
+// points across overlapping windows. Projects without dates count at all times.
+function projWorkWindow(p){
+  if(!p)return null;
+  const r=calcTrainingTimeline(p);const dt=projTTDates(p);
+  const start=dt.techTransfer||dt.uatComplete;
+  if(!start||r.error||!r.finishHi)return null;
+  return{from:new Date(start+'T12:00:00'),to:r.finishHi};
+}
+function peakLoad(wins){
+  const undated=wins.filter(w=>w.undated);const dated=wins.filter(w=>!w.undated);
+  const base=undated.reduce((a,w)=>a+w.pts,0);
+  let best={pts:base,from:null,to:null,names:undated.map(w=>w.name)};
+  dated.forEach(w=>{
+    const over=dated.filter(x=>x.from<=w.from&&x.to>=w.from);
+    const pts=base+over.reduce((a,x)=>a+x.pts,0);
+    if(pts>best.pts||(pts===best.pts&&!best.from)){
+      const to=new Date(Math.min(...over.map(x=>x.to.getTime())));
+      best={pts,from:w.from,to,names:undated.map(x=>x.name).concat(over.map(x=>x.name))};
+    }
+  });
+  return best;
+}
 function collectOcmWorkloadData(){
   const OCM_ROLES=[{key:'ocm_train',label:'OCM Training',abbr:'Train'},{key:'ocm_impl',label:'OCM Implementation',abbr:'Impl'}];
   const personMap={};
@@ -7079,12 +7124,18 @@ function collectOcmWorkloadData(){
   });
 
   const people=Object.values(personMap);
+  const projById={};releases.forEach(r=>(r.projects||[]).forEach(p=>{projById[p.id]=p;}));
   people.forEach(person=>{
-    const seen=new Set();person.load=0;person.unsized=0;person.activeProjs=0;
+    const seen=new Set();person.totalPts=0;person.unsized=0;person.undated=0;person.activeProjs=0;
+    const wins=[];
     person.assignments.forEach(a=>{
       if(seen.has(a.projId)||!a.active)return;seen.add(a.projId);
-      person.load+=a.pts;person.activeProjs++;if(!a.size)person.unsized++;
+      person.totalPts+=a.pts;person.activeProjs++;if(!a.size)person.unsized++;
+      const w=projWorkWindow(projById[a.projId]);
+      if(w)wins.push({...w,pts:a.pts,name:a.projName});else{person.undated++;wins.push({undated:true,pts:a.pts,name:a.projName});}
     });
+    const pk=peakLoad(wins);
+    person.load=pk.pts;person.peakFrom=pk.from;person.peakTo=pk.to;person.peakProjs=pk.names;
   });
   const totalUnique=people.length;
   const overAllocated=people.filter(p=>p.load>=LOAD_OVER).length;
@@ -7119,7 +7170,7 @@ function renderOcmWklSummary(data){
   const s=data.summary;
   el.innerHTML=`<div class="sat-alert-strip">
     <div class="sat-alert-item"><span class="sat-alert-val">${s.totalUnique}</span><span class="sat-alert-lbl">Total OCM Resources</span></div>
-    <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over Capacity (${LOAD_OVER}+ pts)</span></div>
+    <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over Capacity (${LOAD_OVER}+ pts at peak)</span></div>
     <div class="sat-alert-item"><span class="sat-alert-val${s.crossRelease?' sev-high':''}">${s.crossRelease}</span><span class="sat-alert-lbl">Cross-Release Overlap</span></div>
     <div class="sat-alert-item"${data.projectGaps.length?` style="cursor:pointer" onclick="openRelease(${data.projectGaps[0].relId})" title="Go to ${esc(data.projectGaps[0].relName)}"`:''}>
       <span class="sat-alert-val${s.totalGaps?' sev-crit':''}">${s.totalGaps}</span><span class="sat-alert-lbl">Projects w/ Gaps</span></div>
@@ -7146,7 +7197,8 @@ function renderOcmWklRoster(data){
     });
     const projs=Object.values(projGroups);
     let r='<div class="wkl-roster-row">';
-    r+='<div class="wkl-roster-name">'+esc(person.name)+'<span class="wkl-load" title="Load points across active projects (XS 1 · S 2 · M 3 · L 5 · XL 8 · XXL 13)">'+person.load+' pts</span>'+(person.unsized?'<span class="wkl-unsized" title="Unsized projects count as M (3 pts)">'+person.unsized+' unsized</span>':'')+'</div>';
+    const when=person.peakFrom?' · '+person.peakFrom.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'–'+person.peakTo.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+    r+='<div class="wkl-roster-name">'+esc(person.name)+'<span class="wkl-load" title="Peak load points across overlapping active projects (XS 1 · S 2 · M 3 · L 5 · XL 8 · XXL 13). At peak: '+esc((person.peakProjs||[]).join(', '))+'">'+person.load+' pts peak'+when+'</span>'+(person.load!==person.totalPts?'<span class="wkl-unsized" style="color:var(--ink-60)" title="Total if every project ran at once">'+person.totalPts+' total</span>':'')+(person.unsized?'<span class="wkl-unsized" title="Unsized projects count as M (3 pts)">'+person.unsized+' unsized</span>':'')+(person.undated?'<span class="wkl-unsized" title="No Tech Transfer/UAT date, size or audience yet, so these count at all times">'+person.undated+' undated</span>':'')+'</div>';
     r+='<div class="wkl-roster-tags">';
     projs.forEach(pr=>{
       const roles=pr.roles.join(' + ');
@@ -7171,7 +7223,7 @@ function renderOcmWklRoster(data){
   }
 
   let h='';
-  h+=renderGroup('Over Capacity — '+LOAD_OVER+'+ Load Points','wkl-grp-heavy',heavy,false);
+  h+=renderGroup('Over Capacity — '+LOAD_OVER+'+ Points at Peak','wkl-grp-heavy',heavy,false);
   h+=renderGroup('Near Capacity — '+LOAD_NEAR+'–'+(LOAD_OVER-1)+' Points','wkl-grp-active',active,false);
   h+=renderGroup('Has Capacity — Under '+LOAD_NEAR+' Points','wkl-grp-available',available,heavy.length>0||active.length>0);
   el.innerHTML=h;
@@ -7664,7 +7716,7 @@ function renderPPostLaunch(){
   const el=document.getElementById('ptab-postlaunch');if(!el)return;
   const shs=p.stakeholders||[];
   if(!shs.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">Add stakeholder groups first to track post-launch adoption.</div>';return;}
-  const goDate=new Date(p.golive||'');const now=new Date();const daysSince=Math.round((now-goDate)/(1000*60*60*24));
+  const goDate=new Date(projGoLive(p));const now=new Date();const daysSince=Math.round((now-goDate)/(1000*60*60*24));
   let h='<div class="pl-header">';
   h+='<div class="pl-stat"><span class="pl-stat-val">'+daysSince+'</span><span class="pl-stat-lbl">Days Post Go-Live</span></div>';
   h+='<div class="pl-stat"><span class="pl-stat-val">'+shs.length+'</span><span class="pl-stat-lbl">Groups Tracked</span></div>';
@@ -7790,7 +7842,7 @@ function diagnoseSustainment(p,sh){
       if(has(s)&&s<=2.5)add(type,2,'Pulse survey rates '+word+' at '+s.toFixed(1)+'/5 ('+pr.responses+' responses)');
     });
   }
-  const postGL=p.golive&&new Date(p.golive)<=new Date();
+  const postGL=isPostGoLive(p);
   if(postGL&&!(sh.rein&&sh.rein.owner))add('reinforcement',1,'No reinforcement owner assigned after go-live');
   if((sh.anxietyIndicators||{}).whatDoesThisMeanFreq>=4)add('knowledge',1,'Frequent "what does this mean?" questions');
 
@@ -7886,17 +7938,23 @@ const TT_COURSES=[
   {key:'two',label:'2-day hands-on',days:2,makeup:true},
   {key:'three',label:'3-day hands-on',days:3,makeup:true}
 ];
+// Built-in standard: DCAS Training Timeframes by Project Size v1.1 (Oct 6, 2026).
+// XS is not in that standard; its values are placeholders.
 const TT_DEFAULT={
-  cohortSize:20,makeupDays:5,readinessDays:0,reviewFloor:0,
+  cohortSize:20,makeupDays:5,readinessDays:12.5,reviewFloor:5,
   sizes:{
     XS:{build:[2,3],review:2,edits:1,t3:[0,1]},
-    S:{build:[4,6],review:3,edits:2,t3:[1,2]},
-    M:{build:[8,12],review:5,edits:3,t3:[2,3]},
-    L:{build:[15,20],review:5,edits:5,t3:[3,5]},
-    XL:{build:[20,25],review:7,edits:5,t3:[5,8]},
-    XXL:{build:[25,35],review:10,edits:5,t3:[8,10]}
+    S:{build:[5,5],review:5,edits:[2,2],t3:[0,2]},
+    M:{build:[10,10],review:5,edits:[3,3],t3:[2,3]},
+    L:{build:[15,20],review:7,edits:[5,5],t3:[5,5]},
+    XL:{build:[20,25],review:10,edits:[5,5],t3:[5,10]},
+    XXL:{build:[25,30],review:10,edits:[5,8],t3:[10,10]}
   },
-  audiences:[]
+  audiences:[
+    {id:'dhs',name:'DHS',headcount:360,ownTrainers:true,externalReview:true},
+    {id:'medicaid',name:'Medicaid Branch',headcount:35,ownTrainers:false,externalReview:true},
+    {id:'ddcc',name:'DDCC',headcount:100,ownTrainers:false,externalReview:false}
+  ]
 };
 const TT_KEY='adoptiq_training_standard';
 function getTTStd(){
@@ -7918,6 +7976,7 @@ function bizDaysBetween(a,b){// business days from a to b (negative if b before 
   while(d<to){d.setDate(d.getDate()+1);const w=d.getDay();if(w!==0&&w!==6&&d<=to)n++;}
   return n*sign;
 }
+function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function ttFmt(d){return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';}
 function ttDeliveryDays(aud,course,st){
   if(course.noDelivery)return{cohorts:0,days:0};
@@ -7926,7 +7985,7 @@ function ttDeliveryDays(aud,course,st){
   return{cohorts,days:base+(course.makeup?(+st.makeupDays||0):0)};
 }
 function calcTrainingTimeline(p){
-  const st=getTTStd();const tt=p.trainingTimeline||{};
+  const st=getTTStd();const tt=p.trainingTimeline||{};const dt=projTTDates(p);const gl=projGoLive(p);
   const sz=st.sizes[p.size];if(!sz)return{error:'nosize'};
   const course=TT_COURSES.find(c=>c.key===(tt.course||'full'))||TT_COURSES[4];
   const auds=st.audiences.filter(a=>(tt.audiences||[]).includes(a.id));
@@ -7946,19 +8005,42 @@ function calcTrainingTimeline(p){
     {key:'deliver',label:'Delivery',r:binding?[binding.days,binding.days]:[0,0],deliver:true,skip:course.noDelivery?'Release and monitor; no scheduled delivery':''}
   ];
   const lo=phases.reduce((a,x)=>a+x.r[0],0),hi=phases.reduce((a,x)=>a+x.r[1],0);
-  let finishLo=null,finishHi=null,vsGolive=null;
-  if(tt.uatComplete){
-    finishLo=addBizDays(tt.uatComplete,lo);finishHi=addBizDays(tt.uatComplete,hi);
-    if(p.golive&&finishHi)vsGolive=bizDaysBetween(finishHi.toISOString().split('T')[0],p.golive);
+  let finishLo=null,finishHi=null,vsGolive=null,deliveryStart=null;
+  if(dt.uatComplete){
+    finishLo=addBizDays(dt.uatComplete,lo);finishHi=addBizDays(dt.uatComplete,hi);
+    if(gl&&finishHi)vsGolive=bizDaysBetween(isoDate(finishHi),gl);
+    if(!course.noDelivery){const pre=phases.filter(x=>!x.deliver).reduce((a,x)=>a+x.r[1],0);deliveryStart=addBizDays(dt.uatComplete,pre+1);}
   }
-  const gateBreach=!!(tt.uatComplete&&p.trainingStartDate&&p.trainingStartDate<tt.uatComplete);
+  const gateBreach=!!(dt.uatComplete&&p.trainingStartDate&&!p.trainingStartAuto&&p.trainingStartDate<dt.uatComplete);
   // Project Acclimation: Tech Transfer through UAT, before the clock starts
   let accl=null;
-  if(tt.techTransfer&&tt.uatComplete){
-    const d=bizDaysBetween(tt.techTransfer,tt.uatComplete);
+  if(dt.techTransfer&&dt.uatComplete){
+    const d=bizDaysBetween(dt.techTransfer,dt.uatComplete);
     accl=d<0?{invalid:true}:{days:d,commitLo:d+lo,commitHi:d+hi};
   }
-  return{st,sz,course,auds,perAud,binding,phases,lo,hi,finishLo,finishHi,vsGolive,gateBreach,accl};
+  const checkpoints=gl?[30,60,90].map(n=>{const d=new Date(gl+'T12:00:00');d.setDate(d.getDate()+n);return{n,d};}):[];
+  return{st,sz,course,auds,perAud,binding,phases,lo,hi,finishLo,finishHi,vsGolive,gateBreach,accl,dt,gl,deliveryStart,checkpoints};
+}
+function applyTTDerived(p){
+  if(!p)return false;let changed=false;
+  const r=calcTrainingTimeline(p);
+  if(!r.error&&r.deliveryStart){
+    const ds=isoDate(r.deliveryStart);
+    if((!p.trainingStartDate||p.trainingStartAuto)&&p.trainingStartDate!==ds){p.trainingStartDate=ds;p.trainingStartAuto=true;changed=true;}
+  }
+  const st=getTTStd();const sel=st.audiences.filter(a=>((p.trainingTimeline||{}).audiences||[]).includes(a.id));
+  if(sel.length){
+    const users=sel.reduce((a,x)=>a+(+x.headcount||0),0);
+    if((!p.estimatedUsers||p.estimatedUsersAuto)&&p.estimatedUsers!==users){p.estimatedUsers=users;p.estimatedUsersAuto=true;changed=true;}
+  }
+  if(changed){
+    if(p===getProj()){
+      const ts=document.getElementById('p-train-start');if(ts)ts.value=p.trainingStartDate||'';
+      const us=document.getElementById('p-users');if(us)us.value=p.estimatedUsers||0;
+    }
+    touch('proj');schedSave();
+  }
+  return changed;
 }
 function syncTT(field,val){
   const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
@@ -7967,16 +8049,27 @@ function syncTT(field,val){
 function toggleTTAud(id,on){
   const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
   const a=new Set(p.trainingTimeline.audiences||[]);on?a.add(id):a.delete(id);
-  p.trainingTimeline.audiences=[...a];touch('proj');schedSave();renderPTrainPlan();
+  p.trainingTimeline.audiences=[...a];
+  if(on){
+    const aud=getTTStd().audiences.find(x=>x.id===id);
+    if(!p.stakeholders)p.stakeholders=[];
+    if(aud&&!p.stakeholders.some(sh=>sh.audienceId===id||(sh.name||'').trim().toLowerCase()===aud.name.trim().toLowerCase())){
+      const sh=newStakeholder(aud.name);sh.audienceId=id;p.stakeholders.push(sh);
+      showSuccess('Added "'+aud.name+'" as a stakeholder group.');
+    }
+  }
+  touch('proj');schedSave();renderPTrainPlan();
 }
 function renderPTrainPlan(){
   const p=getProj();if(!p)return;
   const el=document.getElementById('ptab-trainplan');if(!el)return;
-  const tt=p.trainingTimeline||{};const st=getTTStd();
+  applyTTDerived(p);
+  const tt=p.trainingTimeline||{};const st=getTTStd();const dt=projTTDates(p);
+  const fromRel=on=>on?'<span class="tt-inherit" title="Inherited from the release. Set a date here to override.">from release</span>':'';
   let h='<div class="tt-inputs">';
   h+='<div class="tt-field"><label>Size</label><div class="tt-static">'+(p.size?'<span class="size-badge size-badge-lg">'+esc(p.size)+'</span>':'<em>Set in header</em>')+'</div></div>';
-  h+='<div class="tt-field"><label for="tt-tech">Tech Transfer Start</label><input type="date" id="tt-tech" value="'+esc(tt.techTransfer||'')+'" onchange="syncTT(\'techTransfer\',this.value)"></div>';
-  h+='<div class="tt-field"><label for="tt-uat">UAT Complete</label><input type="date" id="tt-uat" value="'+esc(tt.uatComplete||'')+'" onchange="syncTT(\'uatComplete\',this.value)"></div>';
+  h+='<div class="tt-field"><label for="tt-tech">Tech Transfer Start '+fromRel(dt.ttFromRel)+'</label><input type="date" id="tt-tech" value="'+esc(dt.techTransfer)+'" onchange="syncTT(\'techTransfer\',this.value)"></div>';
+  h+='<div class="tt-field"><label for="tt-uat">UAT Complete '+fromRel(dt.uatFromRel)+'</label><input type="date" id="tt-uat" value="'+esc(dt.uatComplete)+'" onchange="syncTT(\'uatComplete\',this.value)"></div>';
   h+='<div class="tt-field"><label for="tt-course">Course Length</label><select id="tt-course" onchange="syncTT(\'course\',this.value)">';
   TT_COURSES.forEach(c=>{h+='<option value="'+c.key+'"'+((tt.course||'full')===c.key?' selected':'')+'>'+esc(c.label)+'</option>';});
   h+='</select></div>';
@@ -7991,17 +8084,17 @@ function renderPTrainPlan(){
   if(r.error==='nosize'){h+='<div class="size-exp size-exp-muted"><i class="ph ph-t-shirt"></i><div>Set this project\'s <strong>T-shirt size</strong> in the header to calculate its training timeline.</div></div>';}
   else if(r.error==='noaud'){h+='<div class="size-exp size-exp-muted"><i class="ph ph-users-three"></i><div>Select the <strong>audiences in scope</strong>. Delivery time is set by who is trained and the course length, not by size.</div></div>';}
   else{
-    if(r.gateBreach)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning-octagon"></i><div><strong>Hard gate breached.</strong> Training start ('+fmtDate(p.trainingStartDate)+') is before UAT complete ('+fmtDate(tt.uatComplete)+'). Building materials against an unstable system risks accuracy and forces rework.</div></div>';
+    if(r.gateBreach)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning-octagon"></i><div><strong>Hard gate breached.</strong> Training start ('+fmtDate(p.trainingStartDate)+') is before UAT complete ('+fmtDate(dt.uatComplete)+'). Building materials against an unstable system risks accuracy and forces rework.</div></div>';
     if(r.vsGolive!==null){
-      if(r.vsGolive<0)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-calendar-x"></i><div><strong>Training finishes after go-live.</strong> At the upper end, the last cohort completes '+Math.abs(r.vsGolive)+' business days after the '+fmtDate(p.golive)+' go-live. Options: move UAT earlier, shorten the course, narrow the audience, or move go-live.</div></div>';
-      else h+='<div class="tt-alert tt-alert-green"><i class="ph ph-calendar-check"></i><div><strong>'+r.vsGolive+' business days of buffer</strong> between the last cohort (upper end) and the '+fmtDate(p.golive)+' go-live.</div></div>';
+      if(r.vsGolive<0)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-calendar-x"></i><div><strong>Training finishes after go-live.</strong> At the upper end, the last cohort completes '+Math.abs(r.vsGolive)+' business days after the '+fmtDate(r.gl)+' go-live. Options: move UAT earlier, shorten the course, narrow the audience, or move go-live.</div></div>';
+      else h+='<div class="tt-alert tt-alert-green"><i class="ph ph-calendar-check"></i><div><strong>'+r.vsGolive+' business days of buffer</strong> between the last cohort (upper end) and the '+fmtDate(r.gl)+' go-live.</div></div>';
     }
-    if(r.accl&&r.accl.invalid)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning"></i><div><strong>Check dates.</strong> Tech Transfer start ('+fmtDate(tt.techTransfer)+') is after UAT complete ('+fmtDate(tt.uatComplete)+').</div></div>';
+    if(r.accl&&r.accl.invalid)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning"></i><div><strong>Check dates.</strong> Tech Transfer start ('+fmtDate(dt.techTransfer)+') is after UAT complete ('+fmtDate(dt.uatComplete)+').</div></div>';
     h+='<div class="tt-total"><div><div class="tt-total-l">UAT complete to last cohort</div><div class="tt-total-v">'+(r.lo===r.hi?r.hi:r.lo+' to '+r.hi)+' business days</div><div class="tt-total-s">about '+(Math.round(r.lo/5*2)/2)+(r.lo===r.hi?'':' to '+(Math.round(r.hi/5*2)/2))+' weeks</div></div>';
-    if(r.finishHi)h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-v">'+ttFmt(r.finishLo)+(r.lo===r.hi?'':' to '+ttFmt(r.finishHi))+'</div><div class="tt-total-s">from UAT complete '+fmtDate(tt.uatComplete)+'</div></div>';
+    if(r.finishHi)h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-v">'+ttFmt(r.finishLo)+(r.lo===r.hi?'':' to '+ttFmt(r.finishHi))+'</div><div class="tt-total-s">from UAT complete '+fmtDate(dt.uatComplete)+(r.deliveryStart?' · delivery starts '+ttFmt(r.deliveryStart):'')+'</div></div>';
     else h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-s">Enter the UAT complete date to see calendar dates.</div></div>';
     if(r.accl&&!r.accl.invalid)h+='<div><div class="tt-total-l">Training staff committed</div><div class="tt-total-v">'+(r.accl.commitLo===r.accl.commitHi?r.accl.commitHi:r.accl.commitLo+' to '+r.accl.commitHi)+' business days</div><div class="tt-total-s">Tech Transfer to last cohort, incl. '+r.accl.days+' days of acclimation</div></div>';
-    else if(!tt.techTransfer)h+='<div><div class="tt-total-l">Training staff committed</div><div class="tt-total-s">Enter the Tech Transfer start to include Project Acclimation.</div></div>';
+    else if(!dt.techTransfer)h+='<div><div class="tt-total-l">Training staff committed</div><div class="tt-total-s">Enter the Tech Transfer start to include Project Acclimation.</div></div>';
     h+='</div>';
     // Bar
     const acclDays=r.accl&&!r.accl.invalid?r.accl.days:0;
@@ -8016,12 +8109,13 @@ function renderPTrainPlan(){
     // Phase table
     let cum=0;
     h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Phase</th><th>Business Days</th><th>Ends (upper)</th><th>Note</th></tr></thead><tbody>';
-    if(tt.techTransfer)h+='<tr class="tt-row-accl"><td>Project Acclimation</td><td>'+(r.accl&&!r.accl.invalid?r.accl.days:'—')+'</td><td>'+(tt.uatComplete?fmtDate(tt.uatComplete):'—')+'</td><td class="tt-note">Tech Transfer through UAT. Fixed floor before the clock; trainers learn the change and provide QA test scenarios.</td></tr>';
+    if(dt.techTransfer)h+='<tr class="tt-row-accl"><td>Project Acclimation</td><td>'+(r.accl&&!r.accl.invalid?r.accl.days:'—')+'</td><td>'+(dt.uatComplete?fmtDate(dt.uatComplete):'—')+'</td><td class="tt-note">Tech Transfer through UAT. Fixed floor before the clock; trainers learn the change and provide QA test scenarios.</td></tr>';
     r.phases.forEach(x=>{
-      cum+=x.r[1];const end=tt.uatComplete&&x.r[1]>0?ttFmt(addBizDays(tt.uatComplete,cum)):'—';
+      cum+=x.r[1];const end=dt.uatComplete&&x.r[1]>0?ttFmt(addBizDays(dt.uatComplete,cum)):'—';
       const note=x.skip||(x.deliver&&r.binding?'Binding audience: '+esc(r.binding.a.name)+' ('+r.binding.cohorts+' cohorts'+(r.course.makeup?', incl. '+r.st.makeupDays+'-day make-up':'')+')':x.fixed&&x.r[1]?'Fixed floor':'');
       h+='<tr'+(x.r[1]?'':' class="size-zero"')+'><td>'+esc(x.label)+'</td><td>'+(x.r[0]===x.r[1]?x.r[1]:x.r[0]+' to '+x.r[1])+'</td><td>'+end+'</td><td class="tt-note">'+note+'</td></tr>';
     });
+    r.checkpoints.forEach(c=>{h+='<tr class="tt-row-accl"><td>'+c.n+'-day follow-up</td><td>—</td><td>'+ttFmt(c.d)+'</td><td class="tt-note">Post go-live focus group / checkpoint (logged in Post-Launch)</td></tr>';});
     h+='</tbody></table></div>';
     if(r.perAud.length>1){
       h+='<div class="tt-sub">Delivery by audience</div><div class="hm-scroll"><table class="size-tbl"><thead><tr><th>Audience</th><th>Headcount</th><th>Cohorts</th><th>Delivery Days</th></tr></thead><tbody>';
@@ -8035,7 +8129,7 @@ function renderPTrainPlan(){
 }
 function renderTTStdEditor(st){
   const sizes=PROJ_SIZES.map(x=>x.key);
-  let h='<details class="tt-std"><summary><i class="ph ph-sliders-horizontal"></i> Training standard <span class="tt-muted">(saved in this browser only)</span></summary><div class="tt-std-body">';
+  let h='<details class="tt-std"><summary><i class="ph ph-sliders-horizontal"></i> Training standard <span class="tt-muted">(built-in standard; edits saved in this browser)</span></summary><div class="tt-std-body">';
   h+='<div class="tt-std-actions"><label class="btn-sm tt-file"><i class="ph ph-upload-simple"></i> Import standard (.json)<input type="file" accept=".json,application/json" onchange="importTTStd(this)"></label><button class="btn-sm" onclick="exportTTStd()"><i class="ph ph-download-simple"></i> Export</button><button class="btn-sm" onclick="resetTTStd()">Reset to defaults</button></div>';
   h+='<div class="tt-std-grid">';
   [['cohortSize','Cohort size'],['makeupDays','Make-up window (days)'],['readinessDays','Trainer readiness window (days)'],['reviewFloor','External review minimum (days)']].forEach(([k,l])=>{
@@ -8107,7 +8201,7 @@ function sizeExpectations(p){
   if(exp.rein)rows.push({label:'Reinforcement owner named for every group',met:shs.filter(sh=>sh.rein&&sh.rein.owner).length,total:n});
   if(exp.l3)rows.push({label:'Kirkpatrick L3 behavior defined for every group',met:shs.filter(sh=>sh.kirk&&sh.kirk.L3&&sh.kirk.L3.observable).length,total:n});
   if(exp.esc)rows.push({label:'Escalation path defined for every group',met:shs.filter(sh=>sh.rein&&sh.rein.escalation).length,total:n});
-  const days=p.golive?Math.floor((new Date()-new Date(p.golive))/864e5):-1;
+  const days=projGoLive(p)?Math.floor((new Date()-new Date(projGoLive(p)))/864e5):-1;
   const due=exp.iv.filter(k=>days>=parseInt(k.substring(1)));
   const ivLabel=exp.iv.map(k=>k.substring(1)).join('/')+'-day checkpoints';
   if(due.length){
