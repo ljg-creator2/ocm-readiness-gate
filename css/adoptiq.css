@@ -2727,3 +2727,8 @@ body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-ca
 .shq-field input{padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-body);font-size:12px;color:var(--ink);background:var(--surface);box-sizing:border-box;width:100%}
 .shq-more{margin-top:10px;border:none;background:none;padding:0;color:var(--gold-text);font-family:var(--font-body);font-size:11px;font-weight:700;cursor:pointer}
 @media(max-width:768px){.shq-grid{grid-template-columns:1fr}}
+.shq-train{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.shq-train-hd{display:block;font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--gold-text);margin-bottom:6px}
+.shq-train-hd em{font-style:normal;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-35);margin-left:6px}
+.shq-train-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:768px){.shq-train-grid{grid-template-columns:1fr}}

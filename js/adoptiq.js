@@ -1035,6 +1035,31 @@ function signalStrengthBadge(strength){
 // ════════════════════════════════════════════════════════
 // DATA SOURCE CLASSIFICATION
 // ════════════════════════════════════════════════════════
+
+// ── Training results (Kirkpatrick L1/L2 actuals) per stakeholder group ──
+// When a group has results, its training measure is the share of the group that
+// completed AND passed (completion% × pass%). Without results it falls back to
+// how complete the Kirkpatrick plan is, and is labeled as a plan, not a measure.
+function trNum(v){return v===undefined||v===null||v===''||isNaN(+v)?null:+v;}
+function shTrainResults(sh){const t=(sh&&sh.training)||{};return{completion:trNum(t.completion),pass:trNum(t.pass),confidence:trNum(t.confidence)};}
+function shHasTrainResults(sh){const t=shTrainResults(sh);return t.completion!==null||t.pass!==null;}
+function kirkPlanPct(sh){if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);}
+function shTrainPct(sh){
+  const t=shTrainResults(sh);
+  if(t.completion!==null&&t.pass!==null)return Math.round(t.completion*t.pass/100);
+  if(t.pass!==null)return Math.round(t.pass);
+  if(t.completion!==null)return Math.round(t.completion);
+  return kirkPlanPct(sh);
+}
+function shsTrainPct(shs){return shs&&shs.length?Math.round(shs.reduce((a,sh)=>a+shTrainPct(sh),0)/shs.length):0;}
+function updateTrainResult(id,field,val){
+  const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
+  if(!sh.training)sh.training={};
+  const n=trNum(val);
+  sh.training[field]=n===null?undefined:Math.max(0,Math.min(field==='confidence'?5:100,n));
+  touch('proj');schedSave();
+  if(typeof refreshShQuickChip==='function')refreshShQuickChip(id);
+}
 function getDataSourceType(component,p){
   if(!p)return'Estimated';
   const shs=p.stakeholders||[];
@@ -1053,6 +1078,10 @@ function getDataSourceType(component,p){
       return'Estimated';
     }
     case'training':{
+      const withRes=shs.filter(shHasTrainResults).length;
+      if(shs.length&&withRes===shs.length)return'Measured';
+      if(withRes)return'Observed';
+      return'Estimated';
       const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
       const avg=kirkPcts.length?kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length:0;
       return avg>=75?'Measured':avg>=40?'Observed':'Estimated';
@@ -1233,7 +1262,7 @@ function calcCompositeScore(p){
     return a+sentimentScore(sh,ps);
   },0)/shs.length):50;
   const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
   const lhData=calcLifecycleHealth(p);
   const lcPct=lhData.score;
   const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
@@ -2686,6 +2715,7 @@ function renderPSH(){
           <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${esc(sh.kirk.L2.method)}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
           <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${esc(sh.kirk.L2.assessment)}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
         <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L3</div><div><div class="kirk-name">Behavior</div><div class="kirk-desc-txt">Observable behavior change post go-live</div></div></div>
+          <div class="kirk-field"><label>Training results: completed % · passed L2 % · confidence (1–5)</label><div style="display:flex;gap:6px"><input class="kirk-inp" type="number" min="0" max="100" placeholder="Completed %" value="${shTrainResults(sh).completion??''}" oninput="updateTrainResult(${sh.id},'completion',this.value)"><input class="kirk-inp" type="number" min="0" max="100" placeholder="Passed %" value="${shTrainResults(sh).pass??''}" oninput="updateTrainResult(${sh.id},'pass',this.value)"><input class="kirk-inp" type="number" min="1" max="5" step="0.1" placeholder="Confidence" value="${shTrainResults(sh).confidence??''}" oninput="updateTrainResult(${sh.id},'confidence',this.value)"></div></div>
           <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${esc(sh.kirk.L3.observable)}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
           <div class="kirk-field"><label>Measurement Interval</label>
             <select class="kirk-inp" style="width:auto" onchange="updatePKirk(${sh.id},'L3','interval',this.value)">
@@ -2954,7 +2984,13 @@ function renderShQuick(p){
     shQuickFields(p,sh).forEach(x=>{
       h+='<label class="shq-field"><span>'+esc(x.label)+(x.req?' <em>*</em>':'')+'</span><input type="text" value="'+esc(x.val||'')+'" placeholder="'+esc(x.ph)+'" oninput="'+x.on+';refreshShQuickChip('+sh.id+')"></label>';
     });
-    h+='</div><button class="shq-more" onclick="setShMode(\'full\','+sh.id+')">Add more detail (factors, objectives, Kirkpatrick) &rsaquo;</button></div>';
+    const tr=shTrainResults(sh);const v=x=>x===null?'':x;
+    h+='</div><div class="shq-train"><span class="shq-train-hd">Training results <em>enter when the training wave closes</em></span><div class="shq-train-grid">'
+      +'<label class="shq-field"><span>Completed %</span><input type="number" min="0" max="100" value="'+v(tr.completion)+'" placeholder="e.g. 94" oninput="updateTrainResult('+sh.id+',\'completion\',this.value)"></label>'
+      +'<label class="shq-field"><span>Passed assessment % (L2)</span><input type="number" min="0" max="100" value="'+v(tr.pass)+'" placeholder="e.g. 81" oninput="updateTrainResult('+sh.id+',\'pass\',this.value)"></label>'
+      +'<label class="shq-field"><span>Learner confidence (1–5)</span><input type="number" min="1" max="5" step="0.1" value="'+v(tr.confidence)+'" placeholder="e.g. 3.8" oninput="updateTrainResult('+sh.id+',\'confidence\',this.value)"></label>'
+      +'</div></div>';
+    h+='<button class="shq-more" onclick="setShMode(\'full\','+sh.id+')">Add more detail (factors, objectives, Kirkpatrick) &rsaquo;</button></div>';
   });
   return h;
 }
@@ -3071,7 +3107,7 @@ function openScoreExplainer(){
     if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
     return Math.round(f/8*100);
   });
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
 
   // Lifecycle Health (10%) — SDLC signals
   const lhData=calcLifecycleHealth(p);
@@ -3297,7 +3333,7 @@ function collectTrajectoryData(p){
     if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
     return Math.round(f/8*100);
   });
-  const trainPctCalc=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPctCalc=shsTrainPct(p.stakeholders||[]);
   const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
   const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
   const commsPct=Math.round(commsAvg/5*100);
@@ -5386,7 +5422,7 @@ function getWeakestComponent(p){
   const fwPct=fwScores.length?Math.round(fwScores.reduce((a,b)=>a+b,0)/fwScores.length/5*100):0;
   const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>a+sentimentScore(sh,p.pulseResults?.[sh.id]?.scores||{}),0)/shs.length):50;
   const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
   const lhScore=calcLifecycleHealth(p).score;
   const scored={'Change Readiness':fwPct,'People & Trust':sentPct,'Project Health':lhScore};
   if(trainingActive(p))scored['Training & Preparedness']=trainPct;
@@ -6330,7 +6366,7 @@ function collectSmartRecsData(p){
     if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
     return Math.round(f/8*100);
   });
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
 
   // Comms completion
   const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
@@ -7901,13 +7937,20 @@ function diagnoseSustainment(p,sh){
       if(has(s)&&s<=2.5)add(type,2,'Pulse survey rates '+word+' at '+s.toFixed(1)+'/5 ('+pr.responses+' responses)');
     });
   }
+  const tr=shTrainResults(sh);
+  if(tr.pass!==null){
+    if(tr.pass<70)add('knowledge',3,'Only '+tr.pass+'% passed the end-of-course assessment (L2)');
+    else if(tr.pass<80)add('knowledge',2,tr.pass+'% passed the end-of-course assessment, below the 80% bar');
+  }
+  if(tr.completion!==null&&tr.completion<90)add('knowledge',tr.completion<75?2:1,'Only '+tr.completion+'% completed training');
+  if(tr.confidence!==null&&tr.confidence<=2.5)add('ability',2,'Learner confidence is '+tr.confidence.toFixed(1)+'/5 after training');
   const postGL=isPostGoLive(p);
   if(postGL&&!(sh.rein&&sh.rein.owner))add('reinforcement',1,'No reinforcement owner assigned after go-live');
   if((sh.anxietyIndicators||{}).whatDoesThisMeanFreq>=4)add('knowledge',1,'Frequent "what does this mean?" questions');
 
   const ranked=Object.keys(pts).sort((a,b)=>pts[b]-pts[a]);
   const top=pts[ranked[0]];
-  const hasData=!!latest||pr.responses>0;
+  const hasData=!!latest||pr.responses>0||shHasTrainResults(sh);
   let status;
   if(top>=4)status='intervene';else if(top>=2)status='watch';else status=hasData?'ontrack':'nodata';
   const primary=top>=2?ranked[0]:null;
@@ -8327,11 +8370,12 @@ function exportStatusReport(){
   b+='<h2>Adoption by group</h2>';
   if(!s.dx.length)b+='<p class="muted">No stakeholder groups yet.</p>';
   else{
-    b+='<table class="grid"><tr><th>Group</th><th>Status</th><th>Latest</th><th>Gap / action</th><th>Intervention</th></tr>';
+    b+='<table class="grid"><tr><th>Group</th><th>Status</th><th>Training (L1/L2)</th><th>Latest</th><th>Gap / action</th><th>Intervention</th></tr>';
     s.dx.forEach(({sh,d})=>{
       const l=d.latest;const lat=l?[l.adoption!==undefined?'Adoption '+l.adoption+'%':'',l.proficiency!==undefined?'Prof. '+l.proficiency+'%':''].filter(Boolean).join(', ')+' ('+e(l.label)+')':'—';
       const ivs=(((p.sustainment||{})[sh.id]||{}).interventions||[]);const last=ivs[ivs.length-1];
-      b+='<tr><td>'+e(sh.name)+'</td><td>'+SUS_STATUS[d.status].label+'</td><td>'+lat+'</td><td>'+(d.primary?SUS_GAPS[d.primary].label+': '+e(SUS_GAPS[d.primary].actions[0]):'—')+'</td><td>'+(last?e(SUS_GAPS[last.type].tag)+' · '+e(last.status)+(last.note?' · '+e(last.note):''):'—')+'</td></tr>';
+      const tr=shTrainResults(sh);const trTxt=shHasTrainResults(sh)||tr.confidence!==null?[tr.completion!==null?tr.completion+'% completed':'',tr.pass!==null?tr.pass+'% passed':'',tr.confidence!==null?'confidence '+tr.confidence+'/5':''].filter(Boolean).join(', '):'—';
+      b+='<tr><td>'+e(sh.name)+'</td><td>'+SUS_STATUS[d.status].label+'</td><td>'+trTxt+'</td><td>'+lat+'</td><td>'+(d.primary?SUS_GAPS[d.primary].label+': '+e(SUS_GAPS[d.primary].actions[0]):'—')+'</td><td>'+(last?e(SUS_GAPS[last.type].tag)+' · '+e(last.status)+(last.note?' · '+e(last.note):''):'—')+'</td></tr>';
     });
     b+='</table>';
   }
@@ -10814,7 +10858,7 @@ function genReadinessRec(aiNarrative,audience){
   const fwPctP=fwScoresP.length?Math.round(fwScoresP.reduce((a,b)=>a+b,0)/fwScoresP.length/5*100):0;
   const sentPctP=shs.length?Math.round(shs.reduce((a,sh)=>{const ps=p.pulseResults?.[sh.id]?.scores||{};return a+sentimentScore(sh,ps);},0)/shs.length):50;
   const kirkPctsP=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
-  const trainPctP=kirkPctsP.length?Math.round(kirkPctsP.reduce((a,b)=>a+b,0)/kirkPctsP.length):0;
+  const trainPctP=shsTrainPct(shs);
   const lhDataP=calcLifecycleHealth(p);const lcPctP=lhDataP.score;
   const commsDimsP=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
   const commsAvgP=commsDimsP.length?commsDimsP.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDimsP.length:3;
