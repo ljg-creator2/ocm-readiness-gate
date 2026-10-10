@@ -11169,8 +11169,8 @@ async function closeWelcome(){
 async function loadDemoData(){
   releases=[];
   // Release 1: Q3 EHR Migration (Healthcare)
-  const r1=newRelease('Q3 EHR Migration',['HCA Healthcare','Cigna'],'2026-07-15','Development');
-  const p1a=newProject('Clinical Workflow',['HCA Healthcare'],4200);
+  const r1=newRelease('Q3 EHR Migration',['Northbrook Health System','Lakeside Health Plan'],'2026-07-15','Development');
+  const p1a=newProject('Clinical Workflow',['Northbrook Health System'],4200);
   p1a.status='In Progress';
   p1a.gateState={g1_0:'green',g1_1:'green',g1_2:'yellow',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'yellow',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'yellow',g3_1:'green'};
   migrateResources(p1a);
@@ -11187,7 +11187,7 @@ async function loadDemoData(){
     {id:uid(),type:'constraint',title:'Go-live cannot occur during Joint Commission survey window',description:'Regulatory constraint: the hospital cannot introduce major system changes during the scheduled Joint Commission review period (July 10-24).',status:'Open',severity:'High',owner:'Dr. Rachel Goldman',dueDate:'',created:'2026-04-01T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:'Regulatory'}
   ];
   p1a.stakeholders=[{id:uid(),name:'Attending Physicians',factors:{resistance:4,env:3,window:2,complexity:5,saturation:4,leadership:4},objectives:['Document patient encounters in new EHR','Generate clinical quality reports'],kirk:{L1:{method:'In-person workshop',timing:'Pre-go-live'},L2:{method:'Case-based assessment',assessment:'90% accuracy'},L3:{observable:'Documentation compliance',interval:'14-day post go-live'},L4:{outcome:'Zero clinical safety events',metric:'Safety event tracker'}},rein:{owner:'Chief Medical Officer',activities:'Weekly physician council + lunch sessions',intervals:['Week 1','Week 2','Week 3'],escalation:'Escalate if < 80% documentation compliance'}}];
-  const p1b=newProject('Nursing Documentation',['HCA Healthcare'],8500);
+  const p1b=newProject('Nursing Documentation',['Northbrook Health System'],8500);
   p1b.status='In Progress';
   p1b.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'yellow',g1_4:'yellow',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'yellow',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'yellow'};
   migrateResources(p1b);
@@ -11241,8 +11241,8 @@ async function loadDemoData(){
   releases.push(r1);
 
   // Release 2: Core Banking Modernization (Financial Services)
-  const r2=newRelease('Core Banking Modernization',['JPMorgan','Deloitte'],'2026-08-30','Testing');
-  const p2a=newProject('Teller Platform',['JPMorgan'],2800);
+  const r2=newRelease('Core Banking Modernization',['Harborview Bank','Meridian Advisory'],'2026-08-30','Testing');
+  const p2a=newProject('Teller Platform',['Harborview Bank'],2800);
   p2a.status='In Progress';
   p2a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'yellow',g1_4:'green',g2_0:'yellow',g2_1:'green',g2_2:'green',g2_3:'yellow',g2_4:'yellow',g2_5:'green',g3_0:'yellow',g3_1:'yellow'};
   migrateResources(p2a);
@@ -11258,7 +11258,7 @@ async function loadDemoData(){
     {id:uid(),type:'constraint',title:'No deployments during Q3 earnings blackout',description:'Finance mandates a change freeze during Q3 earnings preparation (Aug 15-Sep 5).',status:'Open',severity:'Medium',owner:'David Thompson',dueDate:'',created:'2026-04-01T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:'Schedule'}
   ];
   p2a.stakeholders=[{id:uid(),name:'Branch Tellers',factors:{resistance:3,env:3,window:3,complexity:3,saturation:2,leadership:3},objectives:['Process deposits/withdrawals','Handle wire transfers','Customer authentication verification'],kirk:{L1:{method:'Role-based training modules',timing:'2 weeks pre-go-live'},L2:{method:'Transaction simulation',assessment:'100 test cases'},L3:{observable:'Avg transaction time',interval:'14-day post go-live'},L4:{outcome:'Zero fraudulent transactions',metric:'Risk dashboard'}},rein:{owner:'Branch Managers',activities:'Daily check-ins + super-user support',intervals:['Week 1','Week 2','Week 4'],escalation:'Escalate if transaction errors exceed 0.5%'}}];
-  const p2b=newProject('Online Banking',['JPMorgan'],45000);
+  const p2b=newProject('Online Banking',['Harborview Bank'],45000);
   p2b.status='Not Started';
   p2b.golive='2026-08-30';
   p2b.gateState={g1_0:'yellow',g1_1:'yellow',g1_2:'red',g1_3:'red',g1_4:'red'};
@@ -11303,9 +11303,9 @@ async function loadDemoData(){
   r2.projects=[p2a,p2b];
   releases.push(r2);
 
-  // Release 3: SAP S/4HANA Cutover (Manufacturing)
-  const r3=newRelease('SAP S/4HANA Cutover',['Accenture','SAP'],'2026-09-15','Development');
-  const p3a=newProject('Shop Floor MES',['Accenture'],650);
+  // Release 3: ERP Manufacturing Cutover (Manufacturing)
+  const r3=newRelease('ERP Manufacturing Cutover',['Corvalis Manufacturing','Keystone Systems'],'2026-09-15','Development');
+  const p3a=newProject('Shop Floor MES',['Corvalis Manufacturing'],650);
   p3a.status='Not Started';
   p3a.gateState={g1_0:'red',g1_1:'red',g1_2:'yellow',g1_3:'yellow',g1_4:'red',g2_0:'red',g2_1:'red',g2_2:'yellow',g2_3:'red',g2_4:'red',g2_5:'yellow',g3_0:'red',g3_1:'red'};
   migrateResources(p3a);
@@ -11340,7 +11340,7 @@ async function loadDemoData(){
   if(p3a.stakeholders[1]){
     p3a.stakeholders[1].trust=3;
     p3a.stakeholders[1].trustHistory=[{date:'2025-11-01',value:3,note:''},{date:'2026-01-01',value:3,note:'Stable'}];
-    p3a.stakeholders[1].touchpoints=[{id:uid(),date:'2025-12-01',type:'Training Session',description:'SAP warehouse basics overview',trustImpact:'Increased'}];
+    p3a.stakeholders[1].touchpoints=[{id:uid(),date:'2025-12-01',type:'Training Session',description:'ERP warehouse basics overview',trustImpact:'Increased'}];
     p3a.stakeholders[1].anxietyIndicators={whatDoesThisMeanFreq:3,extraReviewCycles:1,escalations:0,attendanceDrop:false};
   }
   // HR Business Partners — healthy
@@ -11362,16 +11362,16 @@ async function loadDemoData(){
   r3.projects=[p3a];
   releases.push(r3);
 
-  // Release 4: Müller & Sons CRM Go-Live (Edge case - international)
-  const r4=newRelease('Müller & Sons CRM Go-Live',['Salesforce','Müller & Sons AG'],'2026-06-30','Testing');
-  const p4a=newProject('Client 360° Dashboard <Beta>',['Müller & Sons AG'],3200);
+  // Release 4: Calloway & Sons CRM Go-Live (Edge case - international)
+  const r4=newRelease('Calloway & Sons CRM Go-Live',['Quillon CRM','Calloway & Sons Ltd'],'2026-06-30','Testing');
+  const p4a=newProject('Client 360° Dashboard <Beta>',['Calloway & Sons Ltd'],3200);
   p4a.status='In Progress';
   p4a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'yellow',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'yellow',g3_0:'green',g3_1:'green'};
   migrateResources(p4a);
   p4a.resources.ocm_train=[{name:'François Dupont',contact:''}];
   p4a.resources.ocm_impl=[{name:'Hans Mueller',contact:''}];
   p4a.resources.pm=[{name:'Giulia Rossi',contact:''}];
-  const p4b=newProject('',['Müller & Sons AG'],0);
+  const p4b=newProject('',['Calloway & Sons Ltd'],0);
   p4b.status='Not Started';
   migrateResources(p4b);
   // Client 360 — on track
@@ -11388,8 +11388,8 @@ async function loadDemoData(){
   releases.push(r4);
 
   // Release 5: State Benefits Portal (Government - Live)
-  const r5=newRelease('State Benefits Portal Modernization',['GSA','DeloitteGov'],'2025-11-30','Active Production');
-  const p5a=newProject('Case Management System',['GSA'],12500);
+  const r5=newRelease('State Benefits Portal Modernization',['Commonwealth Benefits Agency','Civic Systems Partners'],'2025-11-30','Active Production');
+  const p5a=newProject('Case Management System',['Commonwealth Benefits Agency'],12500);
   p5a.status='Complete';
   p5a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
   migrateResources(p5a);
@@ -11398,7 +11398,7 @@ async function loadDemoData(){
   p5a.resources.pm=[{name:'Rebecca Martinez',contact:''}];
   p5a.resources.func=[{name:'Dr. Jonathan Lee',contact:''}];
   p5a.stakeholders=[{id:uid(),name:'Case Workers',factors:{resistance:2,env:3,window:4,complexity:3,saturation:2,leadership:4},objectives:['Manage benefit applications','Process claims quickly','Document client interactions'],kirk:{L1:{method:'Classroom + online modules',timing:'6 weeks pre-launch'},L2:{method:'Job shadowing + practice cases',assessment:'100% accuracy required'},L3:{observable:'Case processing time',interval:'30-day post launch'},L4:{outcome:'Zero benefits processing delays',metric:'Claims dashboard'}},rein:{owner:'Regional Director',activities:'Weekly supervisor check-ins + monthly town halls',intervals:['Weekly','Monthly'],escalation:'Escalate if processing time exceeds SLA'}},{id:uid(),name:'Agency Leadership',factors:{resistance:1,env:4,window:5,complexity:2,saturation:1,leadership:5},objectives:['Monitor system performance','Meet constituent service metrics','Track budget savings'],kirk:{L1:{method:'Executive briefing',timing:'2 weeks pre-launch'},L2:{method:'Dashboard training',assessment:'Operational proficiency'},L3:{observable:'System availability',interval:'Ongoing'},L4:{outcome:'90% constituent satisfaction',metric:'Feedback surveys'}},rein:{owner:'Deputy Commissioner',activities:'Monthly performance reviews + quarterly steering committee',intervals:['Monthly','Quarterly'],escalation:'Escalate if system availability < 99.5%'}}];
-  const p5b=newProject('Public Portal & Self-Service',['GSA'],8300);
+  const p5b=newProject('Public Portal & Self-Service',['Commonwealth Benefits Agency'],8300);
   p5b.status='Completed';
   p5b.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
   migrateResources(p5b);
@@ -11443,8 +11443,8 @@ async function loadDemoData(){
   releases.push(r5);
 
   // Release 6: Completed project with post-launch data
-  const r6=newRelease('Payroll Modernization',['ADP','Deloitte'],'2026-02-15','Complete');
-  const p6a=newProject('Payroll Engine',['ADP'],1200);
+  const r6=newRelease('Payroll Modernization',['Halvorsen Payroll','Meridian Advisory'],'2026-02-15','Complete');
+  const p6a=newProject('Payroll Engine',['Halvorsen Payroll'],1200);
   p6a.status='Complete';p6a.golive='2026-02-15';
   p6a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green',g3_2:'green',g3_3:'green',g3_4:'green',g3_5:'green',g4_0:'green',g4_1:'green',g4_2:'green',g4_3:'green',g4_4:'green',g4_5:'green'};
   migrateResources(p6a);
@@ -11825,7 +11825,7 @@ function generateDemoSnapshots(){
           {id:3,name:'Teller Platform',gateScore:baseGates[idx]+3,adkarAvg:baseAdkar[idx].toFixed(1),flags:Math.max(0,baseFlags[idx]-5),status:'In Progress'},
           {id:4,name:'Online Banking',gateScore:Math.max(0,baseGates[idx]-5),adkarAvg:(baseAdkar[idx]-0.2).toFixed(1),flags:baseFlags[idx],status:'Not Started'}
         ]},
-        {id:3,name:'SAP S/4HANA Cutover',projects:[
+        {id:3,name:'ERP Manufacturing Cutover',projects:[
           {id:5,name:'Shop Floor MES',gateScore:Math.max(0,baseGates[idx]-8),adkarAvg:(baseAdkar[idx]-0.3).toFixed(1),flags:Math.min(22,baseFlags[idx]+3),status:'Not Started'}
         ]},
         {id:4,name:'M\u00FCller & Sons CRM Go-Live',projects:[
