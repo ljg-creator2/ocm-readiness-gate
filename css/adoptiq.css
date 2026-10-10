@@ -2732,3 +2732,22 @@ body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-ca
 .shq-train-hd em{font-style:normal;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-35);margin-left:6px}
 .shq-train-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:768px){.shq-train-grid{grid-template-columns:1fr}}
+
+/* ── Quick adoption risk ── */
+.shq-risk{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.shq-risk-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 16px}
+.shq-q{display:flex;flex-direction:column;gap:5px;min-width:0}
+.shq-q>span{font-family:var(--font-body);font-size:11px;color:var(--ink)}
+.shq-q em{font-style:normal;color:var(--red-bright)}
+.shq-q em.shq-opt{color:var(--ink-35);font-size:10px}
+.shq-opts{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;align-self:flex-start}
+.shq-opts button{border:none;border-right:1px solid var(--border);background:var(--surface);color:var(--ink-60);font-family:var(--font-body);font-size:11px;font-weight:700;padding:5px 12px;cursor:pointer}
+.shq-opts button:last-child{border-right:none}
+.shq-opts button.on{background:var(--navy);color:#fff}
+.shq-opts button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.shq-fc{margin-top:8px;font-family:var(--font-body);font-size:11px;color:var(--ink-60)}
+.shq-fc strong{color:var(--ink)}
+.shq-derived{display:block;margin-top:2px;color:var(--ink-35)}
+.sus-fc{font-family:var(--font-body);font-size:10px;color:var(--ink-60)}
+.jira-plan{margin-top:12px;font-family:var(--font-body);font-size:12px;color:var(--ink)}
+@media(max-width:768px){.shq-risk-grid{grid-template-columns:1fr}}

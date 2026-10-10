@@ -2598,7 +2598,7 @@ function renderGuidedSummary(){
 function newStakeholder(name){
   return{id:uid(),name,
     agency:'',stakeholderType:'end_user_group',roleCategory:'',
-    factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},objectives:[],
+    factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},factorsRated:[],objectives:[],
     kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
     rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''},
     trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
@@ -2620,6 +2620,8 @@ function removePSH(id){const p=getProj();if(!p)return;const sh=p.stakeholders.fi
 function migrateStakeholders(p){
   if(!p||!p.stakeholders)return;
   p.stakeholders.forEach(sh=>{
+    // Groups scored before rating was tracked: any non-default factor means someone rated them.
+    if(sh.factorsRated===undefined){const f=sh.factors||{};sh.factorsRated=Object.values(f).some(v=>+v!==3)?Object.keys(f):[];}
     if(sh.agency===undefined)sh.agency='';
     if(sh.stakeholderType===undefined)sh.stakeholderType='end_user_group';
     if(sh.roleCategory===undefined)sh.roleCategory='';
@@ -2657,7 +2659,7 @@ function switchSHTab(shId,idx){
 }
 function renderPSH(){
   const p=getProj();if(!p)return;migrateStakeholders(p);const wrap=document.getElementById('p-sh-wrap');
-  if(p.stakeholders.length&&shQuickOn()){wrap.innerHTML=renderShQuick(p);renderPAHM();if(isReadOnly)applyReadOnlyRestrictions();return;}
+  if(p.stakeholders.length&&shQuickOn()){applyDerivedFactors(p);wrap.innerHTML=renderShQuick(p);renderPAHM();if(isReadOnly)applyReadOnlyRestrictions();return;}
   if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
   const adkarR=p.adkarScores['R'];
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
@@ -2923,7 +2925,7 @@ function removeTouchpoint(shId,idx){
   if(!confirm('Remove this touchpoint?'))return;
   sh.touchpoints.splice(idx,1);renderPSH();touch('proj');schedSave();
 }
-function updatePFac(id,key,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.factors[key]=parseInt(val);const ve=document.getElementById(`pfv-${id}-${key}`);const de=document.getElementById(`pfd-${id}-${key}`);if(ve)ve.textContent=val;if(de)de.textContent=FD[parseInt(val)];renderPSH();renderPKPIs();touch('proj');schedSave();}
+function updatePFac(id,key,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.factors[key]=parseInt(val);markFactorRated(sh,key);const ve=document.getElementById(`pfv-${id}-${key}`);const de=document.getElementById(`pfd-${id}-${key}`);if(ve)ve.textContent=val;if(de)de.textContent=FD[parseInt(val)];renderPSH();renderPKPIs();touch('proj');schedSave();}
 function addPLO(id){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives.push('');renderPSH();const b=document.getElementById('plo-'+id);if(b){b.classList.add('open');const a=document.getElementById('parr-lo-'+id);if(a)a.classList.add('open');}touch('proj');schedSave();}
 function removePLO(id,idx){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;if(!confirm('Remove this learning objective?'))return;sh.objectives.splice(idx,1);renderPSH();touch('proj');schedSave();}
 function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives[idx]=val;
@@ -2936,6 +2938,78 @@ function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeho
 // ── Quick setup: only the fields the pilot uses (reinforcement owner, the
 // observable L3 behavior, and an escalation path for XL/XXL). The full
 // assessment stays available and uses the same data. ──
+
+// ── Simplified adoption risk: 3 quick questions (+1 optional), 2 factors derived
+// from data, and "Not rated" instead of a silent default of 3. Answers write to the
+// same 1–5 factors the full assessment uses (5 = low risk). ──
+const QUICK_FACTORS=[
+  {key:'complexity',q:'How big is the change to this group’s daily work?',opts:[['Low',5],['Medium',3],['High',1]]},
+  {key:'saturation',q:'How much else is changing for them right now?',opts:[['Low',5],['Medium',3],['High',1]]},
+  {key:'leadership',q:'Will their supervisors actively reinforce it?',opts:[['Yes',5],['Partly',3],['No',1]]},
+  {key:'resistance',q:'Resistance signals seen? (workarounds, pushback, escalations)',opts:[['No',4],['Yes',2]],optional:true}
+];
+function markFactorRated(sh,key){if(!sh.factorsRated)sh.factorsRated=[];if(!sh.factorsRated.includes(key))sh.factorsRated.push(key);}
+// Training window from the timeline buffer; environment stability from logged training-environment defects.
+function derivedFactors(p){
+  const out={};
+  try{
+    const t=calcTrainingTimeline(p);
+    if(!t.error&&t.vsGolive!==null)out.window=t.vsGolive<0?1:t.vsGolive<10?3:5;
+  }catch(e){}
+  const ed=+(((p.lifecycleSignals||{}).training||{}).envDefects||0);
+  if(ed>0)out.env=ed>=4?1:3;
+  return out;
+}
+function applyDerivedFactors(p){
+  if(!p||!p.stakeholders)return false;
+  const d=derivedFactors(p);let changed=false;
+  p.stakeholders.forEach(sh=>{
+    if(!sh.factors)sh.factors={};
+    const prev=JSON.stringify(sh.factorsDerived||[]);
+    sh.factorsDerived=[];
+    Object.keys(d).forEach(k=>{
+      if((sh.factorsRated||[]).includes(k))return;// a person's rating wins
+      if(sh.factors[k]!==d[k]){sh.factors[k]=d[k];changed=true;}
+      sh.factorsDerived.push(k);
+    });
+    if(JSON.stringify(sh.factorsDerived)!==prev)changed=true;
+  });
+  return changed;
+}
+function shForecast(sh){
+  // Derived factors refine a forecast but never create one on their own.
+  if(!(sh.factorsRated||[]).some(k=>AF.some(a=>a.key===k)))return null;
+  const keys=[...new Set([...(sh.factorsRated||[]),...(sh.factorsDerived||[])])].filter(k=>AF.some(a=>a.key===k));
+  if(!keys.length)return null;
+  const score=Math.round(keys.reduce((a,k)=>a+(+sh.factors[k]||3),0)/keys.length/5*100);
+  return{score,n:keys.length,tier:adoptTier(score)};
+}
+function forecastLabel(sh){const f=shForecast(sh);return f?f.score+'% · '+f.tier.tier:'Not rated';}
+function quickRiskDone(sh){return QUICK_FACTORS.filter(q=>!q.optional).every(q=>(sh.factorsRated||[]).includes(q.key));}
+function setQuickFactor(shId,key,val){
+  const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===shId);if(!sh)return;
+  if(!sh.factors)sh.factors={};
+  sh.factors[key]=val;markFactorRated(sh,key);touch('proj');schedSave();
+  document.querySelectorAll('#shq-risk-'+shId+' [data-fk="'+key+'"]').forEach(b=>b.classList.toggle('on',+b.dataset.fv===val));
+  const fe=document.getElementById('shq-fc-'+shId);if(fe)fe.textContent=forecastLabel(sh);
+  refreshShQuickChip(shId);
+}
+function renderShQuickRisk(p,sh){
+  const derived=derivedFactors(p);
+  let h='<div class="shq-risk" id="shq-risk-'+sh.id+'"><span class="shq-train-hd">Adoption risk <em>your forecast for this group</em></span><div class="shq-risk-grid">';
+  QUICK_FACTORS.forEach(q=>{
+    const rated=(sh.factorsRated||[]).includes(q.key);
+    h+='<div class="shq-q"><span>'+esc(q.q)+(q.optional?' <em class="shq-opt">optional</em>':' <em>*</em>')+'</span><div class="shq-opts" role="group" aria-label="'+esc(q.q)+'">';
+    q.opts.forEach(([lbl,v])=>{h+='<button type="button" data-fk="'+q.key+'" data-fv="'+v+'" class="'+(rated&&+sh.factors[q.key]===v?'on':'')+'" onclick="setQuickFactor('+sh.id+',\''+q.key+'\','+v+')">'+lbl+'</button>';});
+    h+='</div></div>';
+  });
+  h+='</div><div class="shq-fc">Forecast: <strong id="shq-fc-'+sh.id+'">'+esc(forecastLabel(sh))+'</strong>';
+  const dn=[];
+  if(derived.window!==undefined)dn.push('training window from the timeline ('+(derived.window===1?'finishes after go-live':derived.window===3?'tight buffer':'healthy buffer')+')');
+  if(derived.env!==undefined)dn.push('environment stability from logged training-environment defects');
+  if(dn.length)h+='<span class="shq-derived">Also counts '+dn.join(' and ')+'.</span>';
+  return h+'</div></div>';
+}
 function shQuickOn(){
   let m=null;try{m=localStorage.getItem('adoptiq_sh_mode');}catch(e){}
   return m?m==='quick':!isDemoMode;
@@ -2962,7 +3036,7 @@ function shQuickFields(p,sh){
   ];
   return f;
 }
-function shQuickProgress(p,sh){const f=shQuickFields(p,sh).filter(x=>x.req);return{done:f.filter(x=>(x.val||'').trim()).length,total:f.length};}
+function shQuickProgress(p,sh){const f=shQuickFields(p,sh).filter(x=>x.req);return{done:f.filter(x=>(x.val||'').trim()).length+(quickRiskDone(sh)?1:0),total:f.length+1};}
 function refreshShQuickChip(shId){
   const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===shId);if(!sh)return;
   const el=document.getElementById('shq-chip-'+shId);if(!el)return;
@@ -2985,7 +3059,7 @@ function renderShQuick(p){
       h+='<label class="shq-field"><span>'+esc(x.label)+(x.req?' <em>*</em>':'')+'</span><input type="text" value="'+esc(x.val||'')+'" placeholder="'+esc(x.ph)+'" oninput="'+x.on+';refreshShQuickChip('+sh.id+')"></label>';
     });
     const tr=shTrainResults(sh);const v=x=>x===null?'':x;
-    h+='</div><div class="shq-train"><span class="shq-train-hd">Training results <em>enter when the training wave closes</em></span><div class="shq-train-grid">'
+    h+='</div>'+renderShQuickRisk(p,sh)+'<div class="shq-train"><span class="shq-train-hd">Training results <em>enter when the training wave closes</em></span><div class="shq-train-grid">'
       +'<label class="shq-field"><span>Completed %</span><input type="number" min="0" max="100" value="'+v(tr.completion)+'" placeholder="e.g. 94" oninput="updateTrainResult('+sh.id+',\'completion\',this.value)"></label>'
       +'<label class="shq-field"><span>Passed assessment % (L2)</span><input type="number" min="0" max="100" value="'+v(tr.pass)+'" placeholder="e.g. 81" oninput="updateTrainResult('+sh.id+',\'pass\',this.value)"></label>'
       +'<label class="shq-field"><span>Learner confidence (1–5)</span><input type="number" min="1" max="5" step="0.1" value="'+v(tr.confidence)+'" placeholder="e.g. 3.8" oninput="updateTrainResult('+sh.id+',\'confidence\',this.value)"></label>'
@@ -4285,6 +4359,108 @@ function toggleSmartRow(target,idx,checked){
   if(_multiSectionData&&_multiSectionData[target]&&_multiSectionData[target][idx])_multiSectionData[target][idx]._selected=checked;
 }
 
+
+// ── Loose date parsing for imports (Jira CSV, plan documents) → yyyy-mm-dd ──
+function parseLooseDate(v){
+  if(v===undefined||v===null||v==='')return'';
+  if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*864e5));return isNaN(d)?'':d.toISOString().slice(0,10);}
+  const s=String(v).trim();let m;
+  const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const yy=y=>{y=+y;return y<100?2000+y:y;};
+  const iso=(y,mo,d)=>{const dt=new Date(y,mo,d);return isNaN(dt)?'':dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');};
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/)))return iso(+m[1],+m[2]-1,+m[3]);
+  if((m=s.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{2,4})/))&&MON[m[2].toLowerCase()]!==undefined)return iso(yy(m[3]),MON[m[2].toLowerCase()],+m[1]);
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/)))return iso(yy(m[3]),+m[1]-1,+m[2]);
+  const d=new Date(s);return isNaN(d)?'':iso(d.getFullYear(),d.getMonth(),d.getDate());
+}
+
+// ── Jira, phase 1: import a CSV/Excel issue export onto the open release ──
+let _jiraPlan=null;
+function openJiraImport(){
+  let m=document.getElementById('jira-import-modal');if(m)m.remove();
+  m=document.createElement('div');m.id='jira-import-modal';m.className='import-modal';
+  m.innerHTML='<div class="import-modal-box"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h2>Import from Jira</h2>'
+    +'<div class="import-sub">In Jira, run a filter for this release’s epics, issues and defects, then choose <strong>Export → CSV (all fields)</strong>. AdoptIQ reads UAT, Tech Transfer and go-live dates and counts UAT and training-environment defects. You review every change before it is saved.</div></div>'
+    +'<button class="btn-ghost" onclick="document.getElementById(\'jira-import-modal\').classList.remove(\'open\')" style="font-size:22px;padding:0 6px;line-height:1" aria-label="Close">&times;</button></div>'
+    +'<div class="import-drop" onclick="document.getElementById(\'jira-file-input\').click()"><div class="import-drop-text">Choose your Jira export <strong>(.csv or .xlsx)</strong></div></div>'
+    +'<input type="file" id="jira-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleJiraFile(this.files[0])">'
+    +'<div id="jira-preview"></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  requestAnimationFrame(()=>m.classList.add('open'));
+}
+async function handleJiraFile(file){
+  const out=document.getElementById('jira-preview');if(!file||!out)return;
+  if(!window.XLSX){out.innerHTML='<div class="import-status error">The spreadsheet reader is still loading. Try again in a moment.</div>';return;}
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:false});
+    if(!rows.length)throw new Error('The file has no rows.');
+    _jiraPlan=planJiraImport(rows);
+    out.innerHTML=renderJiraPlan(_jiraPlan);
+  }catch(e){out.innerHTML='<div class="import-status error">Could not read that file: '+esc(e.message)+'</div>';}
+}
+function jiraCols(rows,re){return Object.keys(rows[0]||{}).filter(k=>re.test(k));}
+function jiraVal(row,cols){return cols.map(c=>String(row[c]||'').trim()).filter(Boolean).join(' ');}
+function planJiraImport(rows){
+  const r=getRel();
+  const C={type:jiraCols(rows,/^issue\s*type$/i),summary:jiraCols(rows,/^summary$/i),fix:jiraCols(rows,/^fix\s*versions?(\/s)?(_\d+)?$/i),
+    due:jiraCols(rows,/^due\s*date$/i),resolved:jiraCols(rows,/^resolved$/i),labels:jiraCols(rows,/^labels(_\d+)?$/i),env:jiraCols(rows,/^environment$/i),
+    epic:jiraCols(rows,/^(epic\s*link|epic\s*name|parent|parent\s*summary|custom field \(epic (link|name)\))(_\d+)?$/i)};
+  const versions=[...new Set(rows.flatMap(x=>C.fix.map(c=>String(x[c]||'').trim()).filter(Boolean)))];
+  const norm=t=>t.toLowerCase().replace(/[^a-z0-9]/g,'');
+  const rn=norm(r?r.name:'');
+  const version=versions.find(v=>norm(v)===rn)||versions.find(v=>rn&&(norm(v).includes(rn)||rn.includes(norm(v))))||(versions.length===1?versions[0]:'');
+  const inScope=rows.filter(x=>!version||C.fix.some(c=>String(x[c]||'').trim()===version));
+  const isBug=x=>/bug|defect/i.test(jiraVal(x,C.type));
+  const dateOf=x=>parseLooseDate(jiraVal(x,C.due))||parseLooseDate(jiraVal(x,C.resolved));
+  const pick=(re,which)=>{const ds=inScope.filter(x=>!isBug(x)&&re.test(jiraVal(x,C.summary))).map(dateOf).filter(Boolean).sort();return ds.length?(which==='min'?ds[0]:ds[ds.length-1]):'';};
+  const plan={version,versions,rows:inScope.length,changes:[],projects:[]};
+  if(!r)return plan;
+  const uat=pick(/\bUAT\b|user acceptance/i,'max'),tt=pick(/tech(nical)?\s*transfer/i,'min'),gl=pick(/go[- ]?live|cutover|production (deploy|release)|deploy to prod/i,'max');
+  if(gl&&gl!==r.golive)plan.changes.push({field:'golive',label:'Release go-live',from:r.golive,to:gl});
+  if(uat&&uat!==r.uatComplete)plan.changes.push({field:'uatComplete',label:'UAT complete',from:r.uatComplete,to:uat});
+  if(tt&&tt!==r.techTransfer)plan.changes.push({field:'techTransfer',label:'Tech Transfer start',from:r.techTransfer,to:tt});
+  const bugs=inScope.filter(isBug);
+  (r.projects||[]).forEach(p=>{
+    const pn=norm(p.name);
+    const mine=bugs.filter(x=>{const e=norm(jiraVal(x,C.epic));return pn&&e&&(e.includes(pn)||pn.includes(e));});
+    if(!mine.length)return;
+    const tag=x=>(jiraVal(x,C.labels)+' '+jiraVal(x,C.env)+' '+jiraVal(x,C.summary)).toLowerCase();
+    const trainEnv=mine.filter(x=>/train/.test(tag(x))).length;
+    const uatD=mine.filter(x=>/\buat\b/.test(tag(x))).length;
+    plan.projects.push({id:p.id,name:p.name,total:mine.length,uat:uatD,train:trainEnv});
+  });
+  plan.unmatchedBugs=bugs.length-plan.projects.reduce((a,x)=>a+x.total,0);
+  return plan;
+}
+function renderJiraPlan(pl){
+  let h='<div class="jira-plan">';
+  h+='<p>'+pl.rows+' issues'+(pl.version?' in fix version <strong>'+esc(pl.version)+'</strong>':'')+(pl.versions.length>1&&!pl.version?'. More than one fix version found and none matched this release name, so all rows were read.':'.')+'</p>';
+  if(!pl.changes.length&&!pl.projects.length){return h+'<div class="import-status">Nothing to update. No UAT, Tech Transfer or go-live issues with dates, and no defects matched to this release’s projects.</div></div>';}
+  h+='<table class="size-tbl"><thead><tr><th>Update</th><th>Now</th><th>From Jira</th></tr></thead><tbody>';
+  pl.changes.forEach(c=>{h+='<tr><td>'+esc(c.label)+'</td><td>'+(c.from?fmtDate(c.from):'—')+'</td><td><strong>'+fmtDate(c.to)+'</strong></td></tr>';});
+  pl.projects.forEach(x=>{h+='<tr><td>'+esc(x.name)+': defects</td><td>—</td><td><strong>'+x.uat+' UAT · '+x.train+' training environment</strong> ('+x.total+' total)</td></tr>';});
+  h+='</tbody></table>';
+  if(pl.unmatchedBugs>0)h+='<p class="tt-muted">'+pl.unmatchedBugs+(pl.unmatchedBugs===1?' defect was':' defects were')+' not matched to a project by epic name, so '+(pl.unmatchedBugs===1?'it was':'they were')+' not counted.</p>';
+  return h+'<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-gold" onclick="applyJiraPlan()">Apply updates</button><button class="btn-ghost" onclick="document.getElementById(\'jira-import-modal\').classList.remove(\'open\')">Cancel</button></div></div>';
+}
+function applyJiraPlan(){
+  const r=getRel();const pl=_jiraPlan;if(!r||!pl)return;
+  pl.changes.forEach(c=>{r[c.field]=c.to;});
+  pl.projects.forEach(x=>{
+    const p=(r.projects||[]).find(q=>q.id===x.id);if(!p)return;
+    if(!p.lifecycleSignals)p.lifecycleSignals={};
+    p.lifecycleSignals.testing=Object.assign({},p.lifecycleSignals.testing,{uatDefects:x.uat});
+    p.lifecycleSignals.training=Object.assign({},p.lifecycleSignals.training,{envDefects:x.train});
+    applyTTDerived(p);
+  });
+  touch('rel');schedSave();
+  const m=document.getElementById('jira-import-modal');if(m)m.classList.remove('open');
+  openRelease(r.id);
+  showSuccess('Jira updates applied.');
+}
 function commitMultiSectionImport(){
   const p=getProj();if(!p)return;
   if(!_multiSectionData)return;
@@ -4404,10 +4580,24 @@ function commitMultiSectionImport(){
 
   // ── Training Plan → Stakeholder Learning Objectives ──
   const trainingItems=sel('training');
+  const filled=[];
+  const matchGroup=txt=>{
+    const t=(txt||'').toLowerCase().trim();if(!t)return null;
+    return p.stakeholders.find(sh=>{const n=(sh.name||'').toLowerCase().trim();return n&&(t===n||t.includes(n)||n.includes(t));})||null;
+  };
   if(trainingItems.length){
-    // Add training items as learning objectives to all stakeholders
-    const objTexts=trainingItems.map(item=>item.name||item.text||item.description||'').filter(t=>t);
-    if(p.stakeholders.length){
+    // Items with an audience that matches a group go to that group; the rest go to every group
+    const unmatched=[];let routed=0;
+    trainingItems.forEach(item=>{
+      const obj=item.name||item.text||item.description||'';if(!obj)return;
+      const g=matchGroup(item.audience);
+      if(g){if(!g.objectives)g.objectives=[];if(!g.objectives.includes(obj))g.objectives.push(obj);routed++;}
+      else unmatched.push(obj);
+    });
+    if(routed)filled.push(routed+' objectives matched to their group');
+    const objTexts=unmatched;
+    if(!objTexts.length){}
+    else if(p.stakeholders.length){
       p.stakeholders.forEach(sh=>{
         if(!sh.objectives)sh.objectives=[];
         objTexts.forEach(obj=>{
@@ -4458,6 +4648,26 @@ function commitMultiSectionImport(){
 
   // ── Reinforcement / Post-Go-Live → Stakeholder Reinforcement Plans ──
   const reinItems=sel('reinforcement');
+  // Reinforcement owners and L3 behaviors for groups named in a row (fills empty fields only)
+  let owners=0,behaviors=0;
+  reinItems.forEach(item=>{
+    const txt=[item.name,item.text,item.description].filter(Boolean).join(' ');
+    const g=matchGroup(item.audience)||p.stakeholders.find(sh=>sh.name&&txt.toLowerCase().includes(sh.name.toLowerCase()));
+    if(!g)return;
+    if(!g.rein)g.rein={owner:'',activities:'',intervals:[],escalation:''};
+    if(item.owner&&!g.rein.owner){g.rein.owner=String(item.owner).trim();owners++;}
+  });
+  [...trainingItems,...reinItems,...sel('successcriteria')].forEach(item=>{
+    const txt=[item.name,item.text,item.description].filter(Boolean).join(' ');
+    if(!/\b(behaviou?r|observable|will be able to|L3|level 3)\b/i.test(txt))return;
+    const g=matchGroup(item.audience)||p.stakeholders.find(sh=>sh.name&&txt.toLowerCase().includes(sh.name.toLowerCase()));
+    if(!g)return;
+    if(!g.kirk)g.kirk={L1:{},L2:{},L3:{interval:'30',observable:''},L4:{}};
+    if(!g.kirk.L3)g.kirk.L3={interval:'30',observable:''};
+    if(!g.kirk.L3.observable){g.kirk.L3.observable=(item.description||item.text||item.name||'').trim();behaviors++;}
+  });
+  if(owners)filled.push(owners+' reinforcement owner'+(owners===1?'':'s'));
+  if(behaviors)filled.push(behaviors+' L3 behavior'+(behaviors===1?'':'s'));
   if(reinItems.length){
     const reinText=reinItems.map(item=>item.name||item.text||item.description||'').filter(t=>t).join('\n• ');
     if(p.stakeholders.length){
@@ -4506,7 +4716,33 @@ function commitMultiSectionImport(){
     totalImported+=engItems.length;breakdown.push(engItems.length+' engagement');
   }
 
+  // ── Training Timeline: audiences, course length and dates named anywhere in the document ──
+  const blob=IMPORT_TARGETS.flatMap(t=>sel(t)).map(it=>Object.entries(it).filter(([k])=>k[0]!=='_').map(([,v])=>String(v||'')).join(' ')).join('\n');
+  if(blob.trim()){
+    if(!p.trainingTimeline)p.trainingTimeline={};
+    const tt=p.trainingTimeline;const ttBits=[];
+    const st=getTTStd();const found=st.audiences.filter(a=>new RegExp('\\b'+a.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(blob));
+    if(found.length){
+      tt.audiences=[...new Set([...(tt.audiences||[]),...found.map(a=>a.id)])];
+      found.forEach(a=>{if(!p.stakeholders.some(sh=>sh.audienceId===a.id||(sh.name||'').trim().toLowerCase()===a.name.trim().toLowerCase())){const sh=newStakeholder(a.name);sh.audienceId=a.id;p.stakeholders.push(sh);}});
+      ttBits.push(found.map(a=>a.name).join(', '));
+    }
+    if(!tt.course){
+      const order=[['three',/\b(three|3)[- ]day\b/i],['two',/\b(two|2)[- ]day\b/i],['full',/\b(full[- ]day|one[- ]day|1[- ]day)\b/i],['half',/\bhalf[- ]day\b/i],['info',/\binfo(rmation(al)?)?\s+session\b/i],['huddle',/\bhuddle\b/i],['micro',/\bmicro[- ]?learning\b/i]];
+      const hit=order.find(([,re])=>re.test(blob));// the longest course named sets the delivery window
+      if(hit){tt.course=hit[0];ttBits.push((TT_COURSES.find(c=>c.key===hit[0])||{}).label);}
+    }
+    const dateNear=re=>{const m=blob.match(re);if(!m)return'';const d=parseLooseDate(m[m.length-1]);return d||'';};
+    const dt=projTTDates(p);
+    if(!dt.uatComplete){const d=dateNear(/\bUAT\b[^\n\d]{0,30}(?:complete|completion|end|ends|sign[- ]?off|close[sd]?)?[^\n\d]{0,10}(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2})/i);if(d){tt.uatComplete=d;ttBits.push('UAT complete '+fmtDate(d));}}
+    if(!dt.techTransfer){const d=dateNear(/\btech(?:nical)?\s+transfer\b[^\n\d]{0,30}(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2})/i);if(d){tt.techTransfer=d;ttBits.push('Tech Transfer '+fmtDate(d));}}
+    if(ttBits.length)filled.push('Timeline: '+ttBits.join(' · '));
+    applyTTDerived(p);
+  }
+  if(filled.length)breakdown.push('filled '+filled.join('; '));
+
   // Re-render all affected sections
+  if(typeof renderPTrainPlan==='function')renderPTrainPlan();
   if(impactItems.length)renderPImpact();
   if(gapItems.length)renderPGaps();
   if(shItems.length||trainingItems.length||commsItems.length||reinItems.length||engItems.length){renderPSH();renderPKPIs();}
@@ -7821,9 +8057,9 @@ function renderPPostLaunch(){
   h+='</div>';
   shs.forEach(sh=>{
     const data=p.postLaunch[sh.id]||{};
-    const preScore=adoptScore(sh.factors);
+    const fc=shForecast(sh);const preScore=fc?fc.score:null;
     h+='<div class="pl-group">';
-    h+='<div class="pl-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span><span class="pl-pre-score">Pre-Launch: '+preScore+'%</span></div>';
+    h+='<div class="pl-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span><span class="pl-pre-score">Pre-launch forecast: '+(preScore===null?'Not rated':preScore+'%')+'</span></div>';
     h+='<div class="pl-intervals">';
     PL_INTERVALS.forEach(iv=>{
       const obs=data[iv.key]||{};
@@ -7838,7 +8074,7 @@ function renderPPostLaunch(){
         h+='<div class="pl-iv-field pl-iv-notes"><label>Notes</label><textarea rows="1" oninput="updatePL('+sh.id+',\''+iv.key+'\',\'notes\',this.value)" placeholder="Observations...">'+esc(obs.notes||'')+'</textarea></div>';
         h+='</div>';
         // Show trend vs pre-launch
-        if(obs.adoption!==undefined){
+        if(obs.adoption!==undefined&&preScore!==null){
           const delta=obs.adoption-preScore;
           const cls=delta>=0?'pl-trend-up':'pl-trend-down';
           h+='<div class="pl-trend '+cls+'">'+(delta>=0?'<i class="ph ph-arrow-up"></i>':'<i class="ph ph-arrow-down"></i>')+' '+Math.abs(delta)+'% vs pre-launch prediction</div>';
@@ -7990,6 +8226,7 @@ function renderPSustain(){
     h+='<div class="sus-group">';
     h+='<div class="sus-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span>';
     if(d.primary)h+='<span class="sus-gap-chip sus-gap-'+d.primary+'"><i class="ph '+SUS_GAPS[d.primary].icon+'"></i>'+SUS_GAPS[d.primary].label+'</span>';
+    h+='<span class="sus-fc" title="Pre-training adoption risk forecast from Adoption Scoring">Forecast '+esc(forecastLabel(sh))+'</span>';
     h+='<span class="sus-status '+st.cls+'">'+st.label+'</span></div>';
     if(d.latest){
       const l=d.latest;const bits=[];
@@ -8124,7 +8361,7 @@ function calcTrainingTimeline(p){
   return{st,sz,course,auds,perAud,binding,phases,lo,hi,finishLo,finishHi,vsGolive,gateBreach,accl,dt,gl,deliveryStart,checkpoints};
 }
 function applyTTDerived(p){
-  if(!p)return false;let changed=false;
+  if(!p)return false;let changed=applyDerivedFactors(p);
   const r=calcTrainingTimeline(p);
   if(!r.error&&r.deliveryStart){
     const ds=isoDate(r.deliveryStart);
@@ -8306,7 +8543,8 @@ function pilotStatus(p){
   if(!t.error&&!t.dt.uatComplete)act('amber','Enter the UAT complete date (on the release, or override on this project).','trainplan');
   if(!t.error&&t.gateBreach)act('red','Hard gate: Training Start is before UAT complete. Move training or confirm UAT.','trainplan');
   if(!t.error&&t.vsGolive!==null&&t.vsGolive<0)act('red','Training finishes '+Math.abs(t.vsGolive)+' business days after go-live. Rescope the course or audience, or move dates.','trainplan');
-  if(!trainers.length)act('amber','Name the OCM training lead.','resources');
+  if(!trainers.length)act('amber','Name the OCM Training lead.','resources');
+  if(!impl.length)act('amber','Name the OCM Implementation lead.','resources');
   dx.filter(x=>x.d.status==='intervene').forEach(x=>{
     const g=SUS_GAPS[x.d.primary];
     const ivs=(((p.sustainment||{})[x.sh.id]||{}).interventions||[]).filter(i=>i.type===x.d.primary&&i.status!=='Verified');
@@ -8331,7 +8569,7 @@ function renderPilotOverview(p){
   const ragLbl={green:'On Track',amber:'Watch',red:'Action Needed'}[s.rag];
   const kc=(cls,l,v,sub)=>'<div class="kc '+cls+'"><div class="kc-l">'+l+'</div><div class="kc-v sm">'+v+'</div><div class="kc-s">'+sub+'</div></div>';
   let h='<div class="pilot-ov-hd"><span class="pilot-rag pilot-rag-'+s.rag+'">'+ragLbl+'</span>';
-  h+='<span class="pilot-owner">Training lead: <strong>'+(s.trainers.length?esc(s.trainers.join(', ')):'not assigned')+'</strong>'+(s.impl.length?' · OCM: <strong>'+esc(s.impl.join(', '))+'</strong>':'')+'</span>';
+  h+='<span class="pilot-owner">OCM Training lead: <strong>'+(s.trainers.length?esc(s.trainers.join(', ')):'not assigned')+'</strong> · OCM Implementation lead: <strong>'+(s.impl.length?esc(s.impl.join(', ')):'not assigned')+'</strong></span>';
   h+='<button class="btn-outline" onclick="exportStatusReport()"><i class="ph ph-file-text"></i> Status report</button></div>';
   h+='<div class="kpi-strip">';
   if(t.error){h+=kc('cn','Last Cohort','—',t.error==='nosize'?'Set the size':'Select audiences');}
@@ -8356,7 +8594,7 @@ function exportStatusReport(){
   const row=(k,v)=>'<tr><th>'+k+'</th><td>'+v+'</td></tr>';
   let b='<h1>'+e(p.name)+' <span class="rag rag-'+s.rag+'">'+ragLbl+'</span></h1>';
   b+='<div class="meta">'+e(r?r.name:'')+' · Status as of '+today+(p.size?' · Size '+e(p.size):'')+'</div>';
-  b+='<table class="kv">'+row('Training lead',e(s.trainers.join(', ')||'Not assigned'))+(s.impl.length?row('OCM lead',e(s.impl.join(', '))):'')+row('Go-live',projGoLive(p)?fmtDate(projGoLive(p)):'—')+'</table>';
+  b+='<table class="kv">'+row('OCM Training lead',e(s.trainers.join(', ')||'Not assigned'))+row('OCM Implementation lead',e(s.impl.join(', ')||'Not assigned'))+row('Go-live',projGoLive(p)?fmtDate(projGoLive(p)):'—')+'</table>';
   b+='<h2>Training timeline</h2>';
   if(t.error)b+='<p class="muted">'+(t.error==='nosize'?'Project size not set.':'Audiences not selected.')+'</p>';
   else{
@@ -8370,12 +8608,12 @@ function exportStatusReport(){
   b+='<h2>Adoption by group</h2>';
   if(!s.dx.length)b+='<p class="muted">No stakeholder groups yet.</p>';
   else{
-    b+='<table class="grid"><tr><th>Group</th><th>Status</th><th>Training (L1/L2)</th><th>Latest</th><th>Gap / action</th><th>Intervention</th></tr>';
+    b+='<table class="grid"><tr><th>Group</th><th>Status</th><th>Forecast</th><th>Training (L1/L2)</th><th>Latest</th><th>Gap / action</th><th>Intervention</th></tr>';
     s.dx.forEach(({sh,d})=>{
       const l=d.latest;const lat=l?[l.adoption!==undefined?'Adoption '+l.adoption+'%':'',l.proficiency!==undefined?'Prof. '+l.proficiency+'%':''].filter(Boolean).join(', ')+' ('+e(l.label)+')':'—';
       const ivs=(((p.sustainment||{})[sh.id]||{}).interventions||[]);const last=ivs[ivs.length-1];
       const tr=shTrainResults(sh);const trTxt=shHasTrainResults(sh)||tr.confidence!==null?[tr.completion!==null?tr.completion+'% completed':'',tr.pass!==null?tr.pass+'% passed':'',tr.confidence!==null?'confidence '+tr.confidence+'/5':''].filter(Boolean).join(', '):'—';
-      b+='<tr><td>'+e(sh.name)+'</td><td>'+SUS_STATUS[d.status].label+'</td><td>'+trTxt+'</td><td>'+lat+'</td><td>'+(d.primary?SUS_GAPS[d.primary].label+': '+e(SUS_GAPS[d.primary].actions[0]):'—')+'</td><td>'+(last?e(SUS_GAPS[last.type].tag)+' · '+e(last.status)+(last.note?' · '+e(last.note):''):'—')+'</td></tr>';
+      b+='<tr><td>'+e(sh.name)+'</td><td>'+SUS_STATUS[d.status].label+'</td><td>'+e(forecastLabel(sh))+'</td><td>'+trTxt+'</td><td>'+lat+'</td><td>'+(d.primary?SUS_GAPS[d.primary].label+': '+e(SUS_GAPS[d.primary].actions[0]):'—')+'</td><td>'+(last?e(SUS_GAPS[last.type].tag)+' · '+e(last.status)+(last.note?' · '+e(last.note):''):'—')+'</td></tr>';
     });
     b+='</table>';
   }
