@@ -1,0 +1,15 @@
+{
+  "name": "adoptiq-tests",
+  "private": true,
+  "description": "Automated checks for AdoptIQ. Not part of the site; Netlify does not build this folder.",
+  "scripts": {
+    "test": "node run-all.js",
+    "test:engine": "node engine.test.js"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1",
+    "chart.js": "4.4.4",
+    "@phosphor-icons/web": "2.1.1",
+    "xlsx": "0.18.5"
+  }
+}

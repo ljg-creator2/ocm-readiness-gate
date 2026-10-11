@@ -469,6 +469,77 @@ TE.heatCell=function(p,gi,wsName){
   return{state:worst.status,deps};
 };
 
+// ── Suggestions from data already entered elsewhere ──
+// Drafts only: nothing becomes a Training record until a person reviews and saves it.
+// Sources: open CRAID entries of type Dependency, and Impact Assessment groups.
+TE.CRAID_CLOSED=/^(closed|mitigated|validated|invalidated|resolved|done)$/i;
+TE.suggestions=function(p,ctx){
+  ctx=ctx||{};const t=p.training;const done=(t.suggest&&t.suggest.done)||{};const out={dependencies:[],workflows:[],scenarios:[]};
+  const has=(list,key)=>arr(list).some(r=>r.suggestKey===key);
+  arr(p.craid).forEach(c=>{
+    if(String(c.type||'').toLowerCase()!=='dependency'||TE.CRAID_CLOSED.test(String(c.status||'').trim()))return;
+    const key='craid:'+c.id;if(done[key]||has(t.dependencies,key)||t.dependencies.some(d=>String(d.craidId)===String(c.id)))return;
+    out.dependencies.push({key,source:'CRAID log',label:c.title||c.description||'Untitled dependency',
+      note:[c.severity?'Severity '+c.severity:'',c.dependsOn?'Depends on '+c.dependsOn:'',c.dueDate?'Due '+c.dueDate:''].filter(Boolean).join(' · '),
+      preset:{title:c.title||'',owner:c.owner||'',requiredBy:c.dueDate||'',consequence:c.description||'',craidId:c.id,source:'craid',status:'awaiting',suggestKey:key}});
+  });
+  const groups=(p.impactAssessment&&arr(p.impactAssessment.groups))||[];
+  groups.forEach((g,i)=>{
+    if(!g||(!g.futureState&&!g.currentState))return;
+    const name=String(g.name||'Group '+(i+1));const key='impact:'+name.toLowerCase();
+    if(done[key]||has(t.workflows,key)||t.workflows.some(w=>String(w.impactGroup||'').toLowerCase()===name.toLowerCase()))return;
+    const sh=arr(p.stakeholders).find(s=>String(s.name||'').trim().toLowerCase()===name.trim().toLowerCase());
+    out.workflows.push({key,source:'Impact Assessment',label:name,note:[g.level?g.level+' impact':'',arr(g.changeTypes).join(', ')].filter(Boolean).join(' · '),
+      preset:{name:name+': changed way of working',change:[g.currentState?'Today: '+g.currentState:'',g.futureState?'After: '+g.futureState:''].filter(Boolean).join(' '),
+        audienceIds:sh?[sh.id]:[],impactGroup:name,suggestKey:key}});
+  });
+  // Jira import: OCM-tagged items and training-environment defects.
+  const j=p.jira;
+  if(j&&Array.isArray(j.items)){
+    const src='Jira import';
+    j.items.forEach(it=>{
+      if(!it||!it.key)return;const summary=it.summary||it.key;
+      const openDefects=arr(it.defects).filter(d=>d.open===true);
+      // Passed QA: a candidate training scenario, with its test evidence.
+      if(it.qaPassed){const key='jira-sc:'+it.key;
+        if(!done[key]&&!has(t.scenarios,key)&&!t.scenarios.some(s=>s.jiraKey===it.key))
+          out.scenarios.push({key,source:src,label:summary,note:[it.key,it.uatPassed?'passed QA and UAT':'passed QA',openDefects.length?openDefects.length+' open defect'+(openDefects.length===1?'':'s'):''].filter(Boolean).join(' · '),
+            preset:{title:summary,qaEvidence:it.key+' passed QA ('+(it.status||'status not given')+')',uatEvidence:it.uatPassed?it.key+' passed UAT':'',
+              limitations:openDefects.length?'Open defects: '+openDefects.map(d=>d.key+(d.summary?' '+d.summary:'')).join('; '):'',jiraKey:it.key,suggestKey:key}});}
+      // Not past UAT: Training depends on UAT for validated, scenario-based materials.
+      const dep=t.dependencies.find(d=>d.jiraKey===it.key&&d.jiraKind!=='defect');
+      if(!it.uatPassed){const key='jira-dep:'+it.key;
+        if(!done[key]&&!dep&&!has(t.dependencies,key))
+          out.dependencies.push({key,source:src,label:summary+' passes UAT',note:[it.key,it.qaPassed?'passed QA, in UAT':'in build or QA',ctx.uatComplete?'UAT due '+ctx.uatComplete:''].filter(Boolean).join(' · '),
+            preset:{title:summary+' passes UAT',workstream:'UAT',requiredBy:ctx.uatComplete||'',status:it.qaPassed?'partial':'awaiting',
+              acceptance:it.key+' shows UAT passed in Jira',evidence:{ref:it.key,version:'',environment:'',verified:false,date:''},
+              consequence:'Materials for this change can be drafted but not validated until it passes UAT.',
+              permits:{provisional:true,scenarioDev:!!it.qaPassed,validation:false,facilitator:false,delivery:false},jiraKey:it.key,jiraKind:'uat',source:'jira',suggestKey:key}});}
+      // A later import shows progress on a tracked item: prompt a review, never change the record.
+      else if(dep&&!isResolved(dep)){const key='jira-upd:'+it.key+':uat';
+        if(!done[key])out.dependencies.push({key,source:src,label:it.key+' now shows UAT passed',note:'Review "'+dep.title+'" and record the evidence if you agree',review:dep.id,preset:{}});}
+    });
+    arr(j.trainDefectList).filter(d=>d&&d.open!==false).forEach(d=>{
+      const key='jira-def:'+d.key;
+      const tracked=t.dependencies.find(x=>x.jiraKey===d.key&&x.jiraKind==='defect');
+      if(!tracked){if(done[key]||has(t.dependencies,key))return;
+        const linkedSc=t.scenarios.filter(s=>arr(d.links).includes(s.jiraKey)).map(s=>s.id);
+        out.dependencies.push({key,source:src,label:'Training environment defect '+d.key+(d.summary?': '+d.summary:''),note:[d.status||'',linkedSc.length?linkedSc.length+' linked scenario'+(linkedSc.length===1?'':'s'):'',arr(d.links).length?'linked to '+arr(d.links).join(', '):''].filter(Boolean).join(' · '),
+          preset:{title:'Training environment defect '+d.key+' resolved'+(d.summary?': '+d.summary:''),workstream:'Environment support',status:'blocked',scenarioIds:linkedSc,
+            evidence:{ref:d.key,version:'',environment:'',verified:false,date:''},consequence:'Linked scenarios may not run in the training environment until this is fixed.',
+            permits:{provisional:true,scenarioDev:true,validation:false,facilitator:false,delivery:false},jiraKey:d.key,jiraKind:'defect',source:'jira',suggestKey:key}});}
+    });
+    // Defects tracked earlier that a later import no longer lists as open.
+    t.dependencies.filter(x=>x.jiraKind==='defect'&&!isResolved(x)).forEach(x=>{
+      const d=arr(j.trainDefectList).find(y=>y.key===x.jiraKey);
+      if(d&&d.open===false){const key='jira-upd:'+x.jiraKey+':closed';if(!done[key])out.dependencies.push({key,source:src,label:x.jiraKey+' is closed in Jira',note:'Review "'+x.title+'" and record the evidence if you agree',review:x.id,preset:{}});}
+    });
+  }
+  return out;
+};
+TE.markSuggestion=function(p,key,state){const t=p.training;if(!t.suggest||typeof t.suggest!=='object')t.suggest={done:{}};if(!t.suggest.done)t.suggest.done={};
+  if(state)t.suggest.done[key]=state;else delete t.suggest.done[key];};
+
 // ── Milestones (dependency-based) ──
 // Per deliverable: planned/actual dates and whether each activity may start now.
 TE.milestones=function(p,ctx){
@@ -485,6 +556,72 @@ TE.milestones=function(p,ctx){
       else if(todayISO(ctx)>dep.requiredBy)risks.push({dep,d,text:dep.title+' was required by '+dep.requiredBy+' and is still '+TE.depStatusLabel(dep.status).toLowerCase()+'. Review the plan for '+d.title+'.'});
     });});
   return{rows,risks};
+};
+
+// ── Environments ──
+// Each release keeps its environment list (r.trEnv.list) and the events recorded against it
+// (r.trEnv.events). Organization specifics (names such as TRN1-TRN5, maintenance windows,
+// team names) are settings, not code. Defaults are generic.
+TE.ENV_TYPES={qa:'QA',uat:'UAT',preprod:'Pre-production',training:'Training',lms:'LMS',prod:'Production',other:'Other'};
+TE.ENV_EVENTS={deploy:'Code deployed',refresh:'Refreshed',golden:'Golden copy updated',logins:'Training logins reset',other:'Other change'};
+TE.DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+TE.envKey=n=>String(n||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+TE.newEnvironment=function(o){return Object.assign({id:TE.id(),name:'',type:'training',purpose:'',pii:false,logins:'',maintDays:[],maintStart:'',maintEnd:'',noticeDays:''},o||{});};
+TE.defaultEnvironments=function(){return[
+  TE.newEnvironment({name:'QA',type:'qa',purpose:'Quality assurance testing'}),
+  TE.newEnvironment({name:'UAT',type:'uat',purpose:'End-to-end and subject-matter-expert testing'}),
+  TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation before release. Holds real data copied from production; test data can also be created',pii:true}),
+  TE.newEnvironment({name:'Training',type:'training',purpose:'Learner practice and facilitator rehearsal'}),
+  TE.newEnvironment({name:'Production',type:'prod',purpose:'Live operations',pii:true})];};
+TE.envOf=(list,name)=>arr(list).find(e=>TE.envKey(e.name)===TE.envKey(name))||null;
+TE.isPracticeEnv=e=>!!e&&(e.type==='training'||e.type==='lms');
+// A deployment, refresh or data reset can break a scenario that ran before it. Scenarios that passed in
+// that environment on or before the event date are marked for a re-run (their run history is kept).
+TE.recordEnvEvent=function(projects,ev,ctx){
+  const k=TE.envKey(ev.envName);const date=ev.date||todayISO(ctx);const label=(TE.ENV_EVENTS[ev.kind]||'Changed').toLowerCase();
+  const res={scenarios:0,projects:0};
+  arr(projects).forEach(p=>{
+    if(!p||!p.training)return;let n=0;
+    p.training.scenarios.forEach(s=>{
+      if(!s.env||s.env.status!=='pass'||TE.envKey(s.env.environment)!==k)return;
+      if(s.env.date&&s.env.date>date)return;
+      s.needsRevalidation={reason:ev.envName+' '+label+' on '+date+(ev.ref?' ('+ev.ref+')':'')+'. Re-run before relying on this scenario.',date,sourceType:'environment'};n++;
+    });
+    TE.log(p,{type:'environment',text:ev.envName+': '+(TE.ENV_EVENTS[ev.kind]||'Changed')+(ev.ref?' ('+ev.ref+')':'')+(n?'. '+n+' scenario'+(n===1?'':'s')+' need'+(n===1?'s':'')+' a re-run':''),flagged:n},Object.assign({},ctx,{today:date}));
+    if(n){res.scenarios+=n;res.projects++;}
+  });
+  return res;
+};
+// Five linked dependencies that make a training environment ready, with suggested lead times.
+TE.ENV_CHAIN=[
+  {step:'Deployment requested',ws:'Environment team',lead:10,detail:'Request submitted to infrastructure (with the release and the environment named)'},
+  {step:'Code deployed and smoke-tested',ws:'Infrastructure',lead:7,detail:'Environment refreshed from the golden copy, code deployed, login and integrations checked'},
+  {step:'Environment validated and regression-tested',ws:'Environment team',lead:5,detail:'Defect fixes and new functionality confirmed in the environment'},
+  {step:'Training data staged',ws:'Environment and training teams',lead:3,detail:'Base cases tested, staging sheet prepared, cases created'},
+  {step:'Training cases checked',ws:'Environment team',lead:1,detail:'Quality check of the created cases'}];
+TE.envChain=function(envName,neededBy,scenarioIds){
+  const minus=(d,n)=>{if(!d)return'';const x=new Date(d+'T12:00:00');x.setDate(x.getDate()-n);return x.toISOString().slice(0,10);};
+  return TE.ENV_CHAIN.map((c,i)=>TE.newDependency({title:envName+': '+c.step+' ('+(i+1)+' of '+TE.ENV_CHAIN.length+')',workstream:c.ws,acceptance:c.detail,requiredBy:minus(neededBy,c.lead),
+    critical:true,scenarioIds:arr(scenarioIds).slice(),status:'awaiting',source:'env-chain',envName,phase:2,
+    consequence:'Scenarios that use '+envName+' cannot be validated until this step is done.',
+    permits:{provisional:true,scenarioDev:true,validation:false,facilitator:false,delivery:false}}));
+};
+// Plain warnings about environment use. Advisory only; nothing is blocked by them.
+TE.envWarnings=function(p,list){
+  const t=p.training;const out=[];
+  t.scenarios.forEach(s=>{
+    const e=s.env&&s.env.environment?TE.envOf(list,s.env.environment):null;
+    if(!e)return;
+    if(e.pii)out.push({kind:'pii',id:s.id,text:'"'+s.title+'" is set to '+e.name+', which holds personal data. Learner practice should use a training environment.'});
+    if(s.env.status==='pass'&&!TE.isPracticeEnv(e))out.push({kind:'not-training',id:s.id,text:'"'+s.title+'" was run in '+e.name+' ('+(TE.ENV_TYPES[e.type]||e.type)+'). A pass there does not show it works where learners practise.'});
+  });
+  t.deliverables.forEach(d=>{
+    const dt=d.planned&&d.planned.delivery;if(!dt||d.state==='released')return;
+    const day=new Date(dt+'T12:00:00').getDay();
+    const envs=[...new Set(arr(d.scenarioIds).map(id=>byId(t.scenarios,id)).filter(s=>s&&s.env&&s.env.environment).map(s=>s.env.environment))].map(n=>TE.envOf(list,n)).filter(Boolean);
+    envs.forEach(e=>{if(arr(e.maintDays).map(Number).includes(day))out.push({kind:'maintenance',id:d.id,text:'"'+d.title+'" is planned for '+TE.DAYS[day]+' '+dt+', a maintenance day for '+e.name+(e.maintStart?' ('+e.maintStart+(e.maintEnd?'–'+e.maintEnd:'')+')':'')+'. Confirm the session avoids the window.'});});
+  });
+  return out;
 };
 
 if(typeof module!=='undefined'&&module.exports)module.exports=TE;

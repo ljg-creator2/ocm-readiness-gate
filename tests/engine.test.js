@@ -129,4 +129,72 @@ test('unreviewed checkpoint is a condition, a hold blocks',()=>{
   assert.ok(!TE.activityStatus(p,TE.byId(p.training.deliverables,'d2')).provisional.ok,'hold blocks');
   p.training.checkpoints={};const b=TE.brief(p,ctx);assert.ok(b.conditions.some(c=>/not yet reviewed/.test(c.text)),'shown as a condition in the brief');
 });
+test('suggestions come from open CRAID dependencies and impact groups, once',()=>{
+  const p=project();
+  p.craid=[{id:11,type:'dependency',title:'Lab interface live',owner:'A. Patel',dueDate:'2026-11-01',status:'Open',description:'Scenarios need lab results'},
+    {id:12,type:'dependency',title:'Old one',status:'Closed'},{id:13,type:'risk',title:'Not a dependency',status:'Open'}];
+  p.impactAssessment={groups:[{name:'Intake Specialists',currentState:'Paper forms',futureState:'Eligibility screen'},{name:'Empty group'}]};
+  let s=TE.suggestions(p);
+  assert.deepStrictEqual(s.dependencies.map(x=>x.preset.craidId),[11],'only open CRAID dependencies');
+  assert.strictEqual(s.dependencies[0].preset.requiredBy,'2026-11-01');
+  assert.strictEqual(s.workflows.length,1,'groups without a described change are skipped');
+  assert.deepStrictEqual(s.workflows[0].preset.audienceIds.map(String),['1'],'matched to the stakeholder group');
+  assert.strictEqual(p.training.dependencies.length,1,'suggesting creates nothing');
+  p.training.dependencies.push(TE.newDependency(s.dependencies[0].preset));
+  TE.markSuggestion(p,s.workflows[0].key,'dismissed');
+  s=TE.suggestions(p);assert.strictEqual(s.dependencies.length+s.workflows.length,0,'added and dismissed items are not suggested again');
+});
+test('Jira import suggests scenarios, UAT and environment dependencies, and review prompts only',()=>{
+  const p=project();
+  p.jira={items:[{key:'D-1',summary:'Register claim',status:'UAT Passed',qaPassed:true,uatPassed:true,defects:[]},
+    {key:'D-2',summary:'Notice review',status:'In UAT',qaPassed:true,uatPassed:false,defects:[{key:'D-9',open:true,summary:'Typo'}]},
+    {key:'D-3',summary:'Batch job',status:'In QA',qaPassed:false,uatPassed:false,defects:[]}],
+    trainDefectList:[{key:'D-50',summary:'Env role missing',status:'Open',open:true,links:['D-1']},{key:'D-51',summary:'Closed one',open:false,links:[]}]};
+  let s=TE.suggestions(p,{uatComplete:'2026-11-15'});
+  assert.deepStrictEqual(s.scenarios.map(x=>x.preset.jiraKey).sort(),['D-1','D-2'],'only items that passed QA become scenarios');
+  assert.ok(/D-9/.test(s.scenarios.find(x=>x.preset.jiraKey==='D-2').preset.limitations),'open defects listed as limitations');
+  const uat=s.dependencies.filter(x=>x.preset.jiraKind==='uat');
+  assert.deepStrictEqual(uat.map(x=>x.preset.jiraKey).sort(),['D-2','D-3'],'items not past UAT become UAT dependencies');
+  assert.strictEqual(uat.find(x=>x.preset.jiraKey==='D-2').preset.status,'partial');assert.strictEqual(uat[0].preset.requiredBy,'2026-11-15');
+  assert.ok(!uat.find(x=>x.preset.jiraKey==='D-3').preset.permits.scenarioDev,'not past QA: provisional work only');
+  assert.deepStrictEqual(s.dependencies.filter(x=>x.preset.jiraKind==='defect').map(x=>x.preset.jiraKey),['D-50'],'only open training-environment defects');
+  assert.strictEqual(p.training.dependencies.length,1,'suggesting creates nothing');
+  // Accept the D-2 UAT dependency, then a later import shows it passed UAT.
+  p.training.dependencies.push(TE.newDependency(uat.find(x=>x.preset.jiraKey==='D-2').preset));
+  p.jira.items[1].uatPassed=true;
+  s=TE.suggestions(p,{});
+  const rev=s.dependencies.find(x=>x.review);
+  assert.ok(rev&&/D-2 now shows UAT passed/.test(rev.label),'a review prompt, not an automatic change');
+  assert.strictEqual(p.training.dependencies.find(d=>d.jiraKey==='D-2').status,'partial','record unchanged');
+});
+test('environment event marks earlier passing runs in that environment for a re-run',()=>{
+  const p=project();const q=project();
+  TE.recordScenarioRun(p,'sc1',{status:'pass',environment:'TRN-2',date:'2026-10-01',by:'T'},ctx);
+  TE.recordScenarioRun(q,'sc1',{status:'pass',environment:'TRN1',date:'2026-10-01',by:'T'},ctx);
+  const r=TE.recordEnvEvent([p,q],{envName:'TRN2',kind:'refresh',date:'2026-10-05',ref:'DIS-12'},ctx);
+  assert.strictEqual(r.scenarios,1,'names match regardless of punctuation; other environments untouched');
+  assert.ok(!TE.scenarioValidated(TE.byId(p.training.scenarios,'sc1')),'needs a re-run');
+  assert.ok(TE.scenarioValidated(TE.byId(q.training.scenarios,'sc1')));
+  assert.strictEqual(TE.byId(p.training.scenarios,'sc1').env.status,'pass','run history kept');
+  TE.recordScenarioRun(p,'sc1',{status:'pass',environment:'TRN-2',date:'2026-10-06',by:'T'},ctx);
+  assert.ok(TE.scenarioValidated(TE.byId(p.training.scenarios,'sc1')),'a new run clears it');
+  const later=TE.recordEnvEvent([p],{envName:'TRN2',kind:'deploy',date:'2026-10-04'},ctx);
+  assert.strictEqual(later.scenarios,0,'runs after the event are not flagged');
+});
+test('environment readiness chain and warnings',()=>{
+  const c=TE.envChain('TRN2','2026-11-20',['sc1']);
+  assert.strictEqual(c.length,5);assert.ok(c.every(d=>d.critical&&d.scenarioIds[0]==='sc1'&&d.status==='awaiting'));
+  assert.deepStrictEqual(c.map(d=>d.requiredBy),['2026-11-10','2026-11-13','2026-11-15','2026-11-17','2026-11-19']);
+  const p=project();const list=[TE.newEnvironment({name:'TRN2',type:'training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00'}),TE.newEnvironment({name:'UAT',type:'uat'}),TE.newEnvironment({name:'TRN4',type:'preprod',pii:true})];
+  TE.recordScenarioRun(p,'sc1',{status:'pass',environment:'UAT',date:'2026-10-01'},ctx);
+  assert.ok(TE.envWarnings(p,list).some(w=>w.kind==='not-training'));
+  TE.byId(p.training.scenarios,'sc1').env.environment='TRN4';assert.ok(TE.envWarnings(p,list).some(w=>w.kind==='pii'));
+  TE.byId(p.training.scenarios,'sc1').env.environment='TRN2';TE.byId(p.training.deliverables,'d1').planned.delivery='2026-11-16';
+  assert.ok(TE.envWarnings(p,list).some(w=>w.kind==='maintenance'&&/Mon/.test(w.text)),'2026-11-16 is a Monday');
+});
+test('default environments: pre-production and production hold personal data; training does not',()=>{
+  const d=TE.defaultEnvironments();const by=n=>d.find(e=>e.name===n);
+  assert.ok(by('Pre-production').pii&&by('Production').pii&&!by('Training').pii);
+  assert.ok(TE.isPracticeEnv(by('Training'))&&!TE.isPracticeEnv(by('Pre-production')));
+});
 console.log('\n'+(n-fail)+'/'+n+' passed');process.exit(fail?1:0);

@@ -5030,9 +5030,10 @@ function openJiraImport(){
     +'</details><div id="jira-preview"></div></div>';
   document.body.appendChild(m);
   m.addEventListener('click',function(e){if(e.target===this)closeJiraImport();});
-  requestAnimationFrame(()=>m.classList.add('open'));
+  // Opens on the next frame (for the fade-in); a close that happens first wins.
+  requestAnimationFrame(()=>{if(m.isConnected&&!m._closed)m.classList.add('open');});
 }
-function closeJiraImport(){const m=document.getElementById('jira-import-modal');if(m)m.classList.remove('open');const r=getRel();if(r&&document.getElementById('v-release').classList.contains('active'))openRelease(r.id);}
+function closeJiraImport(){const m=document.getElementById('jira-import-modal');if(m){m._closed=true;m.classList.remove('open');}const r=getRel();if(r&&document.getElementById('v-release').classList.contains('active'))openRelease(r.id);}
 async function handleJiraFile(file){
   const out=document.getElementById('jira-preview');if(!file||!out)return;
   if(!window.XLSX){out.innerHTML='<div class="import-status error">The spreadsheet reader is still loading. Try again in a moment.</div>';return;}
@@ -5134,7 +5135,8 @@ function planJiraImport(rows){
       untriaged:mine.filter(i=>i.ocmBlank).map(i=>({key:i.key,summary:i.summary,programList:i.programList})),
       ocm:ocm.length,ready:ocm.filter(o=>o.ready).length,uatPassed:ocm.filter(o=>o.uatPassed).length,
       openOnOcm:ocm.filter(o=>o.defects.some(d=>d.open)).length,unknownDefects:ocm.reduce((a,o)=>a+o.defects.filter(d=>d.open===null).length,0),
-      uatDefects:bugs.filter(d=>/\buat\b/.test(d.tags)).length,trainDefects:bugs.filter(d=>/train/.test(d.tags)).length,bugs:bugs.length});
+      uatDefects:bugs.filter(d=>/\buat\b/.test(d.tags)).length,trainDefects:bugs.filter(d=>/train/.test(d.tags)).length,bugs:bugs.length,
+      trainDefectList:bugs.filter(d=>/train/.test(d.tags)).map(d=>({key:d.key,summary:d.summary,status:d.status,open:d.open,links:d.links||[]}))});
   });
   plan.unmatched.ocm=issues.filter(i=>i.ocm&&!i.target).length;
   plan.unmatched.bugs=issues.filter(i=>i.bug&&!i.target).length;
@@ -5194,7 +5196,7 @@ function applyJiraPlan(){
       p.lifecycleSignals.testing=Object.assign({},p.lifecycleSignals.testing,{uatDefects:x.uatDefects});
       p.lifecycleSignals.training=Object.assign({},p.lifecycleSignals.training,{envDefects:x.trainDefects});
     }
-    p.jira={importedAt:now,file:pl.file,version:pl.version,items:x.items,untriaged:x.untriaged||[],uatDefects:x.uatDefects,trainDefects:x.trainDefects,bugs:x.bugs};
+    p.jira={importedAt:now,file:pl.file,version:pl.version,items:x.items,untriaged:x.untriaged||[],uatDefects:x.uatDefects,trainDefects:x.trainDefects,trainDefectList:x.trainDefectList||[],bugs:x.bugs};
     applyTTDerived(p);
   });
   const entry={at:now,file:pl.file,version:pl.version,rows:pl.rows,changes:pl.changes,projects:pl.projects.map(x=>({id:x.id,name:x.name+(x.createdNew?' (new project)':''),line:jiraProjLine(x),blocked:x.ocm-x.uatPassed,openOnOcm:x.openOnOcm})),unmatched:pl.unmatched};
@@ -12133,7 +12135,7 @@ function aiFetch(url,opts){
 function applyAIMode(){document.body.classList.toggle('ai-off',!aiAllowed());}
 
 // ── Pilot view: live projects show only the pilot tabs unless "All tabs" is chosen ──
-const PILOT_TABS=['overview','deps','learndev','readiness','actions','milestones','trainplan','adoption','postlaunch','sustain','resources'];
+const PILOT_TABS=['overview','deps','learndev','readiness','actions','milestones','environments','trainplan','adoption','postlaunch','sustain','resources'];
 function pilotOn(){
   let pref=null;try{pref=localStorage.getItem('adoptiq_pilot_view');}catch(e){}
   return pref?pref==='on':!isDemoMode;

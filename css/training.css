@@ -136,3 +136,22 @@ body.tr-dlg-open{overflow:hidden}
 .tr-hist li{display:grid;grid-template-columns:96px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
 .tr-hist .mono{color:var(--ink-60);font-size:12.5px}
 .pg-sub-nav>*{min-width:0;max-width:100%;box-sizing:border-box}
+/* Long project names in the breadcrumb truncate instead of widening the page on phones. */
+.breadcrumb{min-width:0;max-width:100%;overflow:hidden}
+.breadcrumb .bc-cur,.breadcrumb .bc-link{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Suggestions drafted from data already entered elsewhere */
+.tr-suggest{border:1px solid var(--border);border-left:4px solid var(--deep-navy);background:var(--surface);border-radius:var(--radius-card);padding:14px 18px;margin:0 0 16px}
+[data-theme="dark"] .tr-suggest{border-left-color:var(--blue-on-dark)}
+.tr-suggest-hd h3{font-family:var(--font-body);font-size:15px;font-weight:700;color:var(--ink);margin:0}
+.tr-suggest-hd .tr-help{margin:2px 0 8px}
+.tr-suggest ul{list-style:none;margin:0;padding:0}
+.tr-suggest li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap}
+.tr-suggest-t{display:flex;flex-direction:column;min-width:0;font-size:13.5px}
+.tr-suggest-a{display:flex;gap:8px;align-items:center;flex:none}
+.tr-hist li>span>.tr-sub{display:block}
+/* Delivery tracker import */
+.trk-unlist{list-style:none;padding-left:0}
+.trk-un{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:8px 0;border-top:1px solid var(--border)}
+.trk-un select{font-family:var(--font-body);font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--border-md);border-radius:var(--radius-ctl);padding:6px 8px;max-width:100%}
+#trk-plan details>summary{cursor:pointer;font-weight:600;margin:8px 0}

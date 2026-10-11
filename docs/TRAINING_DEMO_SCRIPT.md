@@ -35,6 +35,29 @@ Open it from **Initiatives → Benefits Modernization → Benefits Renewal Notic
    9. The materials were released.
    10. Observations and the diagnosis were recorded.
 
+## Suggestions from data already entered (preview or a signed-in workspace)
+- **Benefits Renewal Notices → Dependencies & Evidence** shows suggestions from its fictional Jira import:
+  - RN-101 hasn't passed UAT yet, so it is suggested as a UAT dependency.
+  - Open defect RN-150 in the training environment is suggested as an environment dependency.
+- **Learning Development** suggests RN-102 as a scenario, with its QA and UAT evidence already filled in.
+- **Q3 EHR Migration → Clinical Workflow** shows suggestions from its CRAID log and Impact Assessment.
+- Nothing is added until someone selects **Review and add** and saves. A later Jira import that shows progress raises a "review" prompt. It never changes a record by itself.
+
+## Environments (Delivery & Capacity → Environments)
+- The release lists its environments: QA, UAT, Pre-production, TRN-1, TRN-2 and Production. Each shows its purpose, whether it holds personal data, its maintenance window and its training logins.
+- The ENV-77 deployment to TRN-2 is recorded. It came before the intake scenario passed, so nothing needed a re-run.
+- With editing on, select **Record a deployment or refresh** for TRN-2 with today's date. The intake scenarios that passed there are marked for a re-run, and Claims Intake's delivery readiness drops until they are re-run. Their run history is kept.
+- **Add readiness steps** creates five linked, critical dependencies (deployment request through checked training cases), with due dates counted back from the date you choose.
+- Warnings appear when:
+  - learner practice points at an environment with personal data
+  - a scenario passed only in QA or UAT
+  - delivery is planned on a maintenance day
+
+## Delivery tracker import (signed-in workspace)
+1. On **Initiatives**, select **Import delivery tracker** and choose your workbook.
+2. Review what will change: new releases and projects, updated go-live dates, sizes, owners and status, learning deliverables, and your lead review %. Pick a project for any Delivery Tracker row whose name doesn't match. AdoptIQ remembers each choice.
+3. Select **Apply changes**. Each project's checklist appears under **Delivery & Capacity → Milestones**, and your lead review % shows on the decision brief, separate from the readiness measures.
+
 ## Try it with editing on
 Sign in to a workspace, or use a copy of the demo with editing enabled. Then:
 1. Add a dependency.

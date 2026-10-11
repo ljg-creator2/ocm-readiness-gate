@@ -360,6 +360,7 @@
     <div class="action-strip-i">
       <div class="action-strip-sec">
         <button class="btn-gold" onclick="openAddRelease()">+ Add Release</button>
+        <button class="btn-outline tr-trk-btn" onclick="trTrackerImport()" style="font-size:11px;padding:6px 14px" title="Update releases, projects and learning deliverables from your delivery tracker workbook">Import delivery tracker</button>
         <span class="save-ind" id="save-ind">Saved</span>
       </div>
       <div class="action-strip-sec">
@@ -916,6 +917,7 @@
         <button class="nav-btn" onclick="showProjTab('flags',this)">Unmet Criteria</button>
         <button class="nav-btn" onclick="showProjTab('craid',this)">CRAID Log</button>
         <button class="nav-btn" onclick="showProjTab('milestones',this)">Milestones</button>
+        <button class="nav-btn" onclick="showProjTab('environments',this)">Environments</button>
         <button class="nav-btn" onclick="showProjTab('trainplan',this)">Standard-Duration Estimate</button>
         <button class="nav-btn" onclick="showProjTab('resources',this)">Resources</button>
         <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)">Outcomes</button>
@@ -1186,6 +1188,11 @@
       <div class="tab-eye">Dependency-based schedule</div>
       <div class="tab-head">Delivery Milestones</div>
       <div id="tr-milestones" class="tr-view"></div>
+    </div>
+    <div class="tab-sec" id="psec-environments">
+      <div class="tab-eye">Where testing and practice happen</div>
+      <div class="tab-head">Environments</div>
+      <div id="tr-environments" class="tr-view"></div>
     </div>
     <!-- LIFECYCLE SIGNALS -->
     <div class="tab-sec" id="psec-lifecycle">
@@ -1583,6 +1590,7 @@
   <span class="print-header__meta">Confidential</span>
 </div>
 <script src="js/training-engine.js?v=20261011t"></script>
+<script src="js/tracker-import.js?v=20261011t"></script>
 <script src="js/adoptiq.js"></script>
 <script src="js/training-ui.js?v=20261011t"></script>
 <script src="js/training-demo.js?v=20261011t"></script>

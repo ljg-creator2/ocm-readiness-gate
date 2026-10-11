@@ -1,0 +1,10 @@
+Summary,Issue key,Issue Type,Status,Fix versions,Created,Due date,Custom field (OCM Needed?),Custom field (QA Needed?),Custom field (UAT Needed?),Custom field (Impacted Programs),Custom field (Application Category),Outward issue link (Defect),Inward issue link (Defect),Labels,Parent key,Parent summary,Custom field (Impacted Programs),Custom field (Acceptance Criteria),Custom field (Business Review Status),Custom field (Impact Summary)
+Notice template A,DEMO-1,Story,OCM Ready,FY2027R1030,03/Sep/26 11:22 AM,,Yes,Yes,Yes,SNAP,Notices -> Static / Dynamic Content,DEMO-50,,,DEMO-900,Notices Enhancements,Medicaid MAGI,Given X when Y then Z,Pending,Workers see a new notice preview step before sending.
+Notice template B,DEMO-2,Story,In UAT,FY2027R1030,03/Sep/26 11:22 AM,,Yes,Yes,Yes,SNAP,Notices -> Static / Dynamic Content,,,,DEMO-900,Notices Enhancements,,,Approved,
+Hub service update,DEMO-3,Story,In QA,FY2027R1030,02/Sep/26 5:11 PM,,Yes,Yes,Yes,Medicaid MAGI,Case Management,,,,DEMO-901,Hub Service Updates,,,Pending,
+Hub field mapping,DEMO-4,Story,UAT Passed,FY2027R1030,20/Dec/26 9:00 AM,,Yes,Yes,Yes,Medicaid MAGI,Case Management,DEMO-51,,,DEMO-901,Hub Service Updates,,Given X when Y then Z,Pending,
+Online intake tweak,DEMO-5,Story,Done,FY2027R1030,01/Sep/26 9:00 AM,,,Yes,Yes,SNAP,Application Intake -> Online Portal,,,,DEMO-902,Intake Improvements,,,Pending,
+Defect on notice A,DEMO-50,Bug,Open,FY2027R1030,01/Oct/26 9:00 AM,,,,,,,,DEMO-1,UAT,,,,,Pending,
+Defect on hub mapping,DEMO-51,Bug,Closed,FY2027R1030,01/Oct/26 9:00 AM,,,,,,,,DEMO-4,UAT,,,,Given X when Y then Z,Pending,
+Training env defect,DEMO-52,Bug,Open,FY2027R1030,01/Oct/26 9:00 AM,,,,,,,,DEMO-4,training,,,,,Pending,
+Batch job tweak,DEMO-77,Story,In QA,FY2027R1030,,,,,,,,,,,DEMO-900,Notices Enhancements,,,,

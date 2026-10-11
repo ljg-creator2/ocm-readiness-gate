@@ -7,7 +7,7 @@
 // Loaded after js/adoptiq.js.
 // ════════════════════════════════════════════════════════
 const TR_WORKSTREAMS=['Environment support','Functional','App Dev','QA','UAT','OCM Implementation','OCM Training','Project Manager','SMEs','Release management'];
-function trCtx(p){return{WS,GL,PL_INTERVALS,golive:p?projGoLive(p):'',by:(window._cc&&_cc.userName)||'',today:trToday()};}
+function trCtx(p){let uat='';try{uat=p?projTTDates(p).uatComplete:'';}catch(e){}return{WS,GL,PL_INTERVALS,golive:p?projGoLive(p):'',uatComplete:uat||'',by:(window._cc&&_cc.userName)||'',today:trToday()};}
 function trToday(){return TE.today();}
 function trProj(){const p=getProj();if(p)TE.migrate(p,trCtx(p));return p;}
 function trCanEdit(){return !isReadOnly;}
@@ -15,7 +15,7 @@ function trSaved(msg){touch('proj');schedSave();if(msg)showSuccess(msg);trRefres
 function trRefresh(){
   const act=document.querySelector('#v-project .tab-sec.active');const id=act?act.id.replace('psec-',''):'';
   renderProjBrief();
-  const map={deps:trRenderDeps,learndev:trRenderLearnDev,readiness:trRenderReadiness,actions:trRenderActions,milestones:trRenderMilestones,postlaunch:trRenderOutcomes,heatmap:renderPDepHM};
+  const map={environments:trRenderEnvironments,deps:trRenderDeps,learndev:trRenderLearnDev,readiness:trRenderReadiness,actions:trRenderActions,milestones:trRenderMilestones,postlaunch:trRenderOutcomes,heatmap:renderPDepHM};
   if(map[id])map[id]();
 }
 const TR_TONE={ready:'st-g',conditional:'st-w',insufficient:'st-w',blocked:'st-c',not_assessed:'st-n',not_observed:'st-n',assessed:'st-n',
@@ -102,7 +102,7 @@ function renderProjBrief(){
     +'<h2 class="erb-pos" id="trb-h">'+esc(b.rec.label)+(String(b.rec.label).toLowerCase()===String((TE.READY_STATES[b.rec.state]||{}).label||'').toLowerCase()?'':' '+trChip(b.rec.state))+'</h2>'
     +'<p class="trb-narr"><strong>Material development</strong> <button type="button" class="trb-state" onclick="goPTab(\'milestones\')">'+trChip(b.dev.state,b.dev.label)+'</button> <strong>Training delivery</strong> <button type="button" class="trb-state" onclick="trExplain(\'delivery\')">'+trChip(b.del.state)+'</button></p>'
     +'<p class="ev-line"><strong>Decision needed:</strong> '+esc(b.decision)+' <strong>Decision authority:</strong> '+esc(b.authority)+'</p>'
-    +'<p class="ev-line"><strong>Evidence last updated:</strong> '+trD(b.lastEvidence)+' · <strong>Last review:</strong> '+trD(b.lastReview)+(trCanEdit()?' <button type="button" class="btn-text" onclick="trMarkReviewed()">Mark reviewed today</button>':'')+'</p></div>'
+    +'<p class="ev-line"><strong>Evidence last updated:</strong> '+trD(b.lastEvidence)+' · <strong>Last review:</strong> '+trD(b.lastReview)+(trCanEdit()?' <button type="button" class="btn-text" onclick="trMarkReviewed()">Mark reviewed today</button>':'')+'</p>'+(p.tracker&&p.tracker.leadReviewPct!=null?'<p class="ev-line"><strong>Lead review (delivery tracker):</strong> '+p.tracker.leadReviewPct+'% of sign-off gates · imported '+trD(p.tracker.importedAt)+'</p>':'')+'</div>'
     +'<div class="trb-measures">'+['input','material','delivery','ability'].map(k=>trMeasureMini(m[k])).join('')+'</div></div>'
     +'<div class="trb-grid">'
     +'<div><h3 class="erb-h">What is blocked and why</h3>'+li(b.blocked,r=>'<li><button type="button" class="trb-link" onclick="'+open(r.kind,r.id)+'">'+trChip('blocked','Blocked')+' <span>'+esc(r.text)+'</span></button></li>','No critical condition is blocking delivery.')
@@ -134,6 +134,41 @@ function trShowHistory(){
 }
 function trMarkReviewed(){const p=trProj();if(!p||!trCanEdit())return;p.training.lastReview=trToday();TE.log(p,{type:'review',text:'Readiness reviewed'},trCtx(p));trSaved('Review date recorded.');}
 
+// ════════════ SUGGESTIONS (from data already entered) ════════════
+// Owner and workstream come from the project's Resources tab.
+function trOwnerFor(p,ws){const r=RES_ROLES.find(x=>x.label.toLowerCase()===String(ws||'').trim().toLowerCase());return r?getEffectiveRes(p,r.key,'name'):'';}
+function trWorkstreamFor(p,owner){if(!owner)return'';const r=RES_ROLES.find(x=>(p.resources&&Array.isArray(p.resources[x.key])?p.resources[x.key]:[]).some(m=>m&&m.name&&m.name.trim().toLowerCase()===owner.trim().toLowerCase()));return r?r.label:'';}
+function trSuggestBox(p,kind){
+  const list=TE.suggestions(p,trCtx(p))[kind];if(!list.length)return'';
+  const reviews=list.filter(x=>x.review),adds=list.filter(x=>!x.review);
+  const noun={dependencies:['dependency','dependencies'],workflows:['changed workflow','changed workflows'],scenarios:['scenario','scenarios']}[kind];
+  const src=[...new Set(list.map(x=>x.source))].join(' and ');
+  const item=x=>'<li><span class="tr-suggest-t"><strong>'+esc(x.label)+'</strong><span class="tr-sub">'+esc(x.source)+(x.note?' · '+esc(x.note):'')+'</span></span>'
+    +(trCanEdit()?'<span class="tr-suggest-a">'+(x.review?trBtn('Review','trReviewSuggestion('+trQ(x.key)+','+trQ(x.review)+')','btn-primary btn-sm'):trBtn('Review and add','trAcceptSuggestion('+trQ(kind)+','+trQ(x.key)+')','btn-primary btn-sm'))+trBtn('Dismiss','trDismissSuggestion('+trQ(x.key)+')','btn-text')+'</span>':'')+'</li>';
+  const ul=arr=>{if(arr.length<=6)return'<ul>'+arr.map(item).join('')+'</ul>';return'<ul>'+arr.slice(0,6).map(item).join('')+'</ul><details class="tr-more"><summary>Show '+(arr.length-6)+' more</summary><ul>'+arr.slice(6).map(item).join('')+'</ul></details>';};
+  const title=(adds.length?adds.length+' suggested '+noun[adds.length===1?0:1]:'')+(adds.length&&reviews.length?' and ':'')+(reviews.length?reviews.length+' update'+(reviews.length===1?'':'s')+' to review':'')+' from your '+src;
+  return'<section class="tr-suggest" aria-labelledby="trs-'+kind+'"><div class="tr-suggest-hd"><h3 id="trs-'+kind+'">'+esc(title)+'</h3>'
+    +'<p class="tr-help">Drafted from what is already entered. Nothing is added or changed until you review and save it.</p></div>'
+    +(reviews.length?ul(reviews):'')+(adds.length?ul(adds):'')
+    +(trCanEdit()?'':'<p class="tr-help">View-only: someone with edit access can add these.</p>')+'</section>';
+}
+function trReviewSuggestion(key,depId){const p=trProj();if(!p||!trCanEdit())return;TE.markSuggestion(p,key,'reviewed');touch('proj');schedSave();trEditDep(depId);}
+function trAcceptSuggestion(kind,key){
+  const p=trProj();if(!p||!trCanEdit())return;const x=TE.suggestions(p)[kind].find(y=>y.key===key);if(!x)return;
+  const pre=JSON.parse(JSON.stringify(x.preset));
+  if(kind==='dependencies'){if(!pre.workstream)pre.workstream=trWorkstreamFor(p,pre.owner);if(!pre.owner&&pre.workstream)pre.owner=trOwnerFor(p,pre.workstream);trEditDep(null,pre);}
+  else if(kind==='scenarios')trEditScenario(null,pre);
+  else trEditWorkflow(null,pre);
+}
+function trDismissSuggestion(key){const p=trProj();if(!p||!trCanEdit())return;TE.markSuggestion(p,key,'dismissed');TE.log(p,{type:'suggestion',text:'Suggestion dismissed: '+key},trCtx(p));trSaved('Suggestion dismissed.');}
+// Fill the accountable person from Resources when the workstream is chosen (only while the field is empty or still auto-filled).
+function trWireOwnerFill(p){
+  const ws=document.getElementById('trf-workstream'),ow=document.getElementById('trf-owner');if(!ws||!ow||ws.disabled)return;
+  let auto=false;const hint=document.createElement('p');hint.className='tr-help';hint.id='trf-owner-hint';ow.insertAdjacentElement('afterend',hint);
+  const fill=()=>{const n=trOwnerFor(p,ws.value);if(n&&(!ow.value||auto)){ow.value=n;auto=true;hint.textContent='Filled from Resources. Change it if someone else is accountable.';}else if(!n&&auto){hint.textContent='';}};
+  ow.addEventListener('input',()=>{auto=false;hint.textContent='';});ws.addEventListener('input',fill);ws.addEventListener('change',fill);fill();
+}
+
 // ════════════ DEPENDENCIES & EVIDENCE ════════════
 let _trDepFilter='open';
 function trRenderDeps(){
@@ -143,11 +178,11 @@ function trRenderDeps(){
     .sort((a,b)=>(b.critical-a.critical)||((TE.DEP_STATUS[b.status].rank)-(TE.DEP_STATUS[a.status].rank))||String(a.requiredBy||'9').localeCompare(String(b.requiredBy||'9')));
   const f=(k,l)=>'<button type="button" class="tr-filter'+(_trDepFilter===k?' on':'')+'" aria-pressed="'+(_trDepFilter===k)+'" onclick="_trDepFilter='+trQ(k)+';trRenderDeps()">'+esc(l)+'</button>';
   const permits=d=>TE.GATED_ACTIVITIES.filter(a=>d.permits&&d.permits[a]).map(a=>(TE.ACTIVITIES.find(x=>x.key===a)||{}).label);
-  el.innerHTML='<div class="tr-bar"><div class="tr-filters" role="group" aria-label="Filter by status">'+f('open','Unresolved ('+(t.dependencies.length-counts.satisfied-counts.exception)+')')+f('blocked','Blocked ('+counts.blocked+')')+f('exception','Exceptions ('+counts.exception+')')+f('satisfied','Satisfied ('+counts.satisfied+')')+f('all','All ('+t.dependencies.length+')')+'</div>'
+  el.innerHTML=trSuggestBox(p,'dependencies')+'<div class="tr-bar"><div class="tr-filters" role="group" aria-label="Filter by status">'+f('open','Unresolved ('+(t.dependencies.length-counts.satisfied-counts.exception)+')')+f('blocked','Blocked ('+counts.blocked+')')+f('exception','Exceptions ('+counts.exception+')')+f('satisfied','Satisfied ('+counts.satisfied+')')+f('all','All ('+t.dependencies.length+')')+'</div>'
     +(trCanEdit()?trBtn('<i class="ph ph-plus"></i> Add dependency','trEditDep()','btn-primary btn-sm'):'')+'</div>'
     +(list.length?'<div class="dt-wrap"><table class="dt tr-table"><thead><tr><th scope="col">Required input</th><th scope="col">Owner</th><th scope="col">Needed by</th><th scope="col">Status</th><th scope="col">Consequence for Training</th><th scope="col">Can continue</th><th scope="col">Next action</th></tr></thead><tbody>'
       +list.map(d=>{const a=TE.depAffects(p,d);const late=d.requiredBy&&!TE.isResolved(d)&&trToday()>d.requiredBy;
-        return'<tr><td><button type="button" class="tr-rowlink" onclick="trEditDep('+trQ(d.id)+')">'+(d.critical?'<span class="tr-crit">Critical</span> ':'')+esc(d.title||'Untitled')+'</button><div class="tr-sub">'+a.scenarioIds.length+' scenario'+(a.scenarioIds.length===1?'':'s')+' · '+a.deliverableIds.length+' deliverable'+(a.deliverableIds.length===1?'':'s')+(a.audienceIds.length?' · '+esc(trAud(p,a.audienceIds).join(', ')):'')+(d.source==='legacy-heatmap'?' · from the earlier dependency map':'')+'</div></td>'
+        return'<tr><td><button type="button" class="tr-rowlink" onclick="trEditDep('+trQ(d.id)+')">'+(d.critical?'<span class="tr-crit">Critical</span> ':'')+esc(d.title||'Untitled')+'</button><div class="tr-sub">'+a.scenarioIds.length+' scenario'+(a.scenarioIds.length===1?'':'s')+' · '+a.deliverableIds.length+' deliverable'+(a.deliverableIds.length===1?'':'s')+(a.audienceIds.length?' · '+esc(trAud(p,a.audienceIds).join(', ')):'')+(d.source==='legacy-heatmap'?' · from the earlier dependency map':d.source==='craid'?' · from the CRAID log':d.jiraKey?' · Jira '+d.jiraKey:'')+'</div></td>'
         +'<td>'+esc(d.workstream||'—')+'<div class="tr-sub">'+esc(d.owner||'No accountable person')+'</div></td>'
         +'<td class="mono'+(late?' tr-late':'')+'">'+trD(d.requiredBy)+(late?'<div class="tr-sub">Past due</div>':'')+'</td>'
         +'<td>'+trChip(d.status,TE.depStatusLabel(d.status))+(d.evidence&&d.evidence.ref?'<div class="tr-sub">Evidence: '+esc(d.evidence.ref)+(d.evidence.version?' · '+esc(d.evidence.version):'')+'</div>':TE.isResolved(d)?'<div class="tr-sub tr-late">No evidence reference</div>':'')+'</td>'
@@ -202,12 +237,13 @@ function trEditDep(id,preset){
     if(!id){const n=TE.newDependency(Object.assign({},v,{status:'awaiting',created:trToday(),updated:trToday()}));t.dependencies.push(n);
       const r=TE.updateDependency(p,n.id,{status:v.status,exception:v.exception,next:v.next},trCtx(p));
       if(r&&r.error){t.dependencies.pop();return r.error;}
-      TE.log(p,{type:'dependency',refId:n.id,text:'Dependency recorded: '+n.title+' ('+TE.depStatusLabel(n.status)+')'},trCtx(p));trSaved('Dependency added.');return;}
+      if(n.craidId)TE.markSuggestion(p,'craid:'+n.craidId,'added');
+      TE.log(p,{type:'dependency',refId:n.id,text:'Dependency recorded: '+n.title+' ('+TE.depStatusLabel(n.status)+')'+(n.craidId?' from the CRAID log':n.jiraKey?' from Jira '+n.jiraKey:'')},trCtx(p));trSaved('Dependency added.');return;}
     const patch={};Object.keys(v).forEach(k=>{patch[k]=v[k];});
     const r=TE.updateDependency(p,id,patch,trCtx(p));if(r&&r.error)return r.error;
     const nf=r?(r.flagged.scenarios.length+r.flagged.deliverables.length):0;
     trSaved(nf?'Saved. '+nf+' linked item'+(nf===1?' is':'s are')+' flagged for review.':'Dependency saved.');
-  });
+  });  trWireOwnerFill(p);
 }
 function trDeleteRec(kind,id){
   const p=trProj();if(!p||!trCanEdit())return;const list=p.training[kind];const i=list.findIndex(x=>String(x.id)===String(id));if(i<0)return;
@@ -258,7 +294,7 @@ function trRenderLearnDev(){
       +(trCanEdit()?'<div>'+trBtn('Record a run','trScenarioRun('+trQ(s.id)+')','btn-text')+'</div>':'')+'</td>'
       +'<td>'+esc(used.map(d=>d.title).join(', ')||'—')+'</td></tr>';}).join('')+'</tbody></table></div>'
     :trEmpty('No scenarios yet.','Record the training-critical scenarios, their QA or UAT evidence and whether they run in the learning environment.');
-  el.innerHTML='<p class="tr-help tr-lead">Author content in your existing tools. AdoptIQ keeps the links, reviews and the reasons materials need to change.</p>'
+  el.innerHTML='<p class="tr-help tr-lead">Author content in your existing tools. AdoptIQ keeps the links, reviews and the reasons materials need to change.</p>'+trSuggestBox(p,'workflows')+trSuggestBox(p,'scenarios')
     +sect('Changed workflows','What changes for people, and who it affects',trBtn('<i class="ph ph-plus"></i> Add workflow','trEditWorkflow()'),wf)
     +sect('Learning objectives','Audience, changed task, expected performance, evaluation',trBtn('<i class="ph ph-plus"></i> Add objective','trEditObjective()'),ob)
     +sect('Training scenarios','Evidence that each scenario runs where learners will practise',trBtn('<i class="ph ph-plus"></i> Add scenario','trEditScenario()'),sc)
@@ -274,13 +310,14 @@ function trDelivTable(p){
       +'<td>'+trChip(d.state,TE.delivStateLabel(d.state))+(d.revisionFlag?'<div class="tr-sub tr-late">Review flagged: '+esc(d.revisionFlag.reason)+'</div>':'')+'</td>'
       +'<td>'+dev+'</td><td>'+del+why+'</td><td>'+esc(d.owner||'—')+'</td></tr>';}).join('')+'</tbody></table></div>';
 }
-function trEditWorkflow(id){
-  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.workflows,id):TE.newWorkflow();if(!rec)return;
+function trEditWorkflow(id,preset){
+  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.workflows,id):TE.newWorkflow(preset||{});if(!rec)return;
   const fields=[{k:'name',label:'Workflow',req:true,ph:'e.g. Claims intake'},{k:'change',label:'What changes',type:'textarea',rows:3},{k:'version',label:'Design or release reference',ph:'e.g. FDD v3, R1030'},
     {k:'audienceIds',label:'Affected audiences',type:'multi',opts:trOpts(p.stakeholders||[]),none:'Add stakeholder groups in People & Learning Impacts first.'}];
   trDialog(id?'Changed workflow':'New changed workflow','<div class="tr-form">'+trForm(fields,rec)+'</div>'+(id&&trCanEdit()?'<p><button type="button" class="btn-text tr-danger" onclick="trDeleteRec(\'workflows\','+trQ(id)+')">Delete this workflow</button></p>':''),()=>{
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;
-    if(id)Object.assign(rec,v);else{t.workflows.push(Object.assign(rec,v));TE.log(p,{type:'workflow',refId:rec.id,text:'Workflow recorded: '+rec.name},trCtx(p));}
+    if(id)Object.assign(rec,v);else{t.workflows.push(Object.assign(rec,v));if(rec.impactGroup)TE.markSuggestion(p,'impact:'+String(rec.impactGroup).toLowerCase(),'added');
+      TE.log(p,{type:'workflow',refId:rec.id,text:'Workflow recorded: '+rec.name+(rec.impactGroup?' from the Impact Assessment':'')},trCtx(p));}
     trSaved('Workflow saved.');});
 }
 function trWorkflowChange(id){
@@ -301,8 +338,8 @@ function trEditObjective(id){
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;
     if(id)Object.assign(rec,v);else t.objectives.push(Object.assign(rec,v));trSaved('Objective saved.');});
 }
-function trEditScenario(id){
-  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.scenarios,id):TE.newScenario();if(!rec)return;
+function trEditScenario(id,preset){
+  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.scenarios,id):TE.newScenario(preset||{});if(!rec)return;
   const fields=[{k:'title',label:'Scenario',req:true},{k:'critical',label:'Critical: delivery cannot proceed until this is validated',type:'check'},
     {k:'workflowId',label:'Workflow',type:'select',half:true,opts:[['','Not linked']].concat(trOpts(t.workflows))},
     {k:'objectiveIds',label:'Objectives',type:'multi',opts:trOpts(t.objectives,o=>o.task),none:'No objectives yet.'},
@@ -313,14 +350,14 @@ function trEditScenario(id){
   const env=rec.env||{};const envLine=id?'<p><strong>Training environment:</strong> '+(rec.needsRevalidation?trChip('revision_required','Needs revalidation')+' '+esc(rec.needsRevalidation.reason):trChip(env.status==='pass'?'validated':env.status==='fail'?'blocked':'not_assessed',TE.SCEN_ENV[env.status]||'Not run'))+(env.environment?' · '+esc(env.environment)+' · '+trD(env.date):'')+'</p>':'';
   trDialog(id?'Scenario':'New scenario',envLine+'<div class="tr-form">'+trForm(fields,rec)+'</div>'+(id&&trCanEdit()?'<p>'+trBtn('Record a run in the training environment','trScenarioRun('+trQ(id)+')','btn-outline btn-sm')+' <button type="button" class="btn-text tr-danger" onclick="trDeleteRec(\'scenarios\','+trQ(id)+')">Delete</button></p>':''),()=>{
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;
-    if(id)Object.assign(rec,v);else{t.scenarios.push(Object.assign(rec,v));TE.log(p,{type:'scenario',refId:rec.id,text:'Scenario recorded: '+rec.title},trCtx(p));}trSaved('Scenario saved.');});
+    if(id)Object.assign(rec,v);else{t.scenarios.push(Object.assign(rec,v));TE.log(p,{type:'scenario',refId:rec.id,text:'Scenario recorded: '+rec.title+(rec.jiraKey?' (from Jira '+rec.jiraKey+')':'')},trCtx(p));}trSaved('Scenario saved.');});
 }
 function trScenarioRun(id){
   const p=trProj();if(!p)return;const s=TE.byId(p.training.scenarios,id);if(!s)return;
   const rec={status:s.env.status==='not_run'?'pass':s.env.status,environment:s.env.environment,date:trToday(),by:(window._cc&&_cc.userName)||'',note:''};
   const fields=[{k:'status',label:'Result',type:'select',opts:[['pass','Runs in the training environment'],['fail','Does not run in the training environment'],['not_run','Not run']]},
-    {k:'environment',label:'Environment',req:true,half:true,ph:'e.g. TRN-2'},{k:'date',label:'Date',type:'date',half:true,req:true},{k:'by',label:'Run by',half:true},{k:'note',label:'What happened',type:'textarea',rows:2}];
-  trDialog('Run: '+s.title,'<p class="tr-help">A passing run in the learning environment is what validates a scenario for practice. QA or UAT results alone do not.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
+    {k:'environment',label:'Environment',req:true,half:true,ph:'e.g. TRN-2',list:'tr-envs'},{k:'date',label:'Date',type:'date',half:true,req:true},{k:'by',label:'Run by',half:true},{k:'note',label:'What happened',type:'textarea',rows:2}];
+  trDialog('Run: '+s.title,trEnvDatalist(p)+'<p class="tr-help">A passing run in the learning environment is what validates a scenario for practice. QA or UAT results alone do not.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;TE.recordScenarioRun(p,id,v,trCtx(p));trSaved('Run recorded.');},{saveLabel:'Record run'});
 }
 function trEditDeliverable(id){
@@ -436,7 +473,7 @@ function trRenderMilestones(){
   const head=TE.GATED_ACTIVITIES.map(k=>'<th scope="col">'+esc((TE.ACTIVITIES.find(x=>x.key===k)||{}).label)+'</th>').join('');
   const cell=a=>'<td title="'+esc(a.blockers.map(b=>b.text).join('; '))+'">'+trChip(a.ok?(a.conditional?'conditional':'ready'):'blocked',a.ok?(a.conditional?'Conditions':'Can start'):'Blocked')+(a.ok?'':'<div class="tr-sub">'+esc(a.blockers.map(b=>b.text).slice(0,1).join(''))+'</div>')+'</td>';
   const rules=t.entryRules||TE.defaultEntryRules();
-  el.innerHTML='<p class="tr-help tr-lead">Each deliverable moves through these activities on its own schedule. A blocked exercise does not hold up unrelated materials, and development can proceed while delivery waits.</p>'
+  el.innerHTML=trTrackerChecklist(p)+'<p class="tr-help tr-lead">Each deliverable moves through these activities on its own schedule. A blocked exercise does not hold up unrelated materials, and development can proceed while delivery waits.</p>'
     +(ms.risks.length?'<div class="tr-flag" role="status"><strong>Proposed schedule changes for your review</strong><ul class="tr-ul">'+ms.risks.map(r=>'<li>'+esc(r.text)+'</li>').join('')+'</ul></div>':'')
     +(ms.rows.length?'<div class="dt-wrap"><table class="dt tr-table tr-ms"><thead><tr><th scope="col">Deliverable</th>'+head+'<th scope="col">Planned</th><th scope="col">Actual</th></tr></thead><tbody>'+ms.rows.map(r=>
       '<tr><td><button type="button" class="tr-rowlink" onclick="trEditDeliverable('+trQ(r.d.id)+')">'+esc(r.d.title)+'</button><div class="tr-sub">'+trChip(r.d.state,TE.delivStateLabel(r.d.state))+'</div></td>'+r.acts.map(cell).join('')
@@ -505,7 +542,7 @@ const TR_GROUPS=[
   {key:'learn',label:'Learning Development',tabs:['learndev']},
   {key:'ready',label:'Readiness & Gates',tabs:['readiness','gates','adkar','adopthm']},
   {key:'actions',label:'Actions & Risks',tabs:['actions','flags','craid']},
-  {key:'delivery',label:'Delivery & Capacity',tabs:['milestones','trainplan','resources']},
+  {key:'delivery',label:'Delivery & Capacity',tabs:['milestones','environments','trainplan','resources']},
   {key:'adoption',label:'Adoption & Sustainment',tabs:['postlaunch','pulse','sustain']}
 ];
 function trGroupOf(tab){return TR_GROUPS.find(g=>g.tabs.includes(tab))||TR_GROUPS[0];}
@@ -527,5 +564,140 @@ function showPGroup(key){const g=TR_GROUPS.find(x=>x.key===key);if(!g)return;
 function trTabRendered(id){
   trSyncNav(id);
   if(id==='deps')trRenderDeps();if(id==='learndev')trRenderLearnDev();if(id==='readiness')trRenderReadiness();if(id==='actions')trRenderActions();
-  if(id==='milestones')trRenderMilestones();if(id==='postlaunch')trRenderOutcomes();if(id==='heatmap')renderPDepHM();
+  if(id==='milestones')trRenderMilestones();if(id==='environments')trRenderEnvironments();if(id==='postlaunch')trRenderOutcomes();if(id==='heatmap')renderPDepHM();
+}
+
+// ════════════ ENVIRONMENTS ════════════
+// The list belongs to the release and is shared by its projects. A new release starts from the
+// most recent list in the workspace, or from the generic defaults.
+function trEnvOf(r){
+  if(!r)return{list:[],events:[]};
+  if(!r.trEnv||typeof r.trEnv!=='object'){
+    const src=releases.find(x=>x!==r&&x.trEnv&&Array.isArray(x.trEnv.list)&&x.trEnv.list.length);
+    r.trEnv={list:src?src.trEnv.list.map(e=>TE.newEnvironment(Object.assign({},e,{id:TE.id()}))):TE.defaultEnvironments(),events:[]};
+  }
+  if(!Array.isArray(r.trEnv.list))r.trEnv.list=[];if(!Array.isArray(r.trEnv.events))r.trEnv.events=[];
+  return r.trEnv;
+}
+function trEnvList(p){return trEnvOf(relOfProj(p)).list;}
+function trEnvDatalist(p){return'<datalist id="tr-envs">'+trEnvList(p).filter(TE.isPracticeEnv).map(e=>'<option value="'+esc(e.name)+'">').join('')+'</datalist>';}
+function trMaint(e){return arr0(e.maintDays).length?arr0(e.maintDays).map(d=>TE.DAYS[d]).join(', ')+(e.maintStart?' '+e.maintStart+(e.maintEnd?'–'+e.maintEnd:''):''):'—';}
+function arr0(v){return Array.isArray(v)?v:[];}
+function trRenderEnvironments(){
+  const el=document.getElementById('tr-environments');const p=trProj();if(!el||!p)return;const r=relOfProj(p);const env=trEnvOf(r);
+  const warn=TE.envWarnings(p,env.list);
+  const rows=env.list.map(e=>'<tr><td><button type="button" class="tr-rowlink" onclick="trEditEnv('+trQ(e.id)+')">'+esc(e.name||'Untitled')+'</button><div class="tr-sub">'+esc(e.purpose||'')+'</div></td>'
+    +'<td>'+esc(TE.ENV_TYPES[e.type]||e.type)+(TE.isPracticeEnv(e)?'<div class="tr-sub">Learner practice</div>':'')+'</td>'
+    +'<td>'+(e.pii?trChip('assessed','Personal data'):'<span class="tr-sub">No personal data</span>')+'</td>'
+    +'<td>'+esc(trMaint(e))+(e.noticeDays?'<div class="tr-sub">'+esc(e.noticeDays)+' business day notice</div>':'')+'</td>'
+    +'<td class="mono">'+(e.logins?esc(e.logins):'—')+'</td></tr>').join('');
+  const ev=env.events.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,10);
+  el.innerHTML='<p class="tr-help tr-lead">Where each kind of testing happens, and what changed in each environment. A pass in QA or UAT does not show a scenario works where learners practise, and a refresh or deployment can break a scenario that worked before.</p>'
+    +(warn.length?'<div class="tr-flag" role="status"><strong>Check these</strong><ul class="tr-ul">'+warn.map(w=>'<li>'+esc(w.text)+'</li>').join('')+'</ul></div>':'')
+    +'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Environments</div><div class="ps-text">Shared by every project in '+esc(r?r.name:'this release')+'. Name them the way your teams do (for example TRN1 to TRN5).</div></div>'
+      +(trCanEdit()?'<span class="tr-suggest-a">'+trBtn('<i class="ph ph-plus"></i> Add environment','trEditEnv()','btn-outline btn-sm')+'</span>':'')+'</div><div class="pb">'
+      +(env.list.length?'<div class="dt-wrap"><table class="dt tr-table"><thead><tr><th scope="col">Environment</th><th scope="col">Type</th><th scope="col">Data</th><th scope="col">Maintenance</th><th scope="col">Training logins</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+        :trEmpty('No environments listed.','Add the environments your teams use, or start from the standard list.',trBtn('Use the standard list','trEnvDefaults()','btn-primary btn-sm')))+'</div></section>'
+    +'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Deployments and refreshes</div><div class="ps-text">Recording one marks scenarios that passed earlier in that environment, in every project, for a re-run.</div></div>'
+      +(trCanEdit()?trBtn('Record a deployment or refresh','trEnvEvent()','btn-primary btn-sm'):'')+'</div><div class="pb">'
+      +(ev.length?'<ul class="tr-hist">'+ev.map(x=>'<li><span class="mono">'+trD(x.date)+'</span><span><strong>'+esc(x.envName)+'</strong>: '+esc(TE.ENV_EVENTS[x.kind]||x.kind)+(x.ref?' ('+esc(x.ref)+')':'')+(x.note?' — '+esc(x.note):'')+'<span class="tr-sub">'+(x.flagged?x.flagged+' scenario'+(x.flagged===1?'':'s')+' marked for a re-run':'No passing scenarios affected')+(x.by?' · '+esc(x.by):'')+'</span></span></li>').join('')+'</ul>'
+        :'<p class="tr-help">No deployments or refreshes recorded for this release.</p>')+'</div></section>'
+    +'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Getting an environment ready</div><div class="ps-text">Adds five linked dependencies, from the deployment request to checked training cases, each with a suggested due date and owning team. Edit any of them afterwards.</div></div>'
+      +(trCanEdit()?trBtn('Add readiness steps','trEnvChainDialog()','btn-outline btn-sm'):'')+'</div><div class="pb"><ol class="tr-ul">'+TE.ENV_CHAIN.map(c=>'<li><strong>'+esc(c.step)+'</strong> · '+esc(c.ws)+' · '+c.lead+' day'+(c.lead===1?'':'s')+' before it is needed<div class="tr-sub">'+esc(c.detail)+'</div></li>').join('')+'</ol></div></section>';
+}
+function trEnvDefaults(){const p=trProj();if(!p||!trCanEdit())return;const env=trEnvOf(relOfProj(p));env.list=TE.defaultEnvironments();touch('rel');trSaved('Standard environments added. Rename them to match your own.');}
+function trEditEnv(id){
+  const p=trProj();if(!p)return;const env=trEnvOf(relOfProj(p));const rec=id?env.list.find(e=>String(e.id)===String(id)):TE.newEnvironment();if(!rec)return;
+  const view=Object.assign({},rec,{maintDays:arr0(rec.maintDays).map(String)});
+  const fields=[{k:'name',label:'Name',req:true,half:true,ph:'e.g. TRN2'},{k:'type',label:'Type',type:'select',half:true,opts:Object.keys(TE.ENV_TYPES).map(k=>[k,TE.ENV_TYPES[k]])},
+    {k:'purpose',label:'What it is used for',ph:'e.g. CWP training'},{k:'pii',label:'Holds personal data (not for learner practice)',type:'check'},
+    {type:'section',label:'Maintenance'},{k:'maintDays',label:'Maintenance days',type:'multi',opts:[1,2,3,4,5].map(d=>[String(d),TE.DAYS[d]])},
+    {k:'maintStart',label:'From',half:true,ph:'09:00'},{k:'maintEnd',label:'Until',half:true,ph:'12:00'},
+    {k:'noticeDays',label:'Notice needed (business days)',half:true},{k:'logins',label:'Training logins available',half:true}];
+  trDialog(id?'Environment':'New environment','<div class="tr-form">'+trForm(fields,view)+'</div>'+(id&&trCanEdit()?'<p><button type="button" class="btn-text tr-danger" onclick="trDeleteEnv('+trQ(id)+')">Remove this environment</button></p>':''),()=>{
+    const v=trCollect(fields,view);const m=trMissing(fields,v);if(m)return m;
+    if(env.list.some(e=>e!==rec&&TE.envKey(e.name)===TE.envKey(v.name)))return'Another environment already has this name.';
+    v.maintDays=arr0(v.maintDays).map(Number);Object.assign(rec,v);if(!id)env.list.push(rec);touch('rel');trSaved('Environment saved.');});
+}
+function trDeleteEnv(id){const p=trProj();if(!p||!trCanEdit())return;const env=trEnvOf(relOfProj(p));const i=env.list.findIndex(e=>String(e.id)===String(id));if(i<0)return;
+  if(!confirm('Remove “'+env.list[i].name+'” from this release’s list? Scenario runs that name it are kept.'))return;env.list.splice(i,1);trCloseDialog();touch('rel');trSaved('Environment removed.');}
+function trEnvEvent(){
+  const p=trProj();if(!p||!trCanEdit())return;const env=trEnvOf(relOfProj(p));if(!env.list.length)return trDialog('Record a deployment or refresh','<p class="tr-help">Add your environments first.</p>',null);
+  const rec={envName:(env.list.find(TE.isPracticeEnv)||env.list[0]).name,kind:'refresh',date:trToday(),ref:'',note:''};
+  const fields=[{k:'envName',label:'Environment',type:'select',half:true,opts:env.list.map(e=>[e.name,e.name])},{k:'kind',label:'What happened',type:'select',half:true,opts:Object.keys(TE.ENV_EVENTS).map(k=>[k,TE.ENV_EVENTS[k]])},
+    {k:'date',label:'Date',type:'date',req:true,half:true},{k:'ref',label:'Ticket or reference',half:true,ph:'e.g. the infrastructure request'},{k:'note',label:'Note',type:'textarea',rows:2}];
+  trDialog('Record a deployment or refresh','<p class="tr-help">Scenarios that passed in this environment on or before this date, in every project, will be marked for a re-run. Their run history is kept.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
+    const v=trCollect(fields,rec);const m=trMissing(fields,v);if(m)return m;
+    const projects=[].concat(...releases.map(r=>r.projects||[]));projects.forEach(q=>TE.migrate(q,trCtx(q)));
+    const res=TE.recordEnvEvent(projects,v,Object.assign(trCtx(p),{today:v.date}));
+    const entry=Object.assign({id:TE.id(),by:(window._cc&&_cc.userName)||'',flagged:res.scenarios},v);
+    releases.forEach(r=>{const e=trEnvOf(r);if(r===relOfProj(p)||TE.envOf(e.list,v.envName))e.events.push(Object.assign({},entry,{id:TE.id()}));r.modified=new Date().toISOString();});
+    touch('proj');trSaved(res.scenarios?res.scenarios+' scenario'+(res.scenarios===1?'':'s')+' in '+res.projects+' project'+(res.projects===1?'':'s')+' marked for a re-run.':'Recorded. No passing scenarios in '+v.envName+' were affected.');},{saveLabel:'Record'});
+}
+function trEnvChainDialog(){
+  const p=trProj();if(!p||!trCanEdit())return;const t=p.training;const list=trEnvList(p).filter(TE.isPracticeEnv);
+  if(!list.length)return trDialog('Add readiness steps','<p class="tr-help">Add a training environment to the list first.</p>',null);
+  const rec={envName:list[0].name,neededBy:projGoLive(p)||'',scenarioIds:[]};
+  const fields=[{k:'envName',label:'Environment',type:'select',half:true,opts:list.map(e=>[e.name,e.name])},{k:'neededBy',label:'Needed ready by',type:'date',req:true,half:true},
+    {k:'scenarioIds',label:'Scenarios that will run there',type:'multi',opts:trOpts(t.scenarios),none:'No scenarios yet. You can link them later.'}];
+  trDialog('Add readiness steps','<p class="tr-help">Creates five critical dependencies with due dates counted back from the date you choose. Change owners, dates or steps afterwards as your teams work.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
+    const v=trCollect(fields,rec);const m=trMissing(fields,v);if(m)return m;
+    const deps=TE.envChain(v.envName,v.neededBy,v.scenarioIds);deps.forEach(d=>{d.created=trToday();t.dependencies.push(d);});
+    TE.log(p,{type:'dependency',text:'Readiness steps added for '+v.envName+' (needed by '+v.neededBy+')'},trCtx(p));
+    trSaved('Five readiness steps added under Dependencies & Evidence.');},{saveLabel:'Add five steps'});
+}
+
+// ════════════ DELIVERY TRACKER IMPORT ════════════
+// Upload the lead's tracker workbook, review every change, then apply. Rules live in js/tracker-import.js.
+let _trk=null;
+function trTrackerImport(){
+  if(!trCanEdit())return;_trk=null;
+  trDialog('Import delivery tracker','<p class="tr-help">Choose your delivery tracker workbook (.xlsx). AdoptIQ reads the Projects tab, each project tab and the Delivery Tracker tab, then shows every change before anything is saved. Your tracker owns dates, owners, status and sign-offs; AdoptIQ keeps its own evidence. Nothing is deleted.</p>'
+    +'<div class="tr-f"><label for="trk-file">Tracker workbook</label><input type="file" id="trk-file" accept=".xlsx,.xlsm,.xls" onchange="trTrkFile(this.files[0])"></div><div id="trk-plan" aria-live="polite"></div>',trTrkApply,{saveLabel:'Apply changes'});
+  const b=document.getElementById('tr-dlg-save');if(b)b.disabled=true;
+}
+async function trTrkFile(file){
+  const out=document.getElementById('trk-plan');if(!file||!out)return;
+  if(!window.XLSX){out.innerHTML='<p class="tr-dlg-err">The spreadsheet reader is still loading. Try again in a moment.</p>';return;}
+  out.innerHTML='<p class="tr-help">Reading '+esc(file.name)+'…</p>';
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});const sheets={};
+    wb.SheetNames.forEach(n=>{sheets[n]=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''});});
+    const parsed=TI.read(sheets);_trk=TI.plan(parsed,releases);_trk.file=file.name;
+    out.innerHTML=trTrkRender(_trk);const b=document.getElementById('tr-dlg-save');if(b)b.disabled=!(_trk.projects.length||_trk.deliverables.length);
+  }catch(e){_trk=null;out.innerHTML='<p class="tr-dlg-err">Could not read that file: '+esc(e.message)+'</p>';}
+}
+function trTrkRender(pl){
+  const c=pl.counts;const projOpts=[...new Set(pl.projects.map(p=>p.name).concat([].concat(...releases.map(r=>(r.projects||[]).map(p=>p.name)))))].sort();
+  const proj=pl.projects.filter(p=>p.isNew||p.move||p.changes.length).map(p=>'<li><strong>'+esc(p.name)+'</strong> <span class="tr-sub">'+(p.isNew?'New project in '+esc(p.release):p.move?'Moves from '+esc(p.existing.relName)+' to '+esc(p.release):esc(p.release))+'</span>'
+    +(p.changes.length?'<ul class="tr-ul">'+p.changes.map(x=>{const fv=v=>x.field==='golive'&&v?trD(v):v;return'<li>'+esc(x.label)+': '+(x.from?esc(fv(x.from))+' → ':'')+'<strong>'+esc(fv(x.to))+'</strong></li>';}).join('')+'</ul>':p.isNew?'':'<span class="tr-sub">No changes</span>')+'</li>').join('');
+  const changed=pl.projects.filter(p=>p.isNew||p.move||p.changes.length);const same=pl.projects.length-changed.length;
+  const un=pl.unmatched.map((u,i)=>'<li class="trk-un"><label for="trk-u-'+i+'"><strong>'+esc(u.row)+'</strong>'+(u.adhoc?' <span class="tr-sub">Ad-hoc work, skipped unless you choose a project</span>':'')+'</label>'
+    +'<select id="trk-u-'+i+'"><option value="">Skip this row</option>'+projOpts.map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('')+'</select>'
+    +(u.suggest?' <button type="button" class="btn-text" onclick="document.getElementById(\'trk-u-'+i+'\').value='+esc(trQ(u.suggest))+'">Use suggestion: '+esc(u.suggest)+'</button>':'')+'</li>').join('');
+  return'<h3 class="tr-fs">What will change</h3><p>'+[c.newReleases?c.newReleases+' new release'+(c.newReleases===1?'':'s'):'',c.newProjects?c.newProjects+' new project'+(c.newProjects===1?'':'s'):'',
+      c.changedProjects?c.changedProjects+' project'+(c.changedProjects===1?'':'s')+' updated':'',c.deliverables?c.deliverables+' learning deliverable'+(c.deliverables===1?'':'s')+' matched':'',same?same+' unchanged':''].filter(Boolean).join(' · ')+'</p>'
+    +(pl.warnings.length?'<div class="tr-flag"><strong>Could not read everything</strong><ul class="tr-ul">'+pl.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')+'</ul></div>':'')
+    +(changed.length?'<details open><summary>Projects ('+changed.length+')</summary><ul class="tr-ul">'+pl.projects.filter(p=>p.isNew||p.move||p.changes.length).map(p=>proj.split('</li><li>')[0]&&'').join('')+proj+'</ul></details>':'<p class="tr-help">No project changes.</p>')
+    +(pl.deliverables.length?'<details><summary>Learning deliverables matched to a project ('+pl.deliverables.length+')</summary><ul class="tr-ul">'+pl.deliverables.map(d=>'<li>'+esc(d.row)+' → '+esc(d.project)+'</li>').join('')+'</ul></details>':'')
+    +(pl.unmatched.length?'<h3 class="tr-fs">Choose a project for these rows</h3><p class="tr-help">These Delivery Tracker rows use a name that does not match a project. Pick the project once and AdoptIQ remembers it for next time.</p><ul class="tr-ul trk-unlist">'+un+'</ul>':'');
+}
+function trTrkApply(){
+  if(!_trk)return'Choose your tracker workbook first.';if(!trCanEdit())return'View-only.';
+  const choices={};_trk.unmatched.forEach((u,i)=>{const v=(document.getElementById('trk-u-'+i)||{}).value;if(v)choices[u.key]=v;});
+  const res=TI.apply(_trk,releases,{newRelease:n=>newRelease(n,[],'',''),newProject:n=>newProject(n,[],0),migrate:p=>migrateResources(p),TE,ctx:{by:(window._cc&&_cc.userName)||''},today:trToday()},choices);
+  releases.forEach(r=>{r.modified=new Date().toISOString();});schedSave();
+  if(typeof renderPortfolio==='function')try{renderPortfolio();}catch(e){}
+  if(document.getElementById('v-project').classList.contains('active'))trRefresh();
+  _trk=null;
+  showSuccess('Tracker imported: '+[res.releases?res.releases+' release'+(res.releases===1?'':'s')+' added':'',res.projects?res.projects+' project'+(res.projects===1?'':'s')+' added':'',res.updated?res.updated+' updated':'',res.moved?res.moved+' moved':'',(res.deliverables+res.deliverablesUpdated)?(res.deliverables+res.deliverablesUpdated)+' deliverable'+((res.deliverables+res.deliverablesUpdated)===1?'':'s'):''].filter(Boolean).join(', ')+'.');
+}
+// The lead's checklist from the tracker, shown under Delivery & Capacity → Milestones.
+function trTrackerChecklist(p){
+  const tk=p.tracker;if(!tk||!Array.isArray(tk.gates)||!tk.gates.length)return'';
+  const rows=tk.gates.filter(g=>!/^n\/?a$/i.test(g.status));
+  return'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Training plan checklist</div><div class="ps-text">From your delivery tracker, imported '+trD(tk.importedAt)+'. Lead review: '+(tk.leadReviewPct!=null?tk.leadReviewPct+'% of sign-off gates':'not given')+'. Update it in the tracker and import again.</div></div></div><div class="pb">'
+    +'<div class="dt-wrap"><table class="dt tr-table"><thead><tr><th scope="col">Item</th><th scope="col">Planned due</th><th scope="col">Status</th><th scope="col">Lead reviewed</th></tr></thead><tbody>'
+    +rows.map(g=>'<tr><td>'+esc(g.name)+(g.gate?'<div class="tr-sub">Sign-off gate</div>':'')+'</td><td class="mono'+(g.due&&g.due<trToday()&&!/complete/i.test(g.status)?' tr-late':'')+'">'+trD(g.due)+'</td><td>'+esc(g.status||'—')+'</td><td>'+(g.gate?(g.reviewed?trChip('ready','Signed'):trChip('awaiting','Not yet')):'—')+'</td></tr>').join('')
+    +'</tbody></table></div></div></section>';
 }

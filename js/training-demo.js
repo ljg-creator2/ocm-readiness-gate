@@ -97,7 +97,7 @@ function trSeedDemo(){
   TE.migrate(q,{});const u=q.training;const qa=n=>({today:day(n),by:'Dana Whitfield'});
   u.workflows.push(TE.newWorkflow({id:'r-wf1',name:'Renewal notice review',change:'Caseworkers review system-generated renewal notices in a new queue before they are mailed.',audienceIds:[rn.id],version:'FDD v2'}));
   u.objectives.push(TE.newObjective({id:'r-ob1',workflowId:'r-wf1',audienceIds:[rn.id],task:'Review a renewal notice and release or correct it',performance:'Releases correct notices and corrects address or income errors before mailing',criteria:'Simulation completed with no released errors',method:'Simulation, then queue sampling in week 1'}));
-  u.scenarios.push(TE.newScenario({id:'r-sc1',title:'Review and release a renewal notice',workflowId:'r-wf1',objectiveIds:['r-ob1'],critical:true,qaEvidence:'QA-301 passed (build R1104)'}));
+  u.scenarios.push(TE.newScenario({id:'r-sc1',title:'Review and release a renewal notice',workflowId:'r-wf1',objectiveIds:['r-ob1'],critical:true,jiraKey:'RN-101',qaEvidence:'QA-301 passed (build R1104)'}));
   u.deliverables.push(TE.newDeliverable({id:'r-d1',title:'Notice review simulation',type:'simulation',scenarioIds:['r-sc1'],objectiveIds:['r-ob1'],audienceIds:[rn.id],critical:true,state:'draft',owner:'Dana Whitfield',planned:{start:day(-10),due:day(18),delivery:day(25)},actual:{start:day(-10),done:''}}));
   u.deliverables.push(TE.newDeliverable({id:'r-d2',title:'Renewal queue quick reference',type:'job_aid',workflowIds:['r-wf1'],audienceIds:[rn.id],state:'in_review',owner:'Dana Whitfield',planned:{start:day(-10),due:day(5),delivery:day(25)},actual:{start:day(-10),done:''}}));
   u.checkpoints.scope={decision:'proceed',reviewer:'Dana Whitfield',date:day(-12)};
@@ -110,7 +110,21 @@ function trSeedDemo(){
     consequence:'Quick reference screenshots may change.',permits:{provisional:true,scenarioDev:true,validation:true,facilitator:false,delivery:false},created:day(-8)}));
   TE.log(q,{type:'dependency',refId:'r-dep2',text:'Dependency recorded: Final notice template wording (Partial)'},qa(-8));
 
+  // Fictional environment list, and the deployment that fixed the intake scenario's environment.
+  r.trEnv={list:[TE.newEnvironment({name:'QA',type:'qa',purpose:'Quality assurance testing'}),TE.newEnvironment({name:'UAT',type:'uat',purpose:'End-to-end and subject-matter-expert testing'}),
+    TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation; real data copied from production, plus test data',pii:true}),
+    TE.newEnvironment({name:'TRN-1',type:'training',purpose:'Intake training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00',noticeDays:'1',logins:'400'}),
+    TE.newEnvironment({name:'TRN-2',type:'training',purpose:'Caseworker training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00',noticeDays:'1',logins:'350'}),
+    TE.newEnvironment({name:'Production',type:'prod',purpose:'Live operations',pii:true})],events:[]};
+  const evt={envName:'TRN-2',kind:'deploy',date:day(-52),ref:'ENV-77',note:'Release R1030 with the learner-role permission fix'};
+  const res=TE.recordEnvEvent([p,q],evt,{today:day(-52),by:'J. Okafor'});
+  r.trEnv.events.push(Object.assign({id:TE.id(),by:'J. Okafor',flagged:res.scenarios},evt));
   // Newest first, by date (records were written in story order).
   [p,q].forEach(x=>x.training.history.sort((a,b)=>String(b.date).localeCompare(String(a.date))));
+  // A fictional Jira import, so the Jira suggestions can be seen in the demo.
+  q.jira={importedAt:new Date(day(-2)+'T09:00:00').toISOString(),file:'renewals-sample.csv',version:'R1104',uatDefects:0,trainDefects:1,bugs:1,untriaged:[],
+    items:[{key:'RN-101',summary:'Renewal notice review queue',status:'In UAT',ready:false,qaPassed:true,uatPassed:false,created:day(-30),defects:[],programs:'Renewals',programList:['Renewals'],hasAccept:true},
+      {key:'RN-102',summary:'Correct an address before mailing',status:'UAT Passed',ready:true,qaPassed:true,uatPassed:true,created:day(-30),defects:[{key:'RN-150',summary:'Learner role cannot release notices in TRN-2',status:'Open',open:true}],programs:'Renewals',programList:['Renewals'],hasAccept:true}],
+    trainDefectList:[{key:'RN-150',summary:'Learner role cannot release notices in TRN-2',status:'Open',open:true,links:['RN-102']}]};
   r.projects=[p,q];releases.push(r);
 }
