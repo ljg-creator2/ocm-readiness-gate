@@ -1,0 +1,38 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Syntax check every script
+        run: |
+          for f in js/*.js; do
+            node -e "new Function(require('fs').readFileSync('$f','utf8'))" || { echo "Syntax error in $f"; exit 1; }
+          done
+
+      - name: Install test tools
+        working-directory: tests
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Engine tests, user journeys, Training flows, Command Center, Jira import, page sweep
+        working-directory: tests
+        run: npm test

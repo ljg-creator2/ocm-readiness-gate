@@ -136,3 +136,6 @@ body.tr-dlg-open{overflow:hidden}
 .tr-hist li{display:grid;grid-template-columns:96px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
 .tr-hist .mono{color:var(--ink-60);font-size:12.5px}
 .pg-sub-nav>*{min-width:0;max-width:100%;box-sizing:border-box}
+/* Long project names in the breadcrumb truncate instead of widening the page on phones. */
+.breadcrumb{min-width:0;max-width:100%;overflow:hidden}
+.breadcrumb .bc-cur,.breadcrumb .bc-link{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

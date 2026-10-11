@@ -27,4 +27,5 @@ All UI work must follow `docs/ADOPTIQ_DESIGN_SYSTEM.md` and the approved mockups
 
 ## Working rules
 - Build, then publish a preview. Push to GitHub only after LaKenya approves the preview.
+- Before every preview, run the automated checks: `cd tests && npm test` (see `tests/README.md`). They also run on GitHub for every pull request; do not merge with a red check. Add or update a test with every behaviour change. Never put a real client Jira export in the repository.
 - Stack: a single-page app (`index.html`, `js/adoptiq.js`, plus `js/training-*.js` and `css/training.css`), no build step. Syntax-check each script with `node -e "new Function(require('fs').readFileSync('js/adoptiq.js','utf8'))"` (repeat for the training files).

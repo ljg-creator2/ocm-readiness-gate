@@ -301,6 +301,8 @@ button.cc-li-t:hover{text-decoration:underline}
 .cc-li-d.late{color:var(--brick-red);font-weight:600}
 .cc-foot{font-size:12px;color:var(--slate);margin:6px 0 0}
 .cc-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Hidden labels inside scrolling tables stay inside the scroller instead of widening the page on phones. */
+.dt-wrap{position:relative}
 /* Row 4: Recent Activity */
 .cc-activity .cc-list li{padding:3px 0}
 /* Row 5: Upcoming Milestones timeline */
