@@ -473,25 +473,68 @@ TE.heatCell=function(p,gi,wsName){
 // Drafts only: nothing becomes a Training record until a person reviews and saves it.
 // Sources: open CRAID entries of type Dependency, and Impact Assessment groups.
 TE.CRAID_CLOSED=/^(closed|mitigated|validated|invalidated|resolved|done)$/i;
-TE.suggestions=function(p){
-  const t=p.training;const done=(t.suggest&&t.suggest.done)||{};const out={dependencies:[],workflows:[]};
+TE.suggestions=function(p,ctx){
+  ctx=ctx||{};const t=p.training;const done=(t.suggest&&t.suggest.done)||{};const out={dependencies:[],workflows:[],scenarios:[]};
+  const has=(list,key)=>arr(list).some(r=>r.suggestKey===key);
   arr(p.craid).forEach(c=>{
     if(String(c.type||'').toLowerCase()!=='dependency'||TE.CRAID_CLOSED.test(String(c.status||'').trim()))return;
-    const key='craid:'+c.id;if(done[key]||t.dependencies.some(d=>String(d.craidId)===String(c.id)))return;
+    const key='craid:'+c.id;if(done[key]||has(t.dependencies,key)||t.dependencies.some(d=>String(d.craidId)===String(c.id)))return;
     out.dependencies.push({key,source:'CRAID log',label:c.title||c.description||'Untitled dependency',
       note:[c.severity?'Severity '+c.severity:'',c.dependsOn?'Depends on '+c.dependsOn:'',c.dueDate?'Due '+c.dueDate:''].filter(Boolean).join(' · '),
-      preset:{title:c.title||'',owner:c.owner||'',requiredBy:c.dueDate||'',consequence:c.description||'',craidId:c.id,source:'craid',status:'awaiting'}});
+      preset:{title:c.title||'',owner:c.owner||'',requiredBy:c.dueDate||'',consequence:c.description||'',craidId:c.id,source:'craid',status:'awaiting',suggestKey:key}});
   });
   const groups=(p.impactAssessment&&arr(p.impactAssessment.groups))||[];
   groups.forEach((g,i)=>{
     if(!g||(!g.futureState&&!g.currentState))return;
     const name=String(g.name||'Group '+(i+1));const key='impact:'+name.toLowerCase();
-    if(done[key]||t.workflows.some(w=>String(w.impactGroup||'').toLowerCase()===name.toLowerCase()))return;
+    if(done[key]||has(t.workflows,key)||t.workflows.some(w=>String(w.impactGroup||'').toLowerCase()===name.toLowerCase()))return;
     const sh=arr(p.stakeholders).find(s=>String(s.name||'').trim().toLowerCase()===name.trim().toLowerCase());
     out.workflows.push({key,source:'Impact Assessment',label:name,note:[g.level?g.level+' impact':'',arr(g.changeTypes).join(', ')].filter(Boolean).join(' · '),
       preset:{name:name+': changed way of working',change:[g.currentState?'Today: '+g.currentState:'',g.futureState?'After: '+g.futureState:''].filter(Boolean).join(' '),
-        audienceIds:sh?[sh.id]:[],impactGroup:name}});
+        audienceIds:sh?[sh.id]:[],impactGroup:name,suggestKey:key}});
   });
+  // Jira import: OCM-tagged items and training-environment defects.
+  const j=p.jira;
+  if(j&&Array.isArray(j.items)){
+    const src='Jira import';
+    j.items.forEach(it=>{
+      if(!it||!it.key)return;const summary=it.summary||it.key;
+      const openDefects=arr(it.defects).filter(d=>d.open===true);
+      // Passed QA: a candidate training scenario, with its test evidence.
+      if(it.qaPassed){const key='jira-sc:'+it.key;
+        if(!done[key]&&!has(t.scenarios,key)&&!t.scenarios.some(s=>s.jiraKey===it.key))
+          out.scenarios.push({key,source:src,label:summary,note:[it.key,it.uatPassed?'passed QA and UAT':'passed QA',openDefects.length?openDefects.length+' open defect'+(openDefects.length===1?'':'s'):''].filter(Boolean).join(' · '),
+            preset:{title:summary,qaEvidence:it.key+' passed QA ('+(it.status||'status not given')+')',uatEvidence:it.uatPassed?it.key+' passed UAT':'',
+              limitations:openDefects.length?'Open defects: '+openDefects.map(d=>d.key+(d.summary?' '+d.summary:'')).join('; '):'',jiraKey:it.key,suggestKey:key}});}
+      // Not past UAT: Training depends on UAT for validated, scenario-based materials.
+      const dep=t.dependencies.find(d=>d.jiraKey===it.key&&d.jiraKind!=='defect');
+      if(!it.uatPassed){const key='jira-dep:'+it.key;
+        if(!done[key]&&!dep&&!has(t.dependencies,key))
+          out.dependencies.push({key,source:src,label:summary+' passes UAT',note:[it.key,it.qaPassed?'passed QA, in UAT':'in build or QA',ctx.uatComplete?'UAT due '+ctx.uatComplete:''].filter(Boolean).join(' · '),
+            preset:{title:summary+' passes UAT',workstream:'UAT',requiredBy:ctx.uatComplete||'',status:it.qaPassed?'partial':'awaiting',
+              acceptance:it.key+' shows UAT passed in Jira',evidence:{ref:it.key,version:'',environment:'',verified:false,date:''},
+              consequence:'Materials for this change can be drafted but not validated until it passes UAT.',
+              permits:{provisional:true,scenarioDev:!!it.qaPassed,validation:false,facilitator:false,delivery:false},jiraKey:it.key,jiraKind:'uat',source:'jira',suggestKey:key}});}
+      // A later import shows progress on a tracked item: prompt a review, never change the record.
+      else if(dep&&!isResolved(dep)){const key='jira-upd:'+it.key+':uat';
+        if(!done[key])out.dependencies.push({key,source:src,label:it.key+' now shows UAT passed',note:'Review "'+dep.title+'" and record the evidence if you agree',review:dep.id,preset:{}});}
+    });
+    arr(j.trainDefectList).filter(d=>d&&d.open!==false).forEach(d=>{
+      const key='jira-def:'+d.key;
+      const tracked=t.dependencies.find(x=>x.jiraKey===d.key&&x.jiraKind==='defect');
+      if(!tracked){if(done[key]||has(t.dependencies,key))return;
+        const linkedSc=t.scenarios.filter(s=>arr(d.links).includes(s.jiraKey)).map(s=>s.id);
+        out.dependencies.push({key,source:src,label:'Training environment defect '+d.key+(d.summary?': '+d.summary:''),note:[d.status||'',linkedSc.length?linkedSc.length+' linked scenario'+(linkedSc.length===1?'':'s'):'',arr(d.links).length?'linked to '+arr(d.links).join(', '):''].filter(Boolean).join(' · '),
+          preset:{title:'Training environment defect '+d.key+' resolved'+(d.summary?': '+d.summary:''),workstream:'Environment support',status:'blocked',scenarioIds:linkedSc,
+            evidence:{ref:d.key,version:'',environment:'',verified:false,date:''},consequence:'Linked scenarios may not run in the training environment until this is fixed.',
+            permits:{provisional:true,scenarioDev:true,validation:false,facilitator:false,delivery:false},jiraKey:d.key,jiraKind:'defect',source:'jira',suggestKey:key}});}
+    });
+    // Defects tracked earlier that a later import no longer lists as open.
+    t.dependencies.filter(x=>x.jiraKind==='defect'&&!isResolved(x)).forEach(x=>{
+      const d=arr(j.trainDefectList).find(y=>y.key===x.jiraKey);
+      if(d&&d.open===false){const key='jira-upd:'+x.jiraKey+':closed';if(!done[key])out.dependencies.push({key,source:src,label:x.jiraKey+' is closed in Jira',note:'Review "'+x.title+'" and record the evidence if you agree',review:x.id,preset:{}});}
+    });
+  }
   return out;
 };
 TE.markSuggestion=function(p,key,state){const t=p.training;if(!t.suggest||typeof t.suggest!=='object')t.suggest={done:{}};if(!t.suggest.done)t.suggest.done={};

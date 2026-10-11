@@ -114,6 +114,43 @@ module.exports=async function(t){
   okS('No JS errors',pg._errs.length===0,pg._errs.join(' | '));
   await pg.context().close();
 
+  // ── Jira import feeds Learning Development and Dependencies (fictional sample) ──
+  {
+    const csv=require('fs').readFileSync(require('path').join(__dirname,'../fixtures/jira-sample.csv'),'utf8');
+    pg=await t.page({wait:2500});
+    const okJ2=(n,c,d)=>ok('Jira suggestions',n,c,d);
+    await ev(pg,async csv=>{setDemoMode(false);isReadOnly=false;document.body.classList.remove('readonly-mode');const r=newRelease('FY2027R1030',[],'2027-01-15','Development');r.uatComplete='2026-11-15';r.projects=[];releases.push(r);openRelease(r.id);
+      openJiraImport();await handleJiraFile(new File([csv],'sample.csv'));applyJiraPlan();closeJiraImport();
+      const p=r.projects.find(x=>x.name==='Hub Service Updates');openProjectFromPortfolio(r.id,p.id,'learndev');},csv);await wait(800);
+    const s1=await ev(pg,()=>({sc:TE.suggestions(getProj(),trCtx(getProj())).scenarios.map(x=>x.label),box:!!document.querySelector('#tr-learndev .tr-suggest'),recs:getProj().training.scenarios.length}));
+    okJ2('Items that passed QA are suggested as scenarios',s1.box&&s1.sc.join()==='Hub field mapping'&&s1.recs===0,JSON.stringify(s1));
+    await pg.click('#tr-learndev .tr-suggest >> text=Review and add');await wait(300);
+    const scf=await ev(pg,()=>({t:document.getElementById('trf-title').value,qa:document.getElementById('trf-qaEvidence').value,uat:document.getElementById('trf-uatEvidence').value}));
+    okJ2('Scenario form carries the QA and UAT evidence',scf.t==='Hub field mapping'&&/DEMO-4 passed QA/.test(scf.qa)&&/DEMO-4 passed UAT/.test(scf.uat),JSON.stringify(scf));
+    await pg.click('#tr-dlg-save');await wait(300);
+    okJ2('Scenario saved and not validated (no training-environment run yet)',await ev(pg,()=>{const sc=getProj().training.scenarios[0];return sc&&sc.jiraKey==='DEMO-4'&&!TE.scenarioValidated(sc);}));
+    await ev(pg,()=>showPGroup('deps'));await wait(400);
+    const d1=await ev(pg,()=>TE.suggestions(getProj(),trCtx(getProj())).dependencies.map(x=>x.label+'|'+(x.preset.requiredBy||'')+'|'+(x.preset.scenarioIds||[]).length));
+    okJ2('Item not past UAT and open environment defect are suggested as dependencies',d1.some(x=>/^Hub service update passes UAT\|2026-11-15/.test(x))&&d1.some(x=>/DEMO-52.*\|\|1$/.test(x)),JSON.stringify(d1));
+    await ev(pg,()=>{const k=TE.suggestions(getProj(),trCtx(getProj())).dependencies.find(x=>/DEMO-52/.test(x.label)).key;trAcceptSuggestion('dependencies',k);});await wait(300);
+    await pg.fill('#trf-owner','Env Team Lead');await pg.click('#tr-dlg-save');await wait(300);
+    const dep=await ev(pg,()=>{const d=getProj().training.dependencies.find(x=>x.jiraKey==='DEMO-52');return d&&{st:d.status,sc:d.scenarioIds.length,ref:d.evidence.ref};});
+    okJ2('Defect dependency saved as Blocked and linked to the scenario',dep&&dep.st==='blocked'&&dep.sc===1&&dep.ref==='DEMO-52',JSON.stringify(dep));
+    okJ2('The linked scenario now blocks validation of its deliverables',await ev(pg,()=>{const p=getProj();return TE.deliveryReadiness(p,trCtx(p)).state!=='ready';}));
+    // Re-import with the defect closed: a review prompt, never an automatic change.
+    const csv2=csv.replace('Training env defect,DEMO-52,Bug,Open','Training env defect,DEMO-52,Bug,Closed');
+    await ev(pg,async csv=>{const r=releases.find(x=>x.name==='FY2027R1030');openRelease(r.id);openJiraImport();await handleJiraFile(new File([csv],'sample2.csv'));applyJiraPlan();closeJiraImport();
+      const p=r.projects.find(x=>x.name==='Hub Service Updates');openProjectFromPortfolio(r.id,p.id,'deps');},csv2);await wait(800);
+    const rv=await ev(pg,()=>{const p=getProj();const s=TE.suggestions(p,trCtx(p)).dependencies.find(x=>x.review);return{label:s&&s.label,st:p.training.dependencies.find(x=>x.jiraKey==='DEMO-52').status,btn:!!document.querySelector('#tr-deps .tr-suggest button')};});
+    okJ2('Re-import with the defect closed prompts a review and changes nothing',rv.label==='DEMO-52 is closed in Jira'&&rv.st==='blocked'&&rv.btn,JSON.stringify(rv));
+    await pg.click('#tr-deps .tr-suggest button >> text="Review"');await wait(300);
+    okJ2('Review opens the dependency to update',await ev(pg,()=>!document.getElementById('tr-dlg').hidden&&/DEMO-52/.test(document.getElementById('trf-title').value)));
+    await ev(pg,()=>trCloseDialog());
+    okJ2('The prompt does not return after review',await ev(pg,()=>{const p=getProj();return !TE.suggestions(p,trCtx(p)).dependencies.some(x=>x.review);}));
+    okJ2('No JS errors',pg._errs.length===0,pg._errs.join(' | '));
+    await pg.context().close();
+  }
+
   // ── Sign-in drawer over the landing page ──
   pg=await t.page({wait:1500});
   await pg.focus('.ld-signin');await pg.click('.ld-signin');await wait(400);

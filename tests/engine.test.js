@@ -144,4 +144,27 @@ test('suggestions come from open CRAID dependencies and impact groups, once',()=
   TE.markSuggestion(p,s.workflows[0].key,'dismissed');
   s=TE.suggestions(p);assert.strictEqual(s.dependencies.length+s.workflows.length,0,'added and dismissed items are not suggested again');
 });
+test('Jira import suggests scenarios, UAT and environment dependencies, and review prompts only',()=>{
+  const p=project();
+  p.jira={items:[{key:'D-1',summary:'Register claim',status:'UAT Passed',qaPassed:true,uatPassed:true,defects:[]},
+    {key:'D-2',summary:'Notice review',status:'In UAT',qaPassed:true,uatPassed:false,defects:[{key:'D-9',open:true,summary:'Typo'}]},
+    {key:'D-3',summary:'Batch job',status:'In QA',qaPassed:false,uatPassed:false,defects:[]}],
+    trainDefectList:[{key:'D-50',summary:'Env role missing',status:'Open',open:true,links:['D-1']},{key:'D-51',summary:'Closed one',open:false,links:[]}]};
+  let s=TE.suggestions(p,{uatComplete:'2026-11-15'});
+  assert.deepStrictEqual(s.scenarios.map(x=>x.preset.jiraKey).sort(),['D-1','D-2'],'only items that passed QA become scenarios');
+  assert.ok(/D-9/.test(s.scenarios.find(x=>x.preset.jiraKey==='D-2').preset.limitations),'open defects listed as limitations');
+  const uat=s.dependencies.filter(x=>x.preset.jiraKind==='uat');
+  assert.deepStrictEqual(uat.map(x=>x.preset.jiraKey).sort(),['D-2','D-3'],'items not past UAT become UAT dependencies');
+  assert.strictEqual(uat.find(x=>x.preset.jiraKey==='D-2').preset.status,'partial');assert.strictEqual(uat[0].preset.requiredBy,'2026-11-15');
+  assert.ok(!uat.find(x=>x.preset.jiraKey==='D-3').preset.permits.scenarioDev,'not past QA: provisional work only');
+  assert.deepStrictEqual(s.dependencies.filter(x=>x.preset.jiraKind==='defect').map(x=>x.preset.jiraKey),['D-50'],'only open training-environment defects');
+  assert.strictEqual(p.training.dependencies.length,1,'suggesting creates nothing');
+  // Accept the D-2 UAT dependency, then a later import shows it passed UAT.
+  p.training.dependencies.push(TE.newDependency(uat.find(x=>x.preset.jiraKey==='D-2').preset));
+  p.jira.items[1].uatPassed=true;
+  s=TE.suggestions(p,{});
+  const rev=s.dependencies.find(x=>x.review);
+  assert.ok(rev&&/D-2 now shows UAT passed/.test(rev.label),'a review prompt, not an automatic change');
+  assert.strictEqual(p.training.dependencies.find(d=>d.jiraKey==='D-2').status,'partial','record unchanged');
+});
 console.log('\n'+(n-fail)+'/'+n+' passed');process.exit(fail?1:0);

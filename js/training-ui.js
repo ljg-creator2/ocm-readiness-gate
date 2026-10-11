@@ -7,7 +7,7 @@
 // Loaded after js/adoptiq.js.
 // ════════════════════════════════════════════════════════
 const TR_WORKSTREAMS=['Environment support','Functional','App Dev','QA','UAT','OCM Implementation','OCM Training','Project Manager','SMEs','Release management'];
-function trCtx(p){return{WS,GL,PL_INTERVALS,golive:p?projGoLive(p):'',by:(window._cc&&_cc.userName)||'',today:trToday()};}
+function trCtx(p){let uat='';try{uat=p?projTTDates(p).uatComplete:'';}catch(e){}return{WS,GL,PL_INTERVALS,golive:p?projGoLive(p):'',uatComplete:uat||'',by:(window._cc&&_cc.userName)||'',today:trToday()};}
 function trToday(){return TE.today();}
 function trProj(){const p=getProj();if(p)TE.migrate(p,trCtx(p));return p;}
 function trCanEdit(){return !isReadOnly;}
@@ -139,19 +139,25 @@ function trMarkReviewed(){const p=trProj();if(!p||!trCanEdit())return;p.training
 function trOwnerFor(p,ws){const r=RES_ROLES.find(x=>x.label.toLowerCase()===String(ws||'').trim().toLowerCase());return r?getEffectiveRes(p,r.key,'name'):'';}
 function trWorkstreamFor(p,owner){if(!owner)return'';const r=RES_ROLES.find(x=>(p.resources&&Array.isArray(p.resources[x.key])?p.resources[x.key]:[]).some(m=>m&&m.name&&m.name.trim().toLowerCase()===owner.trim().toLowerCase()));return r?r.label:'';}
 function trSuggestBox(p,kind){
-  const list=TE.suggestions(p)[kind];if(!list.length)return'';
-  const what=kind==='dependencies'?'dependenc'+(list.length===1?'y':'ies'):'changed workflow'+(list.length===1?'':'s');
+  const list=TE.suggestions(p,trCtx(p))[kind];if(!list.length)return'';
+  const reviews=list.filter(x=>x.review),adds=list.filter(x=>!x.review);
+  const noun={dependencies:['dependency','dependencies'],workflows:['changed workflow','changed workflows'],scenarios:['scenario','scenarios']}[kind];
   const src=[...new Set(list.map(x=>x.source))].join(' and ');
-  return'<section class="tr-suggest" aria-labelledby="trs-'+kind+'"><div class="tr-suggest-hd"><h3 id="trs-'+kind+'">'+list.length+' suggested '+what+' from your '+esc(src)+'</h3>'
-    +'<p class="tr-help">Drafted from what is already entered. Nothing is added until you review and save it.</p></div><ul>'
-    +list.map(x=>'<li><span class="tr-suggest-t"><strong>'+esc(x.label)+'</strong><span class="tr-sub">'+esc(x.source)+(x.note?' · '+esc(x.note):'')+'</span></span>'
-      +(trCanEdit()?'<span class="tr-suggest-a">'+trBtn('Review and add','trAcceptSuggestion('+trQ(kind)+','+trQ(x.key)+')','btn-primary btn-sm')+trBtn('Dismiss','trDismissSuggestion('+trQ(x.key)+')','btn-text')+'</span>':'')+'</li>').join('')
-    +'</ul>'+(trCanEdit()?'':'<p class="tr-help">View-only: someone with edit access can add these.</p>')+'</section>';
+  const item=x=>'<li><span class="tr-suggest-t"><strong>'+esc(x.label)+'</strong><span class="tr-sub">'+esc(x.source)+(x.note?' · '+esc(x.note):'')+'</span></span>'
+    +(trCanEdit()?'<span class="tr-suggest-a">'+(x.review?trBtn('Review','trReviewSuggestion('+trQ(x.key)+','+trQ(x.review)+')','btn-primary btn-sm'):trBtn('Review and add','trAcceptSuggestion('+trQ(kind)+','+trQ(x.key)+')','btn-primary btn-sm'))+trBtn('Dismiss','trDismissSuggestion('+trQ(x.key)+')','btn-text')+'</span>':'')+'</li>';
+  const ul=arr=>{if(arr.length<=6)return'<ul>'+arr.map(item).join('')+'</ul>';return'<ul>'+arr.slice(0,6).map(item).join('')+'</ul><details class="tr-more"><summary>Show '+(arr.length-6)+' more</summary><ul>'+arr.slice(6).map(item).join('')+'</ul></details>';};
+  const title=(adds.length?adds.length+' suggested '+noun[adds.length===1?0:1]:'')+(adds.length&&reviews.length?' and ':'')+(reviews.length?reviews.length+' update'+(reviews.length===1?'':'s')+' to review':'')+' from your '+src;
+  return'<section class="tr-suggest" aria-labelledby="trs-'+kind+'"><div class="tr-suggest-hd"><h3 id="trs-'+kind+'">'+esc(title)+'</h3>'
+    +'<p class="tr-help">Drafted from what is already entered. Nothing is added or changed until you review and save it.</p></div>'
+    +(reviews.length?ul(reviews):'')+(adds.length?ul(adds):'')
+    +(trCanEdit()?'':'<p class="tr-help">View-only: someone with edit access can add these.</p>')+'</section>';
 }
+function trReviewSuggestion(key,depId){const p=trProj();if(!p||!trCanEdit())return;TE.markSuggestion(p,key,'reviewed');touch('proj');schedSave();trEditDep(depId);}
 function trAcceptSuggestion(kind,key){
   const p=trProj();if(!p||!trCanEdit())return;const x=TE.suggestions(p)[kind].find(y=>y.key===key);if(!x)return;
   const pre=JSON.parse(JSON.stringify(x.preset));
-  if(kind==='dependencies'){if(!pre.workstream)pre.workstream=trWorkstreamFor(p,pre.owner);trEditDep(null,pre);}
+  if(kind==='dependencies'){if(!pre.workstream)pre.workstream=trWorkstreamFor(p,pre.owner);if(!pre.owner&&pre.workstream)pre.owner=trOwnerFor(p,pre.workstream);trEditDep(null,pre);}
+  else if(kind==='scenarios')trEditScenario(null,pre);
   else trEditWorkflow(null,pre);
 }
 function trDismissSuggestion(key){const p=trProj();if(!p||!trCanEdit())return;TE.markSuggestion(p,key,'dismissed');TE.log(p,{type:'suggestion',text:'Suggestion dismissed: '+key},trCtx(p));trSaved('Suggestion dismissed.');}
@@ -176,7 +182,7 @@ function trRenderDeps(){
     +(trCanEdit()?trBtn('<i class="ph ph-plus"></i> Add dependency','trEditDep()','btn-primary btn-sm'):'')+'</div>'
     +(list.length?'<div class="dt-wrap"><table class="dt tr-table"><thead><tr><th scope="col">Required input</th><th scope="col">Owner</th><th scope="col">Needed by</th><th scope="col">Status</th><th scope="col">Consequence for Training</th><th scope="col">Can continue</th><th scope="col">Next action</th></tr></thead><tbody>'
       +list.map(d=>{const a=TE.depAffects(p,d);const late=d.requiredBy&&!TE.isResolved(d)&&trToday()>d.requiredBy;
-        return'<tr><td><button type="button" class="tr-rowlink" onclick="trEditDep('+trQ(d.id)+')">'+(d.critical?'<span class="tr-crit">Critical</span> ':'')+esc(d.title||'Untitled')+'</button><div class="tr-sub">'+a.scenarioIds.length+' scenario'+(a.scenarioIds.length===1?'':'s')+' · '+a.deliverableIds.length+' deliverable'+(a.deliverableIds.length===1?'':'s')+(a.audienceIds.length?' · '+esc(trAud(p,a.audienceIds).join(', ')):'')+(d.source==='legacy-heatmap'?' · from the earlier dependency map':d.source==='craid'?' · from the CRAID log':'')+'</div></td>'
+        return'<tr><td><button type="button" class="tr-rowlink" onclick="trEditDep('+trQ(d.id)+')">'+(d.critical?'<span class="tr-crit">Critical</span> ':'')+esc(d.title||'Untitled')+'</button><div class="tr-sub">'+a.scenarioIds.length+' scenario'+(a.scenarioIds.length===1?'':'s')+' · '+a.deliverableIds.length+' deliverable'+(a.deliverableIds.length===1?'':'s')+(a.audienceIds.length?' · '+esc(trAud(p,a.audienceIds).join(', ')):'')+(d.source==='legacy-heatmap'?' · from the earlier dependency map':d.source==='craid'?' · from the CRAID log':d.jiraKey?' · Jira '+d.jiraKey:'')+'</div></td>'
         +'<td>'+esc(d.workstream||'—')+'<div class="tr-sub">'+esc(d.owner||'No accountable person')+'</div></td>'
         +'<td class="mono'+(late?' tr-late':'')+'">'+trD(d.requiredBy)+(late?'<div class="tr-sub">Past due</div>':'')+'</td>'
         +'<td>'+trChip(d.status,TE.depStatusLabel(d.status))+(d.evidence&&d.evidence.ref?'<div class="tr-sub">Evidence: '+esc(d.evidence.ref)+(d.evidence.version?' · '+esc(d.evidence.version):'')+'</div>':TE.isResolved(d)?'<div class="tr-sub tr-late">No evidence reference</div>':'')+'</td>'
@@ -232,7 +238,7 @@ function trEditDep(id,preset){
       const r=TE.updateDependency(p,n.id,{status:v.status,exception:v.exception,next:v.next},trCtx(p));
       if(r&&r.error){t.dependencies.pop();return r.error;}
       if(n.craidId)TE.markSuggestion(p,'craid:'+n.craidId,'added');
-      TE.log(p,{type:'dependency',refId:n.id,text:'Dependency recorded: '+n.title+' ('+TE.depStatusLabel(n.status)+')'+(n.craidId?' from the CRAID log':'')},trCtx(p));trSaved('Dependency added.');return;}
+      TE.log(p,{type:'dependency',refId:n.id,text:'Dependency recorded: '+n.title+' ('+TE.depStatusLabel(n.status)+')'+(n.craidId?' from the CRAID log':n.jiraKey?' from Jira '+n.jiraKey:'')},trCtx(p));trSaved('Dependency added.');return;}
     const patch={};Object.keys(v).forEach(k=>{patch[k]=v[k];});
     const r=TE.updateDependency(p,id,patch,trCtx(p));if(r&&r.error)return r.error;
     const nf=r?(r.flagged.scenarios.length+r.flagged.deliverables.length):0;
@@ -288,7 +294,7 @@ function trRenderLearnDev(){
       +(trCanEdit()?'<div>'+trBtn('Record a run','trScenarioRun('+trQ(s.id)+')','btn-text')+'</div>':'')+'</td>'
       +'<td>'+esc(used.map(d=>d.title).join(', ')||'—')+'</td></tr>';}).join('')+'</tbody></table></div>'
     :trEmpty('No scenarios yet.','Record the training-critical scenarios, their QA or UAT evidence and whether they run in the learning environment.');
-  el.innerHTML='<p class="tr-help tr-lead">Author content in your existing tools. AdoptIQ keeps the links, reviews and the reasons materials need to change.</p>'+trSuggestBox(p,'workflows')
+  el.innerHTML='<p class="tr-help tr-lead">Author content in your existing tools. AdoptIQ keeps the links, reviews and the reasons materials need to change.</p>'+trSuggestBox(p,'workflows')+trSuggestBox(p,'scenarios')
     +sect('Changed workflows','What changes for people, and who it affects',trBtn('<i class="ph ph-plus"></i> Add workflow','trEditWorkflow()'),wf)
     +sect('Learning objectives','Audience, changed task, expected performance, evaluation',trBtn('<i class="ph ph-plus"></i> Add objective','trEditObjective()'),ob)
     +sect('Training scenarios','Evidence that each scenario runs where learners will practise',trBtn('<i class="ph ph-plus"></i> Add scenario','trEditScenario()'),sc)
@@ -332,8 +338,8 @@ function trEditObjective(id){
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;
     if(id)Object.assign(rec,v);else t.objectives.push(Object.assign(rec,v));trSaved('Objective saved.');});
 }
-function trEditScenario(id){
-  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.scenarios,id):TE.newScenario();if(!rec)return;
+function trEditScenario(id,preset){
+  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.scenarios,id):TE.newScenario(preset||{});if(!rec)return;
   const fields=[{k:'title',label:'Scenario',req:true},{k:'critical',label:'Critical: delivery cannot proceed until this is validated',type:'check'},
     {k:'workflowId',label:'Workflow',type:'select',half:true,opts:[['','Not linked']].concat(trOpts(t.workflows))},
     {k:'objectiveIds',label:'Objectives',type:'multi',opts:trOpts(t.objectives,o=>o.task),none:'No objectives yet.'},
@@ -344,7 +350,7 @@ function trEditScenario(id){
   const env=rec.env||{};const envLine=id?'<p><strong>Training environment:</strong> '+(rec.needsRevalidation?trChip('revision_required','Needs revalidation')+' '+esc(rec.needsRevalidation.reason):trChip(env.status==='pass'?'validated':env.status==='fail'?'blocked':'not_assessed',TE.SCEN_ENV[env.status]||'Not run'))+(env.environment?' · '+esc(env.environment)+' · '+trD(env.date):'')+'</p>':'';
   trDialog(id?'Scenario':'New scenario',envLine+'<div class="tr-form">'+trForm(fields,rec)+'</div>'+(id&&trCanEdit()?'<p>'+trBtn('Record a run in the training environment','trScenarioRun('+trQ(id)+')','btn-outline btn-sm')+' <button type="button" class="btn-text tr-danger" onclick="trDeleteRec(\'scenarios\','+trQ(id)+')">Delete</button></p>':''),()=>{
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;
-    if(id)Object.assign(rec,v);else{t.scenarios.push(Object.assign(rec,v));TE.log(p,{type:'scenario',refId:rec.id,text:'Scenario recorded: '+rec.title},trCtx(p));}trSaved('Scenario saved.');});
+    if(id)Object.assign(rec,v);else{t.scenarios.push(Object.assign(rec,v));TE.log(p,{type:'scenario',refId:rec.id,text:'Scenario recorded: '+rec.title+(rec.jiraKey?' (from Jira '+rec.jiraKey+')':'')},trCtx(p));}trSaved('Scenario saved.');});
 }
 function trScenarioRun(id){
   const p=trProj();if(!p)return;const s=TE.byId(p.training.scenarios,id);if(!s)return;

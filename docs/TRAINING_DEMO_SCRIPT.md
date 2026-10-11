@@ -35,6 +35,14 @@ Open it from **Initiatives → Benefits Modernization → Benefits Renewal Notic
    9. The materials were released.
    10. Observations and the diagnosis were recorded.
 
+## Suggestions from data already entered (preview or a signed-in workspace)
+- **Benefits Renewal Notices → Dependencies & Evidence** shows suggestions from its fictional Jira import:
+  - RN-101 hasn't passed UAT yet, so it is suggested as a UAT dependency.
+  - Open defect RN-150 in the training environment is suggested as an environment dependency.
+- **Learning Development** suggests RN-102 as a scenario, with its QA and UAT evidence already filled in.
+- **Q3 EHR Migration → Clinical Workflow** shows suggestions from its CRAID log and Impact Assessment.
+- Nothing is added until someone selects **Review and add** and saves. A later Jira import that shows progress raises a "review" prompt. It never changes a record by itself.
+
 ## Try it with editing on
 Sign in to a workspace, or use a copy of the demo with editing enabled. Then:
 1. Add a dependency.
