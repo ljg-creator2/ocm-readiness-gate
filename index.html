@@ -523,6 +523,12 @@
         </div>
       </div>
     </div>
+    <div id="size-sec" style="display:none;margin-bottom:24px">
+      <div class="panel">
+        <div class="panel-hd"><div><div class="pt">Portfolio by Size</div><div class="ps-text">Active projects by T-shirt size. Load points weight each project by size (XS 1 · S 2 · M 3 · L 5 · XL 8 · XXL 13); completed projects are excluded.</div></div></div>
+        <div class="pb" id="size-panel"></div>
+      </div>
+    </div>
     <!-- Portfolio Risk Dashboard — most actionable, shown first -->
     <div id="port-craid-sec" style="display:none">
       <details class="port-collapse">
@@ -734,6 +740,19 @@
         <div class="ib-label" title="The date this release enters production. All readiness timelines and ADKAR assessments are measured against this date.">Go-Live Date</div>
         <input class="ib-input" id="r-golive" type="date" aria-label="Release go-live date" onchange="updateRelDays();syncRel('golive',this.value)">
       </div>
+      <div class="ib-field" style="max-width:160px">
+        <div class="ib-label" title="Default Tech Transfer start for every project in this release. Projects can override it in Training Timeline.">Tech Transfer</div>
+        <input class="ib-input" id="r-techtransfer" type="date" aria-label="Release tech transfer start" onchange="syncRel('techTransfer',this.value)">
+      </div>
+      <div class="ib-field" style="max-width:160px">
+        <div class="ib-label" title="Default UAT complete date for every project in this release. Projects can override it in Training Timeline.">UAT Complete</div>
+        <input class="ib-input" id="r-uat" type="date" aria-label="Release UAT complete" onchange="syncRel('uatComplete',this.value)">
+      </div>
+      <div class="ib-field" style="max-width:150px">
+        <div class="ib-label">Jira</div>
+        <button class="btn-sm" style="margin-top:8px;white-space:nowrap" onclick="openJiraImport()"><i class="ph ph-upload-simple" style="margin-right:4px"></i>Import CSV</button>
+        <div class="r-jira-last" id="r-jira-last"></div>
+      </div>
       <div class="ib-stat">
         <div class="ib-stat-n" id="rel-days-num">—</div>
         <div class="ib-stat-l">Days to Go-Live</div>
@@ -885,6 +904,7 @@
     <div class="sub-nav-i">
       <nav class="nav-tabs" id="proj-nav-tabs" aria-label="Project navigation">
         <button class="nav-btn active" onclick="showProjTab('overview',this)">Overview</button>
+        <button class="nav-btn" onclick="showProjTab('trainplan',this)">Training Timeline</button>
         <button class="nav-btn" onclick="showProjTab('impact',this)">Impact</button>
         <button class="nav-btn" onclick="showProjTab('gaps',this)">Gaps</button>
         <button class="nav-btn" id="nav-adkar-btn" onclick="showProjTab('adkar',this)">ADKAR</button>
@@ -898,7 +918,9 @@
         <button class="nav-btn" onclick="showProjTab('resources',this)">Resources</button>
         <button class="nav-btn" onclick="showProjTab('pulse',this)">Pulse</button>
         <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)" style="display:none">Post-Launch</button>
+        <button class="nav-btn" onclick="showProjTab('sustain',this)">Sustainment</button>
       </nav>
+      <button class="btn-outline btn-pilot" id="pilot-toggle" onclick="togglePilotView()">All tabs</button>
       <button class="btn-gold" onclick="exportProjectPDF()">Export Report</button>
       <div class="dropdown-gen">
         <button class="btn-gold btn-gen" onclick="toggleGenMenu()">Generate ▾</button>
@@ -937,7 +959,7 @@
       </div>
       <div class="ib-field" id="ib-train-start" style="max-width:150px">
         <div class="ib-label">Training Start</div>
-        <input class="ib-input" id="p-train-start" type="date" aria-label="Project training start date" onchange="syncProj('trainingStartDate',this.value)">
+        <input class="ib-input" id="p-train-start" type="date" aria-label="Project training start date" onchange="syncProj('trainingStartAuto',false);syncProj('trainingStartDate',this.value)">
       </div>
       <div class="ib-field" style="max-width:150px">
         <div class="ib-label">Go-Live Date</div>
@@ -945,12 +967,18 @@
       </div>
       <div class="ib-field" style="max-width:130px">
         <div class="ib-label">Est. End Users</div>
-        <input class="ib-input" id="p-users" type="number" min="0" aria-label="Estimated end users" placeholder="0" oninput="syncProj('estimatedUsers',parseInt(this.value)||0)">
+        <input class="ib-input" id="p-users" type="number" min="0" aria-label="Estimated end users" placeholder="0" oninput="syncProj('estimatedUsersAuto',false);syncProj('estimatedUsers',parseInt(this.value)||0)">
       </div>
       <div class="ib-field" style="max-width:140px">
         <div class="ib-label">Status</div>
         <select class="ib-select" id="p-status" aria-label="Project status" onchange="syncProj('status',this.value)">
           <option>Not Started</option><option>In Progress</option><option>Complete</option><option>On Hold</option><option>Blocked</option>
+        </select>
+      </div>
+      <div class="ib-field" style="max-width:110px">
+        <div class="ib-label">Size</div>
+        <select class="ib-select" id="p-size" aria-label="Project T-shirt size" onchange="syncProj('size',this.value);renderPSustain();renderPTrainPlan()">
+          <option value="">Unsized</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option>
         </select>
       </div>
       <div class="ib-field" id="ib-move-proj" style="max-width:120px;display:none">
@@ -1182,6 +1210,15 @@
         </div>
       </div>
     </div>
+    <!-- TRAINING TIMELINE -->
+    <div class="tab-sec" id="psec-trainplan">
+      <div class="tab-eye">Training Delivery</div>
+      <div class="tab-head">Training Timeline by Size</div>
+      <div class="panel">
+        <div class="panel-hd"><div><div class="pt">UAT Complete to Last Cohort</div><div class="ps-text">Build, review, edits, Train the Trainer, trainer readiness, and delivery in business days, calculated from the project's size, course length, and audiences in scope. Planning baselines, not commitments.</div></div></div>
+        <div class="pb" id="ptab-trainplan"></div>
+      </div>
+    </div>
     <!-- PULSE -->
     <div class="tab-sec" id="psec-pulse">
       <div class="tab-eye">Stakeholder Feedback</div>
@@ -1201,6 +1238,17 @@
         <div class="panel-hd"><div><div class="pt">Post-Go-Live Monitoring</div><div class="ps-text">Track adoption metrics at 30, 60, and 90-day intervals per stakeholder group. Compare predicted readiness against actual adoption outcomes.</div></div></div>
         <div class="pb" id="ptab-postlaunch">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Post-launch tracking activates after the project's go-live date.</p></div>
+        </div>
+      </div>
+    </div>
+    <!-- SUSTAINMENT -->
+    <div class="tab-sec" id="psec-sustain">
+      <div class="tab-eye">Adoption Sustainment</div>
+      <div class="tab-head">Adoption Gap Diagnosis</div>
+      <div class="panel">
+        <div class="panel-hd"><div><div class="pt">Where Adoption Is Slipping, and Why</div><div class="ps-text">Each group is diagnosed from post-launch observations, pulse surveys, and reinforcement planning as a Knowledge, Ability, or Reinforcement gap, with a targeted intervention instead of blanket retraining.</div></div></div>
+        <div class="pb" id="ptab-sustain">
+          <div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups and log adoption observations to diagnose gaps.</p></div>
         </div>
       </div>
     </div>

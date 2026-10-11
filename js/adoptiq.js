@@ -796,7 +796,7 @@ function newRelease(name,agencies,golive,phase){
 function newProject(name,agencies,users){
   const res={};RES_ROLES.forEach(r=>{res[r.key]=[];});
   return{id:uid(),name:name||'Untitled Project',agencies:agencies||[],estimatedUsers:users||0,
-    trainingRequired:true,trainingStartDate:'',status:'Not Started',golive:'',
+    trainingRequired:true,trainingStartDate:'',status:'Not Started',golive:'',size:'',
     gateState:{},depHM:{},depNotes:{},stakeholders:[],
     adkarScores:{A1:3,D:3,K:3,Ab:3,R:3},adkarNotes:{A1:'',D:'',K:'',Ab:'',R:''},
     resources:res,
@@ -805,6 +805,7 @@ function newProject(name,agencies,users){
     pulseConfig:{},
     pulseResults:{},
     postLaunch:{},
+    sustainment:{},
     lifecycleSignals:{
       requirements:{onSchedule:null,daysVariance:0,reviewCycles:0,disputes:false,disputeNotes:''},
       design:{reviewsDelayed:null,delayDays:0,scopeChangeRequests:0,workaroundRequests:0,workaroundNotes:''},
@@ -1034,6 +1035,31 @@ function signalStrengthBadge(strength){
 // ════════════════════════════════════════════════════════
 // DATA SOURCE CLASSIFICATION
 // ════════════════════════════════════════════════════════
+
+// ── Training results (Kirkpatrick L1/L2 actuals) per stakeholder group ──
+// When a group has results, its training measure is the share of the group that
+// completed AND passed (completion% × pass%). Without results it falls back to
+// how complete the Kirkpatrick plan is, and is labeled as a plan, not a measure.
+function trNum(v){return v===undefined||v===null||v===''||isNaN(+v)?null:+v;}
+function shTrainResults(sh){const t=(sh&&sh.training)||{};return{completion:trNum(t.completion),pass:trNum(t.pass),confidence:trNum(t.confidence)};}
+function shHasTrainResults(sh){const t=shTrainResults(sh);return t.completion!==null||t.pass!==null;}
+function kirkPlanPct(sh){if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);}
+function shTrainPct(sh){
+  const t=shTrainResults(sh);
+  if(t.completion!==null&&t.pass!==null)return Math.round(t.completion*t.pass/100);
+  if(t.pass!==null)return Math.round(t.pass);
+  if(t.completion!==null)return Math.round(t.completion);
+  return kirkPlanPct(sh);
+}
+function shsTrainPct(shs){return shs&&shs.length?Math.round(shs.reduce((a,sh)=>a+shTrainPct(sh),0)/shs.length):0;}
+function updateTrainResult(id,field,val){
+  const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;
+  if(!sh.training)sh.training={};
+  const n=trNum(val);
+  sh.training[field]=n===null?undefined:Math.max(0,Math.min(field==='confidence'?5:100,n));
+  touch('proj');schedSave();
+  if(typeof refreshShQuickChip==='function')refreshShQuickChip(id);
+}
 function getDataSourceType(component,p){
   if(!p)return'Estimated';
   const shs=p.stakeholders||[];
@@ -1052,6 +1078,10 @@ function getDataSourceType(component,p){
       return'Estimated';
     }
     case'training':{
+      const withRes=shs.filter(shHasTrainResults).length;
+      if(shs.length&&withRes===shs.length)return'Measured';
+      if(withRes)return'Observed';
+      return'Estimated';
       const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
       const avg=kirkPcts.length?kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length:0;
       return avg>=75?'Measured':avg>=40?'Observed':'Estimated';
@@ -1232,7 +1262,7 @@ function calcCompositeScore(p){
     return a+sentimentScore(sh,ps);
   },0)/shs.length):50;
   const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
   const lhData=calcLifecycleHealth(p);
   const lcPct=lhData.score;
   const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
@@ -1264,8 +1294,16 @@ function calcValueRealization(vc){
   return Math.round(score/criteria.length*100);
 }
 function isPostGoLive(p){
-  if(!p?.golive)return false;
-  return new Date(p.golive)<=new Date();
+  const gl=projGoLive(p);if(!gl)return false;
+  return new Date(gl)<=new Date();
+}
+// Projects inherit release dates unless they set their own.
+function relOfProj(p){return releases.find(r=>(r.projects||[]).includes(p))||getRel();}
+function projGoLive(p){if(!p)return'';const r=relOfProj(p);return p.golive||(r&&r.golive)||'';}
+function projTTDates(p){
+  const tt=(p&&p.trainingTimeline)||{};const r=relOfProj(p)||{};
+  return{techTransfer:tt.techTransfer||r.techTransfer||'',uatComplete:tt.uatComplete||r.uatComplete||'',
+    ttFromRel:!tt.techTransfer&&!!r.techTransfer,uatFromRel:!tt.uatComplete&&!!r.uatComplete};
 }
 
 function daysTo(d){if(!d)return null;const t=new Date();t.setHours(0,0,0,0);const g=new Date(d);g.setHours(0,0,0,0);return Math.ceil((g-t)/86400000);}
@@ -1292,6 +1330,9 @@ function openRelease(id){
   document.getElementById('bc-rel').textContent=r.name||'Release';
   document.getElementById('r-name').value=r.name||'';
   document.getElementById('r-golive').value=r.golive||'';
+  const rtt=document.getElementById('r-techtransfer');if(rtt)rtt.value=r.techTransfer||'';
+  renderRelJiraLast(r);
+  const ruat=document.getElementById('r-uat');if(ruat)ruat.value=r.uatComplete||'';
   document.getElementById('r-phase').value=r.phase||'';
   renderRelAgencyChips();updateRelDays();
   showView('v-release');
@@ -1316,10 +1357,12 @@ function openProject(pid){
   document.getElementById('bc-rel-p').textContent=r.name||'Release';
   document.getElementById('bc-proj').textContent=p.name||'Project';
   document.getElementById('p-name').value=p.name||'';
-  document.getElementById('p-golive').value=p.golive||'';
+  const glEl=document.getElementById('p-golive');glEl.value=projGoLive(p);
+  glEl.title=p.golive?'Project go-live':(projGoLive(p)?'Inherited from the release. Set a date here to override.':'');
   const tsEl=document.getElementById('p-train-start');if(tsEl)tsEl.value=p.trainingStartDate||'';
   document.getElementById('p-users').value=p.estimatedUsers||0;
   document.getElementById('p-status').value=p.status||'Not Started';
+  document.getElementById('p-size').value=p.size||'';
   renderProjAgencyChips();
   updateTRButtons();
   const mvBtn=document.getElementById('ib-move-proj');
@@ -1349,6 +1392,8 @@ function showProjTab(id,btn){
   if(id==='impact')renderPImpact();
   if(id==='gaps')renderPGaps();
   if(id==='postlaunch')renderPPostLaunch();
+  if(id==='sustain')renderPSustain();
+  if(id==='trainplan')renderPTrainPlan();
   if(id==='pulse')renderPPulse();
   if(id==='lifecycle')renderPLifecycle();
   if(id==='craid')renderPCraid();
@@ -1537,7 +1582,7 @@ function renderPortfolio(){
       <button class="btn-gold" onclick="openAddRelease()" style="padding:14px 32px;font-size:13px">Add Your First Release</button>
       <div class="hero-cred">Providence Consulting Firm &middot; CPTM &middot; ATD Master Trainer &middot; ADKAR-Aligned</div>
     </div>`;
-    document.getElementById('tl-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
+    document.getElementById('tl-sec').style.display='none';document.getElementById('size-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
   }
   wrap.innerHTML=`<div class="card-grid stagger-children">${releases.map(r=>{
     const rl=relRollup(r);const d=daysTo(r.golive);const modStr=fmtMod(r.modified);
@@ -1569,6 +1614,7 @@ function renderPortfolio(){
   }).join('')}</div>`;
   document.getElementById('tl-sec').style.display=releases.length>=2?'block':'none';
   document.getElementById('people-cap-sec').style.display=releases.length>=1?'block':'none';
+  document.getElementById('size-sec').style.display=releases.length>=1?'block':'none';renderSizePortfolio();
   requestAnimationFrame(()=>{
     renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
     if(isReadOnly)applyReadOnlyRestrictions();
@@ -1722,7 +1768,7 @@ async function askAdoptIQ(){
 
   try{
     const portfolioData=collectPortfolioData();
-    const response=await fetch(ASK_AIQ_URL,{
+    const response=await aiFetch(ASK_AIQ_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({question,portfolioData})
@@ -2008,7 +2054,7 @@ function renderRelProjCards(){
     const ocmGapHtml=(noTrain||noImpl)?`<div class="pc-ocm-gaps">${noTrain?'<span class="pc-ocm-gap">No OCM Training</span>':''}${noImpl?'<span class="pc-ocm-gap">No OCM Impl</span>':''}</div>`:'';
     return`<div class="pc" tabindex="0" draggable="true" data-proj-id="${p.id}" onclick="openProject(${p.id})" onkeydown="if(event.key==='Enter')openProject(${p.id})" role="button" aria-label="Open project ${esc(p.name)}">
       <div class="pc-hd">
-        <div style="display:flex;align-items:center;justify-content:space-between"><div class="pc-name">${esc(p.name)}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><div class="pc-name">${esc(p.name)}${p.size?` <span class="size-badge" title="T-shirt size">${esc(p.size)}</span>`:''}</div><span class="drag-handle" title="Drag to reorder">&#x2630;</span></div>
         <div class="chip-row">${(p.agencies||[]).map(a=>`<span class="chip chip-white">${esc(a)}</span>`).join('')}</div>
         <div class="pc-tr-badge ${p.trainingRequired?'pc-tr-yes':'pc-tr-no'}">${p.trainingRequired?'Training Required':'No Training'}</div>${ocmGapHtml}
       </div>
@@ -2096,10 +2142,11 @@ function renderProjAll(){
   renderPGates();renderPDepHM();renderPAdkar();renderPSH();renderPKPIs();renderPOverview();renderPResources();
   // Show Post-Launch tab if go-live is in the past
   const p=getProj();const plBtn=document.getElementById('nav-postlaunch');const plSec=document.getElementById('psec-postlaunch');
-  if(p&&p.golive&&new Date(p.golive)<=new Date()){if(plBtn)plBtn.style.display='';if(plSec)plSec.style.display='';}
+  if(p&&projGoLive(p)&&new Date(projGoLive(p))<=new Date()){if(plBtn)plBtn.style.display='';if(plSec)plSec.style.display='';}
   else{if(plBtn)plBtn.style.display='none';if(plSec)plSec.style.display='none';}
+  if(p&&!isReadOnly&&applyTTDerived(p))renderPKPIs();
   if(isReadOnly)applyReadOnlyRestrictions();
-  checkNavOverflow();
+  applyPilotView();
 }
 function checkNavOverflow(){
   const nav=document.getElementById('proj-nav-tabs');
@@ -2549,6 +2596,15 @@ function renderGuidedSummary(){
   updatePAdkarSummary();
 }
 
+function newStakeholder(name){
+  return{id:uid(),name,
+    agency:'',stakeholderType:'end_user_group',roleCategory:'',
+    factors:{resistance:3,env:3,window:3,complexity:3,saturation:3,leadership:3},factorsRated:[],objectives:[],
+    kirk:{L1:{method:'',timing:''},L2:{method:'',assessment:''},L3:{interval:'30',observable:''},L4:{outcome:'',metric:''}},
+    rein:{owner:'',activities:'',intervals:['30 Days'],escalation:''},
+    trust:3,trustHistory:[],preconceptions:[],touchpoints:[],
+    anxietyIndicators:{whatDoesThisMeanFreq:0,extraReviewCycles:0,escalations:0,attendanceDrop:false}};
+}
 function addPSH(){
   const p=getProj();if(!p)return;
   const inp=document.getElementById('p-sh-inp');const name=inp.value.trim();if(!name)return;
@@ -2565,6 +2621,8 @@ function removePSH(id){const p=getProj();if(!p)return;const sh=p.stakeholders.fi
 function migrateStakeholders(p){
   if(!p||!p.stakeholders)return;
   p.stakeholders.forEach(sh=>{
+    // Groups scored before rating was tracked: any non-default factor means someone rated them.
+    if(sh.factorsRated===undefined){const f=sh.factors||{};sh.factorsRated=Object.values(f).some(v=>+v!==3)?Object.keys(f):[];}
     if(sh.agency===undefined)sh.agency='';
     if(sh.stakeholderType===undefined)sh.stakeholderType='end_user_group';
     if(sh.roleCategory===undefined)sh.roleCategory='';
@@ -2602,6 +2660,7 @@ function switchSHTab(shId,idx){
 }
 function renderPSH(){
   const p=getProj();if(!p)return;migrateStakeholders(p);const wrap=document.getElementById('p-sh-wrap');
+  if(p.stakeholders.length&&shQuickOn()){applyDerivedFactors(p);wrap.innerHTML=renderShQuick(p);renderPAHM();if(isReadOnly)applyReadOnlyRestrictions();return;}
   if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
   const adkarR=p.adkarScores['R'];
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
@@ -2659,6 +2718,7 @@ function renderPSH(){
           <div class="kirk-field"><label>Assessment Method</label><input class="kirk-inp" placeholder="e.g. Scenario-based skills check" value="${esc(sh.kirk.L2.method)}" oninput="updatePKirk(${sh.id},'L2','method',this.value)"></div>
           <div class="kirk-field"><label>Proficiency Standard</label><input class="kirk-inp" placeholder="e.g. 80% accuracy prior to go-live access" value="${esc(sh.kirk.L2.assessment)}" oninput="updatePKirk(${sh.id},'L2','assessment',this.value)"></div></div>
         <div class="kirk-card"><div class="kirk-hd"><div class="kirk-badge">L3</div><div><div class="kirk-name">Behavior</div><div class="kirk-desc-txt">Observable behavior change post go-live</div></div></div>
+          <div class="kirk-field"><label>Training results: completed % · passed L2 % · confidence (1–5)</label><div style="display:flex;gap:6px"><input class="kirk-inp" type="number" min="0" max="100" placeholder="Completed %" value="${shTrainResults(sh).completion??''}" oninput="updateTrainResult(${sh.id},'completion',this.value)"><input class="kirk-inp" type="number" min="0" max="100" placeholder="Passed %" value="${shTrainResults(sh).pass??''}" oninput="updateTrainResult(${sh.id},'pass',this.value)"><input class="kirk-inp" type="number" min="1" max="5" step="0.1" placeholder="Confidence" value="${shTrainResults(sh).confidence??''}" oninput="updateTrainResult(${sh.id},'confidence',this.value)"></div></div>
           <div class="kirk-field"><label>Observable Behavior Indicator</label><input class="kirk-inp" placeholder="e.g. Accurate case entry without assistance" value="${esc(sh.kirk.L3.observable)}" oninput="updatePKirk(${sh.id},'L3','observable',this.value)"></div>
           <div class="kirk-field"><label>Measurement Interval</label>
             <select class="kirk-inp" style="width:auto" onchange="updatePKirk(${sh.id},'L3','interval',this.value)">
@@ -2690,6 +2750,7 @@ function renderPSH(){
     </div>
     </div>`;
   }).join('');
+  wrap.insertAdjacentHTML('afterbegin',shModeBar(false));
   renderPAHM();
 }
 
@@ -2865,7 +2926,7 @@ function removeTouchpoint(shId,idx){
   if(!confirm('Remove this touchpoint?'))return;
   sh.touchpoints.splice(idx,1);renderPSH();touch('proj');schedSave();
 }
-function updatePFac(id,key,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.factors[key]=parseInt(val);const ve=document.getElementById(`pfv-${id}-${key}`);const de=document.getElementById(`pfd-${id}-${key}`);if(ve)ve.textContent=val;if(de)de.textContent=FD[parseInt(val)];renderPSH();renderPKPIs();touch('proj');schedSave();}
+function updatePFac(id,key,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.factors[key]=parseInt(val);markFactorRated(sh,key);const ve=document.getElementById(`pfv-${id}-${key}`);const de=document.getElementById(`pfd-${id}-${key}`);if(ve)ve.textContent=val;if(de)de.textContent=FD[parseInt(val)];renderPSH();renderPKPIs();touch('proj');schedSave();}
 function addPLO(id){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives.push('');renderPSH();const b=document.getElementById('plo-'+id);if(b){b.classList.add('open');const a=document.getElementById('parr-lo-'+id);if(a)a.classList.add('open');}touch('proj');schedSave();}
 function removePLO(id,idx){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;if(!confirm('Remove this learning objective?'))return;sh.objectives.splice(idx,1);renderPSH();touch('proj');schedSave();}
 function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.objectives[idx]=val;
@@ -2874,6 +2935,140 @@ function updatePLO(id,idx,val){const p=getProj();if(!p)return;const sh=p.stakeho
   const badge=document.querySelector(`#plo-${id}`)?.closest('.exp-sec')?.querySelector('.exp-badge');
   if(badge){badge.textContent=loc>0?loc+' Defined':'Not Started';badge.className='exp-badge '+(loc>0?'ready':'needed');}
   touch('proj');schedSave();}
+
+// ── Quick setup: only the fields the pilot uses (reinforcement owner, the
+// observable L3 behavior, and an escalation path for XL/XXL). The full
+// assessment stays available and uses the same data. ──
+
+// ── Simplified adoption risk: 3 quick questions (+1 optional), 2 factors derived
+// from data, and "Not rated" instead of a silent default of 3. Answers write to the
+// same 1–5 factors the full assessment uses (5 = low risk). ──
+const QUICK_FACTORS=[
+  {key:'complexity',q:'How big is the change to this group’s daily work?',opts:[['Low',5],['Medium',3],['High',1]]},
+  {key:'saturation',q:'How much else is changing for them right now?',opts:[['Low',5],['Medium',3],['High',1]]},
+  {key:'leadership',q:'Will their supervisors actively reinforce it?',opts:[['Yes',5],['Partly',3],['No',1]]},
+  {key:'resistance',q:'Resistance signals seen? (workarounds, pushback, escalations)',opts:[['No',4],['Yes',2]],optional:true}
+];
+function markFactorRated(sh,key){if(!sh.factorsRated)sh.factorsRated=[];if(!sh.factorsRated.includes(key))sh.factorsRated.push(key);}
+// Training window from the timeline buffer; environment stability from logged training-environment defects.
+function derivedFactors(p){
+  const out={};
+  try{
+    const t=calcTrainingTimeline(p);
+    if(!t.error&&t.vsGolive!==null)out.window=t.vsGolive<0?1:t.vsGolive<10?3:5;
+  }catch(e){}
+  const ed=+(((p.lifecycleSignals||{}).training||{}).envDefects||0);
+  if(ed>0)out.env=ed>=4?1:3;
+  return out;
+}
+function applyDerivedFactors(p){
+  if(!p||!p.stakeholders)return false;
+  const d=derivedFactors(p);let changed=false;
+  p.stakeholders.forEach(sh=>{
+    if(!sh.factors)sh.factors={};
+    const prev=JSON.stringify(sh.factorsDerived||[]);
+    sh.factorsDerived=[];
+    Object.keys(d).forEach(k=>{
+      if((sh.factorsRated||[]).includes(k))return;// a person's rating wins
+      if(sh.factors[k]!==d[k]){sh.factors[k]=d[k];changed=true;}
+      sh.factorsDerived.push(k);
+    });
+    if(JSON.stringify(sh.factorsDerived)!==prev)changed=true;
+  });
+  return changed;
+}
+function shForecast(sh){
+  // Derived factors refine a forecast but never create one on their own.
+  if(!(sh.factorsRated||[]).some(k=>AF.some(a=>a.key===k)))return null;
+  const keys=[...new Set([...(sh.factorsRated||[]),...(sh.factorsDerived||[])])].filter(k=>AF.some(a=>a.key===k));
+  if(!keys.length)return null;
+  const score=Math.round(keys.reduce((a,k)=>a+(+sh.factors[k]||3),0)/keys.length/5*100);
+  return{score,n:keys.length,tier:adoptTier(score)};
+}
+function forecastLabel(sh){const f=shForecast(sh);return f?f.score+'% · '+f.tier.tier:'Not rated';}
+function quickRiskDone(sh){return QUICK_FACTORS.filter(q=>!q.optional).every(q=>(sh.factorsRated||[]).includes(q.key));}
+function setQuickFactor(shId,key,val){
+  const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===shId);if(!sh)return;
+  if(!sh.factors)sh.factors={};
+  sh.factors[key]=val;markFactorRated(sh,key);touch('proj');schedSave();
+  document.querySelectorAll('#shq-risk-'+shId+' [data-fk="'+key+'"]').forEach(b=>b.classList.toggle('on',+b.dataset.fv===val));
+  const fe=document.getElementById('shq-fc-'+shId);if(fe)fe.textContent=forecastLabel(sh);
+  refreshShQuickChip(shId);
+}
+function renderShQuickRisk(p,sh){
+  const derived=derivedFactors(p);
+  let h='<div class="shq-risk" id="shq-risk-'+sh.id+'"><span class="shq-train-hd">Adoption risk <em>your forecast for this group</em></span><div class="shq-risk-grid">';
+  QUICK_FACTORS.forEach(q=>{
+    const rated=(sh.factorsRated||[]).includes(q.key);
+    h+='<div class="shq-q"><span>'+esc(q.q)+(q.optional?' <em class="shq-opt">optional</em>':' <em>*</em>')+'</span><div class="shq-opts" role="group" aria-label="'+esc(q.q)+'">';
+    q.opts.forEach(([lbl,v])=>{h+='<button type="button" data-fk="'+q.key+'" data-fv="'+v+'" class="'+(rated&&+sh.factors[q.key]===v?'on':'')+'" onclick="setQuickFactor('+sh.id+',\''+q.key+'\','+v+')">'+lbl+'</button>';});
+    h+='</div></div>';
+  });
+  h+='</div><div class="shq-fc">Forecast: <strong id="shq-fc-'+sh.id+'">'+esc(forecastLabel(sh))+'</strong>';
+  const dn=[];
+  if(derived.window!==undefined)dn.push('training window from the timeline ('+(derived.window===1?'finishes after go-live':derived.window===3?'tight buffer':'healthy buffer')+')');
+  if(derived.env!==undefined)dn.push('environment stability from logged training-environment defects');
+  if(dn.length)h+='<span class="shq-derived">Also counts '+dn.join(' and ')+'.</span>';
+  return h+'</div></div>';
+}
+function shQuickOn(){
+  let m=null;try{m=localStorage.getItem('adoptiq_sh_mode');}catch(e){}
+  return m?m==='quick':!isDemoMode;
+}
+function setShMode(mode,shId){
+  try{localStorage.setItem('adoptiq_sh_mode',mode);}catch(e){}
+  if(shId!==undefined)_shActiveTab[shId]=1;
+  renderPSH();
+  if(shId!==undefined){const c=document.getElementById('shcard-'+shId);if(c)c.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+function shModeBar(quick){
+  return '<div class="shq-bar"><div class="shq-seg"><button class="'+(quick?'active':'')+'" onclick="setShMode(\'quick\')">Quick setup</button><button class="'+(quick?'':'active')+'" onclick="setShMode(\'full\')">Full assessment</button></div>'
+    +'<span class="shq-hint">'+(quick?'Only what the timeline, sustainment and status report need. Everything else is optional.':'All adoption factors, objectives, Kirkpatrick levels and reinforcement detail.')+'</span></div>';
+}
+function shQuickFields(p,sh){
+  const big=p.size==='XL'||p.size==='XXL';
+  const f=[
+    {key:'owner',label:'Reinforcement owner',ph:'Who keeps this group using it? e.g. unit supervisor',val:sh.rein.owner,req:true,
+      on:'updatePRein('+sh.id+',\'owner\',this.value)'},
+    {key:'l3',label:'What will they do differently? (L3 behavior)',ph:'e.g. Enters cases in the new system without assistance',val:sh.kirk.L3.observable,req:true,
+      on:'updatePKirk('+sh.id+',\'L3\',\'observable\',this.value)'},
+    {key:'esc',label:'Escalation path'+(big?'':' (optional below XL)'),ph:'e.g. Program manager if adoption drops below 70%',val:sh.rein.escalation,req:big,
+      on:'updatePRein('+sh.id+',\'escalation\',this.value)'}
+  ];
+  return f;
+}
+function shQuickProgress(p,sh){const f=shQuickFields(p,sh).filter(x=>x.req);return{done:f.filter(x=>(x.val||'').trim()).length+(quickRiskDone(sh)?1:0),total:f.length+1};}
+function refreshShQuickChip(shId){
+  const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===shId);if(!sh)return;
+  const el=document.getElementById('shq-chip-'+shId);if(!el)return;
+  const pr=shQuickProgress(p,sh);el.textContent=pr.done===pr.total?'Ready':pr.done+' of '+pr.total+' set';
+  el.className='shq-chip '+(pr.done===pr.total?'shq-chip-ok':'shq-chip-todo');
+  const sum=document.getElementById('shq-sum');
+  if(sum)sum.textContent=p.stakeholders.filter(x=>{const q=shQuickProgress(p,x);return q.done===q.total;}).length+' of '+p.stakeholders.length+' groups set up';
+}
+function renderShQuick(p){
+  let h=shModeBar(true);
+  const ready=p.stakeholders.filter(sh=>{const pr=shQuickProgress(p,sh);return pr.done===pr.total;}).length;
+  h+='<div class="shq-sum" id="shq-sum">'+ready+' of '+p.stakeholders.length+' groups set up</div>';
+  p.stakeholders.forEach(sh=>{
+    const pr=shQuickProgress(p,sh);
+    h+='<div class="shq-card" id="shcard-'+sh.id+'"><div class="shq-hd"><span class="pl-group-name">'+esc(sh.name)+'</span>'
+      +(sh.audienceId?'<span class="tt-inherit">from audience</span>':'')
+      +'<span id="shq-chip-'+sh.id+'" class="shq-chip '+(pr.done===pr.total?'shq-chip-ok':'shq-chip-todo')+'">'+(pr.done===pr.total?'Ready':pr.done+' of '+pr.total+' set')+'</span>'
+      +'<button class="btn-rm-sh" title="Remove group" aria-label="Remove group" onclick="removePSH('+sh.id+')">&times;</button></div><div class="shq-grid">';
+    shQuickFields(p,sh).forEach(x=>{
+      h+='<label class="shq-field"><span>'+esc(x.label)+(x.req?' <em>*</em>':'')+'</span><input type="text" value="'+esc(x.val||'')+'" placeholder="'+esc(x.ph)+'" oninput="'+x.on+';refreshShQuickChip('+sh.id+')"></label>';
+    });
+    const tr=shTrainResults(sh);const v=x=>x===null?'':x;
+    h+='</div>'+renderShQuickRisk(p,sh)+'<div class="shq-train"><span class="shq-train-hd">Training results <em>enter when the training wave closes</em></span><div class="shq-train-grid">'
+      +'<label class="shq-field"><span>Completed %</span><input type="number" min="0" max="100" value="'+v(tr.completion)+'" placeholder="e.g. 94" oninput="updateTrainResult('+sh.id+',\'completion\',this.value)"></label>'
+      +'<label class="shq-field"><span>Passed assessment % (L2)</span><input type="number" min="0" max="100" value="'+v(tr.pass)+'" placeholder="e.g. 81" oninput="updateTrainResult('+sh.id+',\'pass\',this.value)"></label>'
+      +'<label class="shq-field"><span>Learner confidence (1–5)</span><input type="number" min="1" max="5" step="0.1" value="'+v(tr.confidence)+'" placeholder="e.g. 3.8" oninput="updateTrainResult('+sh.id+',\'confidence\',this.value)"></label>'
+      +'</div></div>';
+    h+='<button class="shq-more" onclick="setShMode(\'full\','+sh.id+')">Add more detail (factors, objectives, Kirkpatrick) &rsaquo;</button></div>';
+  });
+  return h;
+}
 function updatePKirk(id,level,field,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.kirk[level][field]=val;touch('proj');schedSave();}
 function updatePRein(id,field,val){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;sh.rein[field]=val;touch('proj');schedSave();}
 function updatePReinIv(id,iv,checked){const p=getProj();if(!p)return;const sh=p.stakeholders.find(s=>s.id===id);if(!sh)return;if(checked&&!sh.rein.intervals.includes(iv))sh.rein.intervals.push(iv);if(!checked)sh.rein.intervals=sh.rein.intervals.filter(x=>x!==iv);touch('proj');schedSave();}
@@ -2987,7 +3182,7 @@ function openScoreExplainer(){
     if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
     return Math.round(f/8*100);
   });
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
 
   // Lifecycle Health (10%) — SDLC signals
   const lhData=calcLifecycleHealth(p);
@@ -3213,7 +3408,7 @@ function collectTrajectoryData(p){
     if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
     return Math.round(f/8*100);
   });
-  const trainPctCalc=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPctCalc=shsTrainPct(p.stakeholders||[]);
   const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
   const commsAvg=commsDims.length?commsDims.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDims.length:3;
   const commsPct=Math.round(commsAvg/5*100);
@@ -3250,7 +3445,7 @@ function collectTrajectoryData(p){
 }
 
 async function callAnthropicPrediction(data){
-  const response=await fetch(TRAJ_EDGE_URL,{
+  const response=await aiFetch(TRAJ_EDGE_URL,{
     method:'POST',
     headers:{
       'Content-Type':'application/json',
@@ -3271,6 +3466,7 @@ function renderTrajectoryCard(){
   const p=getProj();if(!p)return;
   const card=document.getElementById('p-trajectory-card');
   if(!card)return;
+  if(!aiAllowed()){card.style.display='none';return;}
 
   card.style.display='block';
 
@@ -4164,6 +4360,358 @@ function toggleSmartRow(target,idx,checked){
   if(_multiSectionData&&_multiSectionData[target]&&_multiSectionData[target][idx])_multiSectionData[target][idx]._selected=checked;
 }
 
+
+// ── Loose date parsing for imports (Jira CSV, plan documents) → yyyy-mm-dd ──
+function parseLooseDate(v){
+  if(v===undefined||v===null||v==='')return'';
+  if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*864e5));return isNaN(d)?'':d.toISOString().slice(0,10);}
+  const s=String(v).trim();let m;
+  const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const yy=y=>{y=+y;return y<100?2000+y:y;};
+  const iso=(y,mo,d)=>{const dt=new Date(y,mo,d);return isNaN(dt)?'':dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');};
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/)))return iso(+m[1],+m[2]-1,+m[3]);
+  if((m=s.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{2,4})/))&&MON[m[2].toLowerCase()]!==undefined)return iso(yy(m[3]),MON[m[2].toLowerCase()],+m[1]);
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/)))return iso(yy(m[3]),+m[1]-1,+m[2]);
+  const d=new Date(s);return isNaN(d)?'':iso(d.getFullYear(),d.getMonth(),d.getDate());
+}
+
+// ── Jira import: release dates, OCM-tagged items, QA/UAT status and defects ──
+// Reads a Jira issue export (CSV or Excel). Field matching is adjustable because
+// every Jira is configured differently; defaults follow DCAS conventions.
+const JIRA_MAP_KEY='adoptiq_jira_map';
+const JIRA_MAP_DEFAULT={ocmTag:'OCM Needed',ocmReady:'OCM Ready',qaPass:'QA (Passed|Complete|Done)',uatPass:'UAT (Passed|Complete|Done|Signed ?off)',done:'Done|Closed|Resolved|Released|Deployed',impactCol:'impact summary|change impact|training impact'};
+const JIRA_MAP_LABELS={ocmTag:'OCM tag (label, component or field value)',ocmReady:'OCM ready status',qaPass:'Status meaning QA passed',uatPass:'Status meaning UAT passed',done:'Statuses that mean finished',impactCol:'Impact summary column name (e.g. written by Jira AI)'};
+function getJiraMap(){let m={};try{m=JSON.parse(localStorage.getItem(JIRA_MAP_KEY)||'{}')||{};}catch(e){}return{...JIRA_MAP_DEFAULT,...m};}
+function setJiraMap(k,v){const m=getJiraMap();m[k]=v||JIRA_MAP_DEFAULT[k];try{localStorage.setItem(JIRA_MAP_KEY,JSON.stringify(m));}catch(e){}if(_jiraRows)refreshJiraPlan();}
+function jiraRe(p){try{return new RegExp(p,'i');}catch(e){return /$^/;}}
+let _jiraPlan=null,_jiraRows=null,_jiraFile='';
+function jiraExportHelp(){
+  const r=getRel()||{};
+  const key=r.jiraProjKey||'YOURPROJECT';const ver=r.jiraVersion||r.name||'Release name';
+  const jql='project = '+key+' AND fixVersion = "'+ver.replace(/"/g,'')+'" ORDER BY key';
+  return '<details class="jira-map jira-help"><summary>How to export from Jira Cloud</summary><ol>'
+    +'<li>In Jira, open <strong>Filters → View all issues</strong>, then switch the search to <strong>JQL</strong>.</li>'
+    +'<li>Paste this query and press Enter. It pulls the whole release, including the defects your OCM stories link to.'
+    +'<div class="jira-jql"><input type="text" id="jira-jql" readonly value="'+esc(jql)+'" onclick="this.select()"><button class="btn-sm" onclick="navigator.clipboard.writeText(document.getElementById(\'jira-jql\').value);this.textContent=\'Copied!\';setTimeout(()=>this.textContent=\'Copy\',1500)">Copy</button></div>'
+    +(r.jiraProjKey?'':'<span class="tt-muted">Replace YOURPROJECT with your Jira project key (the letters before the dash in an issue number, e.g. ABC in ABC-123). AdoptIQ fills it in after your first import.</span>')
+    +'</li><li>Choose <strong>Export → Export CSV (all fields)</strong>, then upload that file below.</li></ol>'
+    +'<p class="tt-muted">Tips: save the query as a filter so next time is one click. Jira exports up to 1,000 issues at a time. Export one release per file.</p></details>';
+}
+function openJiraImport(){
+  let m=document.getElementById('jira-import-modal');if(m)m.remove();
+  _jiraRows=null;_jiraPlan=null;_jiraEpicChoice={};
+  const jm=getJiraMap();
+  m=document.createElement('div');m.id='jira-import-modal';m.className='import-modal';
+  m.innerHTML='<div class="import-modal-box"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h2>Import from Jira</h2>'
+    +'<div class="import-sub">In Jira, filter to this release’s epics, stories and defects, then choose <strong>Export → CSV (all fields)</strong>. AdoptIQ reads release dates, OCM-tagged items, QA and UAT status, and defects, and shows what each means for training. Nothing is saved until you apply it.</div></div>'
+    +'<button class="btn-ghost" onclick="closeJiraImport()" style="font-size:22px;padding:0 6px;line-height:1" aria-label="Close">&times;</button></div>'
+    +'<div class="import-drop" onclick="document.getElementById(\'jira-file-input\').click()"><div class="import-drop-text">Choose your Jira export <strong>(.csv or .xlsx)</strong></div></div>'
+    +'<input type="file" id="jira-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleJiraFile(this.files[0])">'
+    +jiraExportHelp()
+    +'<details class="jira-map"><summary>Field matching</summary><p class="tt-muted">Adjust these if your Jira uses different names. Patterns are matched case-insensitively; use | for alternatives.</p>'
+    +Object.keys(JIRA_MAP_DEFAULT).map(k=>'<label class="jira-map-row"><span>'+JIRA_MAP_LABELS[k]+'</span><input type="text" id="jira-map-'+k+'" value="'+esc(jm[k])+'" onchange="setJiraMap(\''+k+'\',this.value)"></label>').join('')
+    +'</details><div id="jira-preview"></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click',function(e){if(e.target===this)closeJiraImport();});
+  requestAnimationFrame(()=>m.classList.add('open'));
+}
+function closeJiraImport(){const m=document.getElementById('jira-import-modal');if(m)m.classList.remove('open');const r=getRel();if(r&&document.getElementById('v-release').classList.contains('active'))openRelease(r.id);}
+async function handleJiraFile(file){
+  const out=document.getElementById('jira-preview');if(!file||!out)return;
+  if(!window.XLSX){out.innerHTML='<div class="import-status error">The spreadsheet reader is still loading. Try again in a moment.</div>';return;}
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:false});
+    if(!rows.length)throw new Error('The file has no rows.');
+    _jiraRows=rows;_jiraFile=file.name;refreshJiraPlan();
+  }catch(e){out.innerHTML='<div class="import-status error">Could not read that file: '+esc(e.message)+'</div>';}
+}
+function refreshJiraPlan(){const out=document.getElementById('jira-preview');if(!out||!_jiraRows)return;_jiraPlan=planJiraImport(_jiraRows);out.innerHTML=renderJiraPlan(_jiraPlan);}
+function jiraCols(rows,re){return Object.keys(rows[0]||{}).filter(k=>re.test(k));}
+function jiraVal(row,cols){return cols.map(c=>String(row[c]||'').trim()).filter(Boolean).join(' ');}
+let _jiraEpicChoice={};
+function planJiraImport(rows){
+  const r=getRel();const jm=getJiraMap();
+  const C={key:jiraCols(rows,/^issue\s*key$/i),type:jiraCols(rows,/^issue\s*type$/i),summary:jiraCols(rows,/^summary$/i),status:jiraCols(rows,/^status$/i),
+    fix:jiraCols(rows,/^fix\s*versions?(\/s)?(_\d+)?$/i),due:jiraCols(rows,/^due\s*date$/i),resolved:jiraCols(rows,/^resolved$/i),created:jiraCols(rows,/^created$/i),
+    labels:jiraCols(rows,/^labels(_\d+)?$/i),comps:jiraCols(rows,/^components?(_\d+)?$/i),env:jiraCols(rows,/^environment$/i),
+    epicName:jiraCols(rows,/^(parent\s*summary|epic\s*name|custom field \(epic name\))(_\d+)?$/i),epicKey:jiraCols(rows,/^(parent\s*key|epic\s*link|parent|custom field \(epic link\))(_\d+)?$/i),
+    links:jiraCols(rows,/(issue\s*link|linked\s*issues)/i),defectLinks:jiraCols(rows,/issue\s*link\s*\(defect\)/i),
+    qa:jiraCols(rows,/\bqa\b/i).filter(c=>!/summary|needed/i.test(c)),uat:jiraCols(rows,/\buat\b/i).filter(c=>!/summary|needed/i.test(c)),
+    ocmField:jiraCols(rows,jiraRe(jm.ocmTag)),programs:jiraCols(rows,/impacted programs/i),appcat:jiraCols(rows,/application category/i),
+    accept:jiraCols(rows,/acceptance criteria/i),bizReview:jiraCols(rows,/business review status/i),impact:jiraCols(rows,jiraRe(jm.impactCol)).filter(c=>!/impacted programs/i.test(c))};
+  const versions=[...new Set(rows.flatMap(x=>C.fix.map(c=>String(x[c]||'').trim()).filter(Boolean)))];
+  const norm=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const rn=norm(r?r.name:'');
+  const version=(r&&r.jiraVersion&&versions.includes(r.jiraVersion)?r.jiraVersion:'')||versions.find(v=>norm(v)===rn)||versions.find(v=>rn&&(norm(v).includes(rn)||rn.includes(norm(v))))||(versions.length===1?versions[0]:'');
+  const inScope=rows.filter(x=>!version||!C.fix.length||C.fix.some(c=>String(x[c]||'').trim()===version));
+  const reTag=jiraRe(jm.ocmTag),reReady=jiraRe(jm.ocmReady),reQA=jiraRe(jm.qaPass),reUAT=jiraRe(jm.uatPass),reDone=jiraRe(jm.done);
+  const yes=v=>/^(yes|y|true|required)$/i.test(String(v||'').trim());
+  const keyRe=/\b[A-Z][A-Z0-9]+-\d+\b/g;
+  const statusCount={},defectStatusCount={};
+  const issues=inScope.map(x=>{
+    const status=jiraVal(x,C.status),type=jiraVal(x,C.type);
+    const bug=/bug|defect/i.test(type);
+    const sc=bug?defectStatusCount:statusCount;sc[status||'(none)']=(sc[status||'(none)']||0)+1;
+    const ready=reReady.test(status);
+    const finished=reDone.test(status);
+    const uatPassed=!bug&&(reUAT.test(status)||ready||finished||/pass/i.test(jiraVal(x,C.uat)));
+    const qaPassed=!bug&&(uatPassed||reQA.test(status)||/\buat\b/i.test(status)||/pass/i.test(jiraVal(x,C.qa)));
+    const tagText=[jiraVal(x,C.labels),jiraVal(x,C.comps)].join(' ');
+    const ocmVals=C.ocmField.map(c=>String(x[c]||'').trim()).filter(Boolean);
+    const programList=[...new Set(C.programs.flatMap(c=>String(x[c]||'').split(/;/)).map(t=>t.trim()).filter(Boolean))];
+    const isOcm=!bug&&(reTag.test(tagText)||C.ocmField.some(c=>yes(x[c]))||ready);
+    return{programList,hasAccept:C.accept.length?!!jiraVal(x,C.accept):null,ocmFieldBlank:C.ocmField.length>0&&!ocmVals.length,bizReview:jiraVal(x,C.bizReview),impactNote:jiraVal(x,C.impact),
+      ocmBlank:!bug&&!isOcm&&C.ocmField.length>0&&!ocmVals.length,key:jiraVal(x,C.key),summary:jiraVal(x,C.summary),type,status,bug,
+      ocm:isOcm,ready,qaPassed,uatPassed,
+      open:bug?(!finished&&!/closed|resolved|done|fixed|cancel|won.?t/i.test(status)):false,
+      created:parseLooseDate(jiraVal(x,C.created)),date:parseLooseDate(jiraVal(x,C.due))||parseLooseDate(jiraVal(x,C.resolved)),
+      epic:jiraVal(x,C.epicName)||jiraVal(x,C.epicKey),
+      links:(jiraVal(x,C.links)+' '+jiraVal(x,C.epicKey)).match(keyRe)||[],defectKeys:jiraVal(x,C.defectLinks).match(keyRe)||[],
+      programs:C.programs.map(c=>String(x[c]||'').trim()).filter(Boolean).join(', '),appcat:jiraVal(x,C.appcat),
+      tags:(jiraVal(x,C.labels)+' '+jiraVal(x,C.env)+' '+jiraVal(x,C.summary)).toLowerCase()};
+  });
+  const plan={file:_jiraFile,version,versions,rows:inScope.length,programs:[...new Set(issues.filter(i=>!i.bug).flatMap(i=>i.programList))].sort(),changes:[],projects:[],epics:[],statuses:statusCount,defectStatuses:defectStatusCount,unmatched:{ocm:0,bugs:0}};
+  if(!r)return plan;
+  const pick=(re,which)=>{const ds=issues.filter(i=>!i.bug&&re.test(i.summary)).map(i=>i.date).filter(Boolean).sort();return ds.length?(which==='min'?ds[0]:ds[ds.length-1]):'';};
+  const uat=pick(/\bUAT\b|user acceptance/i,'max'),tt=pick(/tech(nical)?\s*transfer/i,'min'),gl=pick(/go[- ]?live|cutover|production (deploy|release)|deploy to prod/i,'max');
+  if(gl&&gl!==r.golive)plan.changes.push({field:'golive',label:'Release go-live',from:r.golive||'',to:gl});
+  if(uat&&uat!==r.uatComplete)plan.changes.push({field:'uatComplete',label:'UAT complete',from:r.uatComplete||'',to:uat});
+  if(tt&&tt!==r.techTransfer)plan.changes.push({field:'techTransfer',label:'Tech Transfer start',from:r.techTransfer||'',to:tt});
+  // Epic → project: remembered choice, then a name match, otherwise create a new project
+  const remembered=r.jiraEpicMap||{};
+  const epicNames=[...new Set(issues.filter(i=>!i.bug&&i.epic).map(i=>i.epic))];
+  epicNames.forEach(en=>{
+    let choice=_jiraEpicChoice[en];
+    if(choice===undefined){
+      const rp=remembered[en]&&(r.projects||[]).find(p=>p.id===remembered[en]);
+      const nm=(r.projects||[]).find(p=>{const pn=norm(p.name),e=norm(en);return pn&&e&&(pn===e||e.includes(pn)||pn.includes(e));});
+      const hasOcm=issues.some(i=>i.epic===en&&i.ocm);
+      choice=rp?String(rp.id):nm?String(nm.id):hasOcm?'new':'skip';
+      _jiraEpicChoice[en]=choice;
+    }
+    const its=issues.filter(i=>i.epic===en&&!i.bug);
+    plan.epics.push({name:en,choice,stories:its.length,ocm:its.filter(i=>i.ocm).length});
+  });
+  const targetOf=en=>{const c=_jiraEpicChoice[en];return!c||c==='skip'?null:c==='new'?'new:'+en:c;};
+  const byKey={};issues.forEach(i=>{if(i.key)byKey[i.key]=i;i.target=i.epic?targetOf(i.epic):null;});
+  // Defects follow their own epic, or the story they are linked to
+  issues.filter(i=>i.bug).forEach(d=>{
+    const st=issues.find(s=>!s.bug&&(s.defectKeys.includes(d.key)||d.links.includes(s.key)));
+    if(!d.target&&st)d.target=st.target;
+  });
+  const groups={};
+  issues.forEach(i=>{if(!i.target)return;(groups[i.target]=groups[i.target]||[]).push(i);});
+  Object.entries(groups).forEach(([target,mine])=>{
+    const isNew=target.startsWith('new:');
+    const epic=isNew?target.slice(4):(mine.find(i=>!i.bug)?.epic||'');
+    const p=isNew?null:(r.projects||[]).find(q=>String(q.id)===target);
+    const ocm=mine.filter(i=>i.ocm),bugs=mine.filter(i=>i.bug);
+    ocm.forEach(o=>{
+      const keys=[...new Set([...o.defectKeys,...bugs.filter(d=>d.links.includes(o.key)).map(d=>d.key)])];
+      o.defects=keys.map(k=>{const d=byKey[k];return d&&d.bug?{key:k,summary:d.summary,status:d.status,open:d.open}:{key:k,summary:'',status:'',open:null};});
+    });
+    plan.projects.push({target,isNew,id:p?p.id:null,name:p?p.name:epic,epics:[...new Set(mine.filter(i=>!i.bug).map(i=>i.epic))],
+      items:ocm.map(o=>({key:o.key,summary:o.summary,status:o.status,ready:o.ready,qaPassed:o.qaPassed,uatPassed:o.uatPassed,created:o.created,defects:o.defects,programs:o.programs,appcat:o.appcat,programList:o.programList,hasAccept:o.hasAccept,ocmFieldBlank:o.ocmFieldBlank,bizReview:o.bizReview,impactNote:o.impactNote})),
+      untriaged:mine.filter(i=>i.ocmBlank).map(i=>({key:i.key,summary:i.summary,programList:i.programList})),
+      ocm:ocm.length,ready:ocm.filter(o=>o.ready).length,uatPassed:ocm.filter(o=>o.uatPassed).length,
+      openOnOcm:ocm.filter(o=>o.defects.some(d=>d.open)).length,unknownDefects:ocm.reduce((a,o)=>a+o.defects.filter(d=>d.open===null).length,0),
+      uatDefects:bugs.filter(d=>/\buat\b/.test(d.tags)).length,trainDefects:bugs.filter(d=>/train/.test(d.tags)).length,bugs:bugs.length});
+  });
+  plan.unmatched.ocm=issues.filter(i=>i.ocm&&!i.target).length;
+  plan.unmatched.bugs=issues.filter(i=>i.bug&&!i.target).length;
+  return plan;
+}
+function setJiraEpicChoice(en,v){_jiraEpicChoice[en]=v;refreshJiraPlan();}
+function jiraProjLine(x){
+  return x.ocm+' OCM item'+(x.ocm===1?'':'s')+' · '+x.uatPassed+' passed UAT · '+x.ready+' OCM Ready · '+x.openOnOcm+' with open defects'
+    +(x.unknownDefects?' · '+x.unknownDefects+' linked defect'+(x.unknownDefects===1?'':'s')+' not in this export':'')
+    +(x.bugs?' · '+x.uatDefects+' UAT / '+x.trainDefects+' training-env defects':'');
+}
+function renderJiraPlan(pl){
+  const r=getRel();const jm=getJiraMap();
+  let h='<div class="jira-plan">';
+  h+='<p>'+pl.rows+' issues'+(pl.version?' in fix version <strong>'+esc(pl.version)+'</strong>':'')+(pl.versions.length>1&&!pl.version?'. More than one fix version was found and none matched this release name, so all rows were read.':'.')+'</p>';
+  const sts=Object.entries(pl.statuses).sort((a,b)=>b[1]-a[1]);
+  const reQA=jiraRe(jm.qaPass),reUAT=jiraRe(jm.uatPass),reReady=jiraRe(jm.ocmReady),reDone=jiraRe(jm.done);
+  h+='<p class="jira-statuses"><strong>Story statuses:</strong> '+sts.map(([s,n])=>{
+    const m=reReady.test(s)?'OCM Ready':reUAT.test(s)||reDone.test(s)?'counts as UAT passed':reQA.test(s)||/\buat\b/i.test(s)?'counts as QA passed':'not yet past QA';
+    return esc(s)+' ('+n+', '+m+')';}).join(' · ')+'. If any are counted wrong, adjust <strong>Field matching</strong> above.</p>';
+  const dst=Object.entries(pl.defectStatuses||{}).sort((a,b)=>b[1]-a[1]);
+  if(dst.length)h+='<p class="jira-statuses"><strong>Defect statuses:</strong> '+dst.map(([s,n])=>{const closed=reDone.test(s)||/closed|resolved|done|fixed|cancel|won.?t/i.test(s);return esc(s)+' ('+n+', '+(closed?'closed':'open')+')';}).join(' · ')+'.</p>';
+  if(pl.epics.length){
+    h+='<div class="tt-sub">Epics → AdoptIQ projects</div><table class="size-tbl"><thead><tr><th>Jira epic</th><th>Stories</th><th>OCM items</th><th>Goes to</th></tr></thead><tbody>';
+    pl.epics.forEach(ep=>{
+      h+='<tr><td>'+esc(ep.name)+'</td><td>'+ep.stories+'</td><td>'+ep.ocm+'</td><td><select aria-label="Project for '+esc(ep.name)+'" onchange="setJiraEpicChoice(this.dataset.epic,this.value)" data-epic="'+esc(ep.name)+'">'
+        +'<option value="new"'+(ep.choice==='new'?' selected':'')+'>Create new project</option>'
+        +(r.projects||[]).map(p=>'<option value="'+p.id+'"'+(String(p.id)===ep.choice?' selected':'')+'>'+esc(p.name)+'</option>').join('')
+        +'<option value="skip"'+(ep.choice==='skip'?' selected':'')+'>Skip</option></select></td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+=renderProgMapTable(pl.programs);
+  if(!pl.changes.length&&!pl.projects.length)return h+'<div class="import-status">Nothing to update. No dated UAT, Tech Transfer or go-live items, and no stories assigned to a project.</div></div>';
+  h+='<div class="tt-sub">Will update</div><table class="size-tbl"><thead><tr><th>Item</th><th>Now</th><th>From Jira</th></tr></thead><tbody>';
+  pl.changes.forEach(c=>{h+='<tr><td>'+esc(c.label)+'</td><td>'+(c.from?fmtDate(c.from):'—')+'</td><td><strong>'+fmtDate(c.to)+'</strong></td></tr>';});
+  pl.projects.forEach(x=>{h+='<tr><td>'+esc(x.name)+(x.isNew?' <span class="tt-inherit">new project</span>':'')+'</td><td>—</td><td>'+esc(jiraProjLine(x))+'</td></tr>';});
+  h+='</tbody></table>';
+  const um=[];if(pl.unmatched.ocm)um.push(pl.unmatched.ocm+' OCM item'+(pl.unmatched.ocm===1?'':'s'));if(pl.unmatched.bugs)um.push(pl.unmatched.bugs+' defect'+(pl.unmatched.bugs===1?'':'s'));
+  if(um.length)h+='<p class="tt-muted">Not included (no epic, or epic skipped): '+um.join(' and ')+'.</p>';
+  if(!pl.changes.length)h+='<p class="tt-muted">No UAT, Tech Transfer or go-live dates were found in this file, so release dates stay as they are.</p>';
+  return h+'<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-gold" onclick="applyJiraPlan()">Apply updates</button><button class="btn-ghost" onclick="closeJiraImport()">Cancel</button></div></div>';
+}
+function applyJiraPlan(){
+  const r=getRel();const pl=_jiraPlan;if(!r||!pl)return;
+  const now=new Date().toISOString();
+  pl.changes.forEach(c=>{r[c.field]=c.to;});
+  if(pl.version)r.jiraVersion=pl.version;
+  {const k=(pl.projects||[]).flatMap(x=>x.items||[]).map(i=>String(i.key||'').split('-')[0]).find(Boolean);if(k)r.jiraProjKey=k;}
+  if(!r.jiraEpicMap)r.jiraEpicMap={};
+  pl.projects.forEach(x=>{
+    let p=x.isNew?null:(r.projects||[]).find(q=>q.id===x.id);
+    if(!p){p=newProject(x.name,[],0);migrateResources(p);p.status='In Progress';r.projects.push(p);x.id=p.id;x.createdNew=true;}
+    x.epics.forEach(en=>{r.jiraEpicMap[en]=p.id;});
+    if(!p.lifecycleSignals)p.lifecycleSignals={};
+    if(x.bugs){
+      p.lifecycleSignals.testing=Object.assign({},p.lifecycleSignals.testing,{uatDefects:x.uatDefects});
+      p.lifecycleSignals.training=Object.assign({},p.lifecycleSignals.training,{envDefects:x.trainDefects});
+    }
+    p.jira={importedAt:now,file:pl.file,version:pl.version,items:x.items,untriaged:x.untriaged||[],uatDefects:x.uatDefects,trainDefects:x.trainDefects,bugs:x.bugs};
+    applyTTDerived(p);
+  });
+  const entry={at:now,file:pl.file,version:pl.version,rows:pl.rows,changes:pl.changes,projects:pl.projects.map(x=>({id:x.id,name:x.name+(x.createdNew?' (new project)':''),line:jiraProjLine(x),blocked:x.ocm-x.uatPassed,openOnOcm:x.openOnOcm})),unmatched:pl.unmatched};
+  r.jiraLog=[entry,...(r.jiraLog||[])].slice(0,10);
+  _jiraEpicChoice={};
+  touch('rel');schedSave();
+  const out=document.getElementById('jira-preview');if(out)out.innerHTML=renderJiraLogEntry(r,entry,true);
+  showSuccess('Jira updates applied.');
+}
+function renderJiraLogEntry(r,e,justApplied){
+  let h='<div class="jira-plan"><div class="import-status success">'+(justApplied?'Applied. ':'')+'Jira import of '+esc(e.file||'export')+' on '+new Date(e.at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+(e.version?' · fix version '+esc(e.version):'')+' · '+e.rows+' issues</div>';
+  h+='<div class="tt-sub">What changed</div><ul class="jira-changes">';
+  if(!e.changes.length)h+='<li>Release dates: no change.</li>';
+  e.changes.forEach(c=>{h+='<li><strong>'+esc(c.label)+':</strong> '+(c.from?fmtDate(c.from):'empty')+' → '+fmtDate(c.to)+'</li>';});
+  e.projects.forEach(x=>{
+    h+='<li><strong>'+esc(x.name)+':</strong> '+esc(x.line)+(x.blocked?' <span class="jira-flag">'+x.blocked+' not cleared for material build</span>':'')
+      +' <button class="btn-sm" onclick="document.getElementById(\'jira-import-modal\')&&document.getElementById(\'jira-import-modal\').classList.remove(\'open\');openProjectFromPortfolio('+r.id+','+x.id+',\'trainplan\')">Open project</button></li>';
+  });
+  return h+'</ul><p class="tt-muted">Details for each project are on its Training Timeline tab under “Jira: OCM items”.</p><div style="margin-top:10px"><button class="btn-ghost" onclick="closeJiraImport()">Close</button></div></div>';
+}
+function showJiraLog(){
+  const r=getRel();if(!r||!(r.jiraLog||[]).length)return;
+  openJiraImport();
+  const out=document.getElementById('jira-preview');if(out)out.innerHTML=renderJiraLogEntry(r,r.jiraLog[0],false);
+}
+function renderRelJiraLast(r){
+  const el=document.getElementById('r-jira-last');if(!el)return;
+  const e=(r.jiraLog||[])[0];
+  el.innerHTML=e?'Last import '+new Date(e.at).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · <a href="#" onclick="showJiraLog();return false">view changes</a>':'Not imported yet';
+}
+// Program → audience map. Saved on the release so every lead sees the same groups;
+// the browser copy only seeds a release that has no map yet.
+const PROG_MAP_KEY='adoptiq_jira_programs';
+function getProgMap(r){
+  r=r||getRel();
+  if(r&&r.jiraProgMap)return r.jiraProgMap;
+  try{return JSON.parse(localStorage.getItem(PROG_MAP_KEY)||'{}')||{};}catch(e){return{};}
+}
+function setProgMap(prog,aud,on){
+  if(isReadOnly)return;
+  const r=getRel();const m={...getProgMap(r)};const a=new Set(m[prog]||[]);on?a.add(aud):a.delete(aud);m[prog]=[...a];
+  if(r){r.jiraProgMap=m;touch('rel');schedSave();}
+  try{localStorage.setItem(PROG_MAP_KEY,JSON.stringify(m));}catch(e){}
+  if(_jiraRows&&document.getElementById('jira-preview'))refreshJiraPlan();
+  const pj=getProj();if(pj&&document.getElementById('v-project')&&document.getElementById('v-project').classList.contains('active'))renderPTrainPlan();
+}
+function itemPrograms(it){return it.programList||(it.programs?String(it.programs).split(/\s*[,;]\s*/).filter(Boolean):[]);}
+function renderProgMapTable(progs,r){
+  if(!progs||!progs.length)return'';
+  const auds=getTTStd().audiences||[];const m=getProgMap(r);
+  const unmapped=progs.filter(pr=>!(m[pr]||[]).length).length;
+  let h='<div class="tt-sub">Who each program affects</div><p class="tt-muted">Tick the audiences each Jira program affects. AdoptIQ remembers this for future imports'+(unmapped?'. <strong>'+unmapped+' of '+progs.length+' not mapped yet.</strong>':'.')+'</p>';
+  h+='<div class="hm-scroll"><table class="size-tbl prog-map"><thead><tr><th>Impacted program</th>'+auds.map(a=>'<th>'+esc(a.name)+'</th>').join('')+'</tr></thead><tbody>';
+  progs.forEach(pr=>{h+='<tr><td>'+esc(pr)+'</td>'+auds.map(a=>'<td><input type="checkbox" aria-label="'+esc(pr)+' affects '+esc(a.name)+'" data-prog="'+esc(pr)+'"'+((m[pr]||[]).includes(a.id)?' checked':'')+' onchange="setProgMap(this.dataset.prog,\''+a.id+'\',this.checked)"'+(isReadOnly?' disabled':'')+'></td>').join('')+'</tr>';});
+  return h+'</tbody></table></div>';
+}
+function jiraChangeImpact(p){
+  const ji=jiraTrainingImpact(p);if(!ji)return null;
+  const auds=getTTStd().audiences||[];const rel=relOfProj(p);const m=getProgMap(rel);
+  const inTT=new Set((p.trainingTimeline&&p.trainingTimeline.audiences)||[]);
+  const audsOf=it=>[...new Set(itemPrograms(it).flatMap(pr=>m[pr]||[]))];
+  const byAud=auds.map(a=>{
+    const its=ji.rows.filter(it=>audsOf(it).includes(a.id));
+    return{id:a.id,name:a.name,count:its.length,programs:[...new Set(its.flatMap(it=>itemPrograms(it).filter(pr=>(m[pr]||[]).includes(a.id))))],
+      cleared:its.filter(it=>it.uatPassed).length,blocked:its.filter(it=>!it.uatPassed).length,inTimeline:inTT.has(a.id)};
+  }).filter(x=>x.count);
+  const gaps=[];
+  {const g=ji.rows.filter(it=>it.hasAccept===false);if(g.length)gaps.push({id:'accept',n:g.length,keys:g.map(x=>x.key),label:'OCM item'+(g.length===1?' has':'s have')+' no acceptance criteria',why:'Nothing is defined to train to. Ask the BA before building materials.'});}
+  {const g=ji.rows.filter(it=>it.bizReview&&!(/approv|complete|done|sign/i.test(it.bizReview)&&!/\b(not|un\w*|reject\w*|pend\w*|deni\w*|return\w*)\b/i.test(it.bizReview)));if(g.length)gaps.push({id:'biz',n:g.length,keys:g.map(x=>x.key),label:'OCM item'+(g.length===1?'':'s')+' with business review not approved ('+[...new Set(g.map(x=>x.bizReview))].join(', ')+')',why:'Scope may still change. Confirm before you finalize content.'});}
+  {const g=(p.jira.untriaged||[]);if(g.length)gaps.push({id:'triage',n:g.length,keys:g.map(x=>x.key),label:'stor'+(g.length===1?'y has':'ies have')+' “OCM Needed?” left blank',why:'Not triaged for OCM. Ask the product owner to mark Yes or No so nothing slips past training.'});}
+  {const g=ji.rows.filter(it=>it.ready&&it.ocmFieldBlank);if(g.length)gaps.push({id:'hygiene',n:g.length,keys:g.map(x=>x.key),label:'item'+(g.length===1?' is':'s are')+' OCM Ready but “OCM Needed?” is blank',why:'Counted as OCM here. Confirm the triage in Jira so the record is clean.'});}
+  {const g=ji.rows.filter(it=>!itemPrograms(it).length||!audsOf(it).length);if(g.length){const progs=[...new Set(g.flatMap(itemPrograms))];gaps.push({id:'map',n:g.length,keys:g.map(x=>x.key),label:'OCM item'+(g.length===1?' is':'s are')+' not linked to an audience'+(progs.length?' (unmapped: '+progs.join(', ')+')':' (no impacted program)'),why:'You can’t tell who needs training. Tick the audiences under “Who each program affects” below.'});}}
+  return{ji,byAud,gaps,notes:ji.rows.filter(it=>it.impactNote).map(it=>({key:it.key,summary:it.summary,note:it.impactNote})),missingAud:byAud.filter(x=>!x.inTimeline),allPrograms:[...new Set(ji.rows.flatMap(itemPrograms))].sort(),rel};
+}
+function renderChangeImpactCard(p){
+  const ci=jiraChangeImpact(p);if(!ci||!ci.ji.total)return'';
+  let h='<div class="jira-card"><div class="jira-card-hd"><strong>Change impact (from Jira)</strong><span class="tt-muted">rules-based; no AI</span></div>';
+  if(ci.byAud.length){
+    h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Audience</th><th>OCM changes</th><th>Programs</th><th>Passed UAT</th><th>Not past UAT</th><th>In this timeline</th></tr></thead><tbody>';
+    ci.byAud.forEach(a=>{h+='<tr><td><strong>'+esc(a.name)+'</strong></td><td>'+a.count+'</td><td class="tt-note">'+esc(a.programs.join(', '))+'</td><td>'+a.cleared+'</td><td>'+(a.blocked||'—')+'</td><td>'+(a.inTimeline?'Yes':isReadOnly?'No':'<button class="btn-sm" onclick="toggleTTAud(\''+a.id+'\',true)">Add to timeline</button>')+'</td></tr>';});
+    h+='</tbody></table></div>';
+  }else h+='<p class="tt-muted">No audiences linked yet. Tick which audiences each program affects below.</p>';
+  if(ci.gaps.length){
+    h+='<div class="tt-sub">Gaps to close</div><ul class="ci-gaps">';
+    ci.gaps.forEach(g=>{h+='<li><strong>'+g.n+' '+esc(g.label)+'.</strong> '+esc(g.why)+' <span class="tt-muted">'+esc(g.keys.slice(0,8).join(', '))+(g.keys.length>8?' …':'')+'</span></li>';});
+    h+='</ul>';
+  }else h+='<p class="tt-muted">No gaps found in the Jira fields.</p>';
+  if(ci.allPrograms.length){
+    const m=getProgMap(ci.rel);const open=ci.allPrograms.some(pr=>!(m[pr]||[]).length);
+    h+='<details class="ci-map"'+(open?' open':'')+'><summary>Who each program affects'+(open?'':' (all mapped)')+'</summary>'+renderProgMapTable(ci.allPrograms,ci.rel).replace(/^<div class="tt-sub">[^<]*<\/div>/,'')+'</details>';
+  }
+  if(ci.notes.length){h+='<div class="tt-sub">Impact summaries from Jira</div><ul class="ci-gaps">';ci.notes.forEach(n=>{h+='<li><strong>'+esc(n.key)+'</strong> '+esc(n.note)+'</li>';});h+='</ul>';}
+  return h+'</div>';
+}
+// Training implications of the project's last Jira import
+function jiraTrainingImpact(p){
+  const j=p&&p.jira;if(!j||!j.items)return null;
+  const uat=projTTDates(p).uatComplete;
+  const today=new Date().toISOString().slice(0,10);
+  const rows=j.items.map(it=>{
+    const open=(it.defects||[]).filter(d=>d.open===true);
+    const unknown=(it.defects||[]).filter(d=>d.open===null);
+    const late=!!(uat&&it.created&&it.created>uat);
+    let state,impl,rank;
+    if(!it.qaPassed){state='In build / QA';impl='Not testable yet. Do not build materials.';rank=0;}
+    else if(!it.uatPassed){state='Passed QA, in UAT';impl='Plan the content, but hold the build until UAT passes.';rank=1;}
+    else if(open.length){state=it.ready?'OCM Ready':'Passed UAT';impl=open.length+' open defect'+(open.length===1?'':'s')+'. Build with care; you may need workaround content or rework.';rank=2;}
+    else{state=it.ready?'OCM Ready':'Passed UAT';impl='Cleared for material development.';rank=3;}
+    if(unknown.length)impl+=' '+unknown.length+' linked defect'+(unknown.length===1?'':'s')+' not in this export; check '+(unknown.length===1?'its':'their')+' status in Jira.';
+    if(late)impl+=' Added after UAT; check the training build plan.';
+    return{...it,openDefects:open.length,unknownDefects:unknown.length,late,state,impl,rank};
+  }).sort((a,b)=>a.rank-b.rank);
+  return{rows,total:rows.length,cleared:rows.filter(x=>x.uatPassed).length,blocked:rows.filter(x=>!x.uatPassed).length,
+    withDefects:rows.filter(x=>x.uatPassed&&x.openDefects).length,unknown:rows.reduce((a,x)=>a+x.unknownDefects,0),late:rows.filter(x=>x.late).length,ready:rows.filter(x=>x.ready).length,
+    buildStarted:!!(uat&&today>=uat),importedAt:j.importedAt};
+}
+function renderJiraCard(p){
+  const ji=jiraTrainingImpact(p);
+  if(!ji)return'<div class="jira-card jira-card-empty"><i class="ph ph-kanban"></i><div><strong>Jira: OCM items.</strong> Import a Jira export from the release header to see which OCM-tagged items have cleared UAT for material development.</div></div>';
+  let h='<div class="jira-card"><div class="jira-card-hd"><strong>Jira: OCM items</strong><span class="tt-muted">from the import on '+new Date(ji.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>';
+  if(!ji.total)return h+'<p class="tt-muted">No items tagged for OCM in this project’s epic.</p></div>';
+  const pct=Math.round(ji.cleared/ji.total*100);
+  h+='<div class="jira-gate"><div class="jira-gate-bar"><span style="width:'+pct+'%"></span></div><div><strong>'+ji.cleared+' of '+ji.total+'</strong> OCM items have passed UAT and can go into material development'+(ji.ready?' · '+ji.ready+' marked OCM Ready':'')+'.</div></div>';
+  const flags=[];
+  if(ji.blocked)flags.push(ji.blocked+' not yet past UAT'+(ji.buildStarted?' (material build window has started)':''));
+  if(ji.withDefects)flags.push(ji.withDefects+' passed UAT with open defects');
+  if(ji.unknown)flags.push(ji.unknown+' linked defect'+(ji.unknown===1?'':'s')+' not in the export');
+  if(ji.late)flags.push(ji.late+' added after UAT');
+  if(flags.length)h+='<p class="jira-flags">'+flags.map(esc).join(' · ')+'</p>';
+  const hasCtx=ji.rows.some(x=>x.programs||x.appcat);
+  h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Item</th>'+(hasCtx?'<th>Programs / area</th>':'')+'<th>Status</th><th>Stage</th><th>Open defects</th><th>Training implication</th></tr></thead><tbody>';
+  ji.rows.forEach(x=>{h+='<tr><td><strong>'+esc(x.key)+'</strong> '+esc(x.summary)+'</td>'+(hasCtx?'<td class="tt-note">'+esc([x.programs,x.appcat].filter(Boolean).join(' · '))+'</td>':'')+'<td>'+esc(x.status)+'</td><td>'+esc(x.state)+'</td><td>'+(x.openDefects||'—')+(x.unknownDefects?' <span class="tt-muted">(+'+x.unknownDefects+' unknown)</span>':'')+'</td><td class="tt-note">'+esc(x.impl)+'</td></tr>';});
+  return h+'</tbody></table></div></div>';
+}
 function commitMultiSectionImport(){
   const p=getProj();if(!p)return;
   if(!_multiSectionData)return;
@@ -4283,10 +4831,24 @@ function commitMultiSectionImport(){
 
   // ── Training Plan → Stakeholder Learning Objectives ──
   const trainingItems=sel('training');
+  const filled=[];
+  const matchGroup=txt=>{
+    const t=(txt||'').toLowerCase().trim();if(!t)return null;
+    return p.stakeholders.find(sh=>{const n=(sh.name||'').toLowerCase().trim();return n&&(t===n||t.includes(n)||n.includes(t));})||null;
+  };
   if(trainingItems.length){
-    // Add training items as learning objectives to all stakeholders
-    const objTexts=trainingItems.map(item=>item.name||item.text||item.description||'').filter(t=>t);
-    if(p.stakeholders.length){
+    // Items with an audience that matches a group go to that group; the rest go to every group
+    const unmatched=[];let routed=0;
+    trainingItems.forEach(item=>{
+      const obj=item.name||item.text||item.description||'';if(!obj)return;
+      const g=matchGroup(item.audience);
+      if(g){if(!g.objectives)g.objectives=[];if(!g.objectives.includes(obj))g.objectives.push(obj);routed++;}
+      else unmatched.push(obj);
+    });
+    if(routed)filled.push(routed+' objectives matched to their group');
+    const objTexts=unmatched;
+    if(!objTexts.length){}
+    else if(p.stakeholders.length){
       p.stakeholders.forEach(sh=>{
         if(!sh.objectives)sh.objectives=[];
         objTexts.forEach(obj=>{
@@ -4337,6 +4899,26 @@ function commitMultiSectionImport(){
 
   // ── Reinforcement / Post-Go-Live → Stakeholder Reinforcement Plans ──
   const reinItems=sel('reinforcement');
+  // Reinforcement owners and L3 behaviors for groups named in a row (fills empty fields only)
+  let owners=0,behaviors=0;
+  reinItems.forEach(item=>{
+    const txt=[item.name,item.text,item.description].filter(Boolean).join(' ');
+    const g=matchGroup(item.audience)||p.stakeholders.find(sh=>sh.name&&txt.toLowerCase().includes(sh.name.toLowerCase()));
+    if(!g)return;
+    if(!g.rein)g.rein={owner:'',activities:'',intervals:[],escalation:''};
+    if(item.owner&&!g.rein.owner){g.rein.owner=String(item.owner).trim();owners++;}
+  });
+  [...trainingItems,...reinItems,...sel('successcriteria')].forEach(item=>{
+    const txt=[item.name,item.text,item.description].filter(Boolean).join(' ');
+    if(!/\b(behaviou?r|observable|will be able to|L3|level 3)\b/i.test(txt))return;
+    const g=matchGroup(item.audience)||p.stakeholders.find(sh=>sh.name&&txt.toLowerCase().includes(sh.name.toLowerCase()));
+    if(!g)return;
+    if(!g.kirk)g.kirk={L1:{},L2:{},L3:{interval:'30',observable:''},L4:{}};
+    if(!g.kirk.L3)g.kirk.L3={interval:'30',observable:''};
+    if(!g.kirk.L3.observable){g.kirk.L3.observable=(item.description||item.text||item.name||'').trim();behaviors++;}
+  });
+  if(owners)filled.push(owners+' reinforcement owner'+(owners===1?'':'s'));
+  if(behaviors)filled.push(behaviors+' L3 behavior'+(behaviors===1?'':'s'));
   if(reinItems.length){
     const reinText=reinItems.map(item=>item.name||item.text||item.description||'').filter(t=>t).join('\n• ');
     if(p.stakeholders.length){
@@ -4385,7 +4967,33 @@ function commitMultiSectionImport(){
     totalImported+=engItems.length;breakdown.push(engItems.length+' engagement');
   }
 
+  // ── Training Timeline: audiences, course length and dates named anywhere in the document ──
+  const blob=IMPORT_TARGETS.flatMap(t=>sel(t)).map(it=>Object.entries(it).filter(([k])=>k[0]!=='_').map(([,v])=>String(v||'')).join(' ')).join('\n');
+  if(blob.trim()){
+    if(!p.trainingTimeline)p.trainingTimeline={};
+    const tt=p.trainingTimeline;const ttBits=[];
+    const st=getTTStd();const found=st.audiences.filter(a=>new RegExp('\\b'+a.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(blob));
+    if(found.length){
+      tt.audiences=[...new Set([...(tt.audiences||[]),...found.map(a=>a.id)])];
+      found.forEach(a=>{if(!p.stakeholders.some(sh=>sh.audienceId===a.id||(sh.name||'').trim().toLowerCase()===a.name.trim().toLowerCase())){const sh=newStakeholder(a.name);sh.audienceId=a.id;p.stakeholders.push(sh);}});
+      ttBits.push(found.map(a=>a.name).join(', '));
+    }
+    if(!tt.course){
+      const order=[['three',/\b(three|3)[- ]day\b/i],['two',/\b(two|2)[- ]day\b/i],['full',/\b(full[- ]day|one[- ]day|1[- ]day)\b/i],['half',/\bhalf[- ]day\b/i],['info',/\binfo(rmation(al)?)?\s+session\b/i],['huddle',/\bhuddle\b/i],['micro',/\bmicro[- ]?learning\b/i]];
+      const hit=order.find(([,re])=>re.test(blob));// the longest course named sets the delivery window
+      if(hit){tt.course=hit[0];ttBits.push((TT_COURSES.find(c=>c.key===hit[0])||{}).label);}
+    }
+    const dateNear=re=>{const m=blob.match(re);if(!m)return'';const d=parseLooseDate(m[m.length-1]);return d||'';};
+    const dt=projTTDates(p);
+    if(!dt.uatComplete){const d=dateNear(/\bUAT\b[^\n\d]{0,30}(?:complete|completion|end|ends|sign[- ]?off|close[sd]?)?[^\n\d]{0,10}(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2})/i);if(d){tt.uatComplete=d;ttBits.push('UAT complete '+fmtDate(d));}}
+    if(!dt.techTransfer){const d=dateNear(/\btech(?:nical)?\s+transfer\b[^\n\d]{0,30}(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2})/i);if(d){tt.techTransfer=d;ttBits.push('Tech Transfer '+fmtDate(d));}}
+    if(ttBits.length)filled.push('Timeline: '+ttBits.join(' · '));
+    applyTTDerived(p);
+  }
+  if(filled.length)breakdown.push('filled '+filled.join('; '));
+
   // Re-render all affected sections
+  if(typeof renderPTrainPlan==='function')renderPTrainPlan();
   if(impactItems.length)renderPImpact();
   if(gapItems.length)renderPGaps();
   if(shItems.length||trainingItems.length||commsItems.length||reinItems.length||engItems.length){renderPSH();renderPKPIs();}
@@ -5236,6 +5844,7 @@ function normalizeSeverity(val){
 
 function renderPOverview(){
   const p=getProj();if(!p)return;
+  renderPilotOverview(p);
   renderPKPIs();
   renderTrajectoryCard();
   renderDataConfidenceBar(p);
@@ -5300,7 +5909,7 @@ function getWeakestComponent(p){
   const fwPct=fwScores.length?Math.round(fwScores.reduce((a,b)=>a+b,0)/fwScores.length/5*100):0;
   const sentPct=shs.length?Math.round(shs.reduce((a,sh)=>a+sentimentScore(sh,p.pulseResults?.[sh.id]?.scores||{}),0)/shs.length):50;
   const kirkPcts=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
   const lhScore=calcLifecycleHealth(p).score;
   const scored={'Change Readiness':fwPct,'People & Trust':sentPct,'Project Health':lhScore};
   if(trainingActive(p))scored['Training & Preparedness']=trainPct;
@@ -6244,7 +6853,7 @@ function collectSmartRecsData(p){
     if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;
     return Math.round(f/8*100);
   });
-  const trainPct=kirkPcts.length?Math.round(kirkPcts.reduce((a,b)=>a+b,0)/kirkPcts.length):0;
+  const trainPct=shsTrainPct(shs);
 
   // Comms completion
   const commsDims=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
@@ -6309,7 +6918,7 @@ function collectSmartRecsData(p){
 }
 
 async function callSmartRecommendations(data){
-  const response=await fetch(SMART_RECS_URL,{
+  const response=await aiFetch(SMART_RECS_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
     body:JSON.stringify(data)
@@ -6326,6 +6935,7 @@ function renderSmartRecs(){
   const panel=document.getElementById('smart-recs-panel');
   const fab=document.getElementById('smart-fab');
   if(!panel)return;
+  if(!aiAllowed()){panel.style.display='none';if(fab)fab.style.display='none';return;}
 
   panel.style.display='block';
   if(fab)fab.style.display='flex';
@@ -7029,6 +7639,37 @@ function openResourceInProject(relId,projId){
 // ════════════════════════════════════════════════════════
 // FEATURE: OCM WORKLOAD BALANCE DASHBOARD
 // ════════════════════════════════════════════════════════
+// ── T-shirt sizing: load points per project size ──
+const PROJ_SIZES=[{key:'XS',pts:1},{key:'S',pts:2},{key:'M',pts:3},{key:'L',pts:5},{key:'XL',pts:8},{key:'XXL',pts:13}];
+const SIZE_UNSIZED_PTS=3;// unsized projects count as M until sized
+const LOAD_OVER=10,LOAD_NEAR=6;
+function sizePts(p){const s=PROJ_SIZES.find(x=>x.key===p.size);return s?s.pts:SIZE_UNSIZED_PTS;}
+function isActiveProj(p){return !/^complete/i.test(p.status||'');}
+
+// Time-based load: a project occupies its trainers from Tech Transfer (or UAT
+// complete) through the last cohort. Peak load is the highest total of size
+// points across overlapping windows. Projects without dates count at all times.
+function projWorkWindow(p){
+  if(!p)return null;
+  const r=calcTrainingTimeline(p);const dt=projTTDates(p);
+  const start=dt.techTransfer||dt.uatComplete;
+  if(!start||r.error||!r.finishHi)return null;
+  return{from:new Date(start+'T12:00:00'),to:r.finishHi};
+}
+function peakLoad(wins){
+  const undated=wins.filter(w=>w.undated);const dated=wins.filter(w=>!w.undated);
+  const base=undated.reduce((a,w)=>a+w.pts,0);
+  let best={pts:base,from:null,to:null,names:undated.map(w=>w.name)};
+  dated.forEach(w=>{
+    const over=dated.filter(x=>x.from<=w.from&&x.to>=w.from);
+    const pts=base+over.reduce((a,x)=>a+x.pts,0);
+    if(pts>best.pts||(pts===best.pts&&!best.from)){
+      const to=new Date(Math.min(...over.map(x=>x.to.getTime())));
+      best={pts,from:w.from,to,names:undated.map(x=>x.name).concat(over.map(x=>x.name))};
+    }
+  });
+  return best;
+}
 function collectOcmWorkloadData(){
   const OCM_ROLES=[{key:'ocm_train',label:'OCM Training',abbr:'Train'},{key:'ocm_impl',label:'OCM Implementation',abbr:'Impl'}];
   const personMap={};
@@ -7048,7 +7689,7 @@ function collectOcmWorkloadData(){
             const nm=res.name.trim();const norm=nm.toLowerCase();
             relResources.add(norm);
             if(!personMap[norm])personMap[norm]={name:nm,assignments:[],projIds:new Set(),relIds:new Set()};
-            personMap[norm].assignments.push({roleKey:role.key,roleLabel:role.label,roleAbbr:role.abbr,projId:p.id,projName:p.name,relName:r.name,relId:r.id,relGoLive:r.golive});
+            personMap[norm].assignments.push({roleKey:role.key,roleLabel:role.label,roleAbbr:role.abbr,projId:p.id,projName:p.name,relName:r.name,relId:r.id,relGoLive:r.golive,size:p.size||'',pts:sizePts(p),active:isActiveProj(p)});
             personMap[norm].projIds.add(p.id);
             personMap[norm].relIds.add(r.id);
           });
@@ -7065,8 +7706,21 @@ function collectOcmWorkloadData(){
   });
 
   const people=Object.values(personMap);
+  const projById={};releases.forEach(r=>(r.projects||[]).forEach(p=>{projById[p.id]=p;}));
+  people.forEach(person=>{
+    const seen=new Set();person.totalPts=0;person.unsized=0;person.undated=0;person.activeProjs=0;
+    const wins=[];
+    person.assignments.forEach(a=>{
+      if(seen.has(a.projId)||!a.active)return;seen.add(a.projId);
+      person.totalPts+=a.pts;person.activeProjs++;if(!a.size)person.unsized++;
+      const w=projWorkWindow(projById[a.projId]);
+      if(w)wins.push({...w,pts:a.pts,name:a.projName});else{person.undated++;wins.push({undated:true,pts:a.pts,name:a.projName});}
+    });
+    const pk=peakLoad(wins);
+    person.load=pk.pts;person.peakFrom=pk.from;person.peakTo=pk.to;person.peakProjs=pk.names;
+  });
   const totalUnique=people.length;
-  const overAllocated=people.filter(p=>p.projIds.size>=3).length;
+  const overAllocated=people.filter(p=>p.load>=LOAD_OVER).length;
   const crossRelease=people.filter(p=>p.relIds.size>=2).length;
   const totalGaps=projectGaps.length;
   projectGaps.sort((a,b)=>b.missingCount-a.missingCount);
@@ -7087,7 +7741,7 @@ function renderOcmWorkloadBalance(){
     const parts=[];
     if(data.summary.totalGaps)parts.push(data.summary.totalGaps+' gap'+(data.summary.totalGaps!==1?'s':''));
     if(data.summary.crossRelease)parts.push(data.summary.crossRelease+' cross-release');
-    if(data.summary.overAllocated)parts.push(data.summary.overAllocated+' over-allocated');
+    if(data.summary.overAllocated)parts.push(data.summary.overAllocated+' over capacity');
     if(!parts.length)parts.push('All balanced');
     statEl.textContent=parts.join(' · ');
   }
@@ -7098,7 +7752,7 @@ function renderOcmWklSummary(data){
   const s=data.summary;
   el.innerHTML=`<div class="sat-alert-strip">
     <div class="sat-alert-item"><span class="sat-alert-val">${s.totalUnique}</span><span class="sat-alert-lbl">Total OCM Resources</span></div>
-    <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over-Allocated (3+)</span></div>
+    <div class="sat-alert-item"><span class="sat-alert-val${s.overAllocated?' sev-crit':''}">${s.overAllocated}</span><span class="sat-alert-lbl">Over Capacity (${LOAD_OVER}+ pts at peak)</span></div>
     <div class="sat-alert-item"><span class="sat-alert-val${s.crossRelease?' sev-high':''}">${s.crossRelease}</span><span class="sat-alert-lbl">Cross-Release Overlap</span></div>
     <div class="sat-alert-item"${data.projectGaps.length?` style="cursor:pointer" onclick="openRelease(${data.projectGaps[0].relId})" title="Go to ${esc(data.projectGaps[0].relName)}"`:''}>
       <span class="sat-alert-val${s.totalGaps?' sev-crit':''}">${s.totalGaps}</span><span class="sat-alert-lbl">Projects w/ Gaps</span></div>
@@ -7111,27 +7765,27 @@ function renderOcmWklRoster(data){
   // Bucket people by utilization level
   const heavy=[],active=[],available=[];
   data.people.forEach(person=>{
-    const pc=person.projIds.size;
-    if(pc>=3)heavy.push(person);
-    else if(pc===2)active.push(person);
+    if(person.load>=LOAD_OVER)heavy.push(person);
+    else if(person.load>=LOAD_NEAR)active.push(person);
     else available.push(person);
   });
-  [heavy,active,available].forEach(arr=>arr.sort((a,b)=>b.projIds.size-a.projIds.size||a.name.localeCompare(b.name)));
+  [heavy,active,available].forEach(arr=>arr.sort((a,b)=>b.load-a.load||a.name.localeCompare(b.name)));
 
   function renderPersonRow(person){
     const projGroups={};
     person.assignments.forEach(a=>{
-      if(!projGroups[a.projId])projGroups[a.projId]={projName:a.projName,relName:a.relName,relId:a.relId,projId:a.projId,roles:[]};
+      if(!projGroups[a.projId])projGroups[a.projId]={projName:a.projName,relName:a.relName,relId:a.relId,projId:a.projId,size:a.size,active:a.active,roles:[]};
       projGroups[a.projId].roles.push(a.roleAbbr);
     });
     const projs=Object.values(projGroups);
     let r='<div class="wkl-roster-row">';
-    r+='<div class="wkl-roster-name">'+esc(person.name)+'</div>';
+    const when=person.peakFrom?' · '+person.peakFrom.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'–'+person.peakTo.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+    r+='<div class="wkl-roster-name">'+esc(person.name)+'<span class="wkl-load" title="Peak load points across overlapping active projects (XS 1 · S 2 · M 3 · L 5 · XL 8 · XXL 13). At peak: '+esc((person.peakProjs||[]).join(', '))+'">'+person.load+' pts peak'+when+'</span>'+(person.load!==person.totalPts?'<span class="wkl-unsized" style="color:var(--ink-60)" title="Total if every project ran at once">'+person.totalPts+' total</span>':'')+(person.unsized?'<span class="wkl-unsized" title="Unsized projects count as M (3 pts)">'+person.unsized+' unsized</span>':'')+(person.undated?'<span class="wkl-unsized" title="No Tech Transfer/UAT date, size or audience yet, so these count at all times">'+person.undated+' undated</span>':'')+'</div>';
     r+='<div class="wkl-roster-tags">';
     projs.forEach(pr=>{
       const roles=pr.roles.join(' + ');
       const showRel=releases.length>1;
-      r+='<span class="wkl-roster-tag" title="'+esc(pr.relName)+' → '+esc(pr.projName)+'" onclick="openResourceInProject('+pr.relId+','+pr.projId+')">'+(showRel?'<span class="wkl-roster-rel">'+esc(pr.relName)+'</span> ':'')+esc(pr.projName)+' <span class="wkl-roster-role">'+esc(roles)+'</span></span>';
+      r+='<span class="wkl-roster-tag" title="'+esc(pr.relName)+' → '+esc(pr.projName)+'" onclick="openResourceInProject('+pr.relId+','+pr.projId+')">'+(showRel?'<span class="wkl-roster-rel">'+esc(pr.relName)+'</span> ':'')+(pr.size?'<span class="size-badge">'+esc(pr.size)+'</span> ':'')+(pr.active?'':'<span class="wkl-roster-role">Complete</span> ')+esc(pr.projName)+' <span class="wkl-roster-role">'+esc(roles)+'</span></span>';
     });
     r+='</div></div>';
     return r;
@@ -7151,9 +7805,9 @@ function renderOcmWklRoster(data){
   }
 
   let h='';
-  h+=renderGroup('Over-Allocated — 3+ Projects','wkl-grp-heavy',heavy,false);
-  h+=renderGroup('Multi-Project — 2 Projects','wkl-grp-active',active,false);
-  h+=renderGroup('Single Project','wkl-grp-available',available,heavy.length>0||active.length>0);
+  h+=renderGroup('Over Capacity — '+LOAD_OVER+'+ Points at Peak','wkl-grp-heavy',heavy,false);
+  h+=renderGroup('Near Capacity — '+LOAD_NEAR+'–'+(LOAD_OVER-1)+' Points','wkl-grp-active',active,false);
+  h+=renderGroup('Has Capacity — Under '+LOAD_NEAR+' Points','wkl-grp-available',available,heavy.length>0||active.length>0);
   el.innerHTML=h;
 }
 
@@ -7304,7 +7958,7 @@ async function runSaturationForecast(){
   el.innerHTML='<div class="sf-loading"><div class="sf-spinner"></div><div>Analyzing saturation patterns and forecasting change load…</div></div>';
   try{
     const satData=collectSaturationData();
-    const response=await fetch(SAT_FORECAST_URL,{
+    const response=await aiFetch(SAT_FORECAST_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({saturationData:satData,mode:'forecast'})
@@ -7474,7 +8128,7 @@ async function runWhatIfComparison(){
   adjusted.groups=Object.values(groupMap).filter(g=>g.projects.length>=2);
 
   try{
-    const response=await fetch(SAT_FORECAST_URL,{
+    const response=await aiFetch(SAT_FORECAST_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({saturationData:{original,adjusted},mode:'whatif'})
@@ -7571,7 +8225,7 @@ async function runSequencingAnalysis(){
   el.innerHTML='<div class="sf-loading"><div class="sf-spinner"></div><div>Analyzing optimal sequencing strategy…</div></div>';
   try{
     const satData=collectSaturationData();
-    const response=await fetch(SAT_FORECAST_URL,{
+    const response=await aiFetch(SAT_FORECAST_URL,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
       body:JSON.stringify({saturationData:satData,mode:'sequencing'})
@@ -7644,7 +8298,7 @@ function renderPPostLaunch(){
   const el=document.getElementById('ptab-postlaunch');if(!el)return;
   const shs=p.stakeholders||[];
   if(!shs.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">Add stakeholder groups first to track post-launch adoption.</div>';return;}
-  const goDate=new Date(p.golive||'');const now=new Date();const daysSince=Math.round((now-goDate)/(1000*60*60*24));
+  const goDate=new Date(projGoLive(p));const now=new Date();const daysSince=Math.round((now-goDate)/(1000*60*60*24));
   let h='<div class="pl-header">';
   h+='<div class="pl-stat"><span class="pl-stat-val">'+daysSince+'</span><span class="pl-stat-lbl">Days Post Go-Live</span></div>';
   h+='<div class="pl-stat"><span class="pl-stat-val">'+shs.length+'</span><span class="pl-stat-lbl">Groups Tracked</span></div>';
@@ -7654,9 +8308,9 @@ function renderPPostLaunch(){
   h+='</div>';
   shs.forEach(sh=>{
     const data=p.postLaunch[sh.id]||{};
-    const preScore=adoptScore(sh.factors);
+    const fc=shForecast(sh);const preScore=fc?fc.score:null;
     h+='<div class="pl-group">';
-    h+='<div class="pl-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span><span class="pl-pre-score">Pre-Launch: '+preScore+'%</span></div>';
+    h+='<div class="pl-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span><span class="pl-pre-score">Pre-launch forecast: '+(preScore===null?'Not rated':preScore+'%')+'</span></div>';
     h+='<div class="pl-intervals">';
     PL_INTERVALS.forEach(iv=>{
       const obs=data[iv.key]||{};
@@ -7671,7 +8325,7 @@ function renderPPostLaunch(){
         h+='<div class="pl-iv-field pl-iv-notes"><label>Notes</label><textarea rows="1" oninput="updatePL('+sh.id+',\''+iv.key+'\',\'notes\',this.value)" placeholder="Observations...">'+esc(obs.notes||'')+'</textarea></div>';
         h+='</div>';
         // Show trend vs pre-launch
-        if(obs.adoption!==undefined){
+        if(obs.adoption!==undefined&&preScore!==null){
           const delta=obs.adoption-preScore;
           const cls=delta>=0?'pl-trend-up':'pl-trend-down';
           h+='<div class="pl-trend '+cls+'">'+(delta>=0?'<i class="ph ph-arrow-up"></i>':'<i class="ph ph-arrow-down"></i>')+' '+Math.abs(delta)+'% vs pre-launch prediction</div>';
@@ -7705,6 +8359,656 @@ function updatePL(shId,interval,field,value){
   if(!p.postLaunch[shId][interval])p.postLaunch[shId][interval]={};
   p.postLaunch[shId][interval][field]=field==='notes'?value:(value===''?undefined:parseInt(value));
   touch('proj');schedSave();
+}
+
+// ════════════════════════════════════════════════════════
+// FEATURE: SUSTAINMENT — ADOPTION GAP DIAGNOSIS
+// Classifies each group's slippage as a Knowledge, Ability, or
+// Reinforcement gap and prescribes a targeted intervention, so the
+// answer is never "retrain everyone."
+// ════════════════════════════════════════════════════════
+const SUS_GAPS={
+  knowledge:{label:'Knowledge Gap',tag:'Refresher',icon:'ph-book-open',
+    meaning:'They never fully learned it, or they have forgotten it.',
+    actions:['Targeted refresher on the specific tasks they are missing, not the full course','Job aid or quick-reference guide at the point of need','Re-check proficiency at the next checkpoint to confirm the refresher worked'],
+    avoid:'Do not re-run the full training for everyone. Aim the refresher at this group and these tasks.'},
+  ability:{label:'Ability Gap',tag:'Hands-On Support',icon:'ph-hand-pointing',
+    meaning:'They know how in theory but cannot do it under real working conditions.',
+    actions:['Floor support or super-users at the elbow during live work','Practice in the sandbox using their real scenarios','Open office hours for in-the-moment questions'],
+    avoid:'More classroom time will not fix this. They need supported practice in the real environment.'},
+  reinforcement:{label:'Reinforcement Gap',tag:'Reinforcement',icon:'ph-arrows-clockwise',
+    meaning:'They can do it, but they are drifting back to the old way.',
+    actions:['Manager check-ins on usage, with the adoption data in hand','Recognize early adopters publicly within the group','Retire the old way: remove legacy access, forms, and workarounds'],
+    avoid:'Retraining will not help. They already know how. This needs accountability and visible leadership.'}
+};
+const SUS_STATUS={
+  intervene:{label:'Intervene',cls:'sus-st-red'},
+  watch:{label:'Watch',cls:'sus-st-amber'},
+  ontrack:{label:'On Track',cls:'sus-st-green'},
+  nodata:{label:'Needs Data',cls:'sus-st-grey'}
+};
+const SUS_IV_STATUSES=['Planned','Delivered','Verified'];
+
+function diagnoseSustainment(p,sh){
+  const pts={knowledge:0,ability:0,reinforcement:0};
+  const ev={knowledge:[],ability:[],reinforcement:[]};
+  const add=(type,n,msg)=>{pts[type]+=n;ev[type].push(msg);};
+  const pl=(p.postLaunch||{})[sh.id]||{};
+  const obs=PL_INTERVALS.map(iv=>Object.assign({label:iv.label},pl[iv.key]||{}))
+    .filter(o=>o.adoption!==undefined||o.proficiency!==undefined||o.tickets!==undefined);
+  const latest=obs[obs.length-1];const prev=obs.length>1?obs[obs.length-2]:null;
+  const has=v=>v!==undefined&&v!==null&&!isNaN(v);
+  if(latest){
+    const at=' at '+latest.label.toLowerCase();
+    if(has(latest.proficiency)){
+      if(latest.proficiency<60)add('knowledge',3,'Proficiency is '+latest.proficiency+'%'+at);
+      else if(latest.proficiency<75)add('knowledge',2,'Proficiency is '+latest.proficiency+'%'+at+', below the 75% bar');
+    }
+    if(prev&&has(prev.proficiency)&&has(latest.proficiency)&&latest.proficiency<=prev.proficiency-5)
+      add('knowledge',2,'Proficiency fell from '+prev.proficiency+'% to '+latest.proficiency+'%, a sign of skill decay');
+    if(prev&&has(prev.tickets)&&has(latest.tickets)&&latest.tickets>prev.tickets)
+      add('knowledge',1,'Support tickets rose from '+prev.tickets+' to '+latest.tickets);
+    if(prev&&has(prev.adoption)&&has(latest.adoption)&&latest.adoption<=prev.adoption-8)
+      add('reinforcement',3,'Adoption fell from '+prev.adoption+'% to '+latest.adoption+'%, so people are reverting');
+    else if(has(latest.adoption)&&has(latest.proficiency)&&latest.proficiency>=75&&latest.adoption<=latest.proficiency-10)
+      add('ability',latest.proficiency-latest.adoption>=25?3:2,'Proficient on assessment ('+latest.proficiency+'%) but only '+latest.adoption+'% adoption in live work');
+    else if(has(latest.adoption)&&latest.adoption<60&&!has(latest.proficiency))
+      add('ability',1,'Adoption is '+latest.adoption+'%'+at);
+  }
+  // Pulse survey signals (ADKAR only: d3 Knowledge, d4 Ability, d5 Reinforcement)
+  const pr=(p.pulseResults||{})[sh.id]||{};
+  const fwId=getBrand().frameworkId||'adkar';
+  if(fwId==='adkar'&&pr.responses>0&&pr.scores){
+    [['d3','knowledge','Knowledge'],['d4','ability','Ability'],['d5','reinforcement','Reinforcement']].forEach(([k,type,word])=>{
+      const s=+pr.scores[k];
+      if(has(s)&&s<=2.5)add(type,2,'Pulse survey rates '+word+' at '+s.toFixed(1)+'/5 ('+pr.responses+' responses)');
+    });
+  }
+  const tr=shTrainResults(sh);
+  if(tr.pass!==null){
+    if(tr.pass<70)add('knowledge',3,'Only '+tr.pass+'% passed the end-of-course assessment (L2)');
+    else if(tr.pass<80)add('knowledge',2,tr.pass+'% passed the end-of-course assessment, below the 80% bar');
+  }
+  if(tr.completion!==null&&tr.completion<90)add('knowledge',tr.completion<75?2:1,'Only '+tr.completion+'% completed training');
+  if(tr.confidence!==null&&tr.confidence<=2.5)add('ability',2,'Learner confidence is '+tr.confidence.toFixed(1)+'/5 after training');
+  const postGL=isPostGoLive(p);
+  if(postGL&&!(sh.rein&&sh.rein.owner))add('reinforcement',1,'No reinforcement owner assigned after go-live');
+  if((sh.anxietyIndicators||{}).whatDoesThisMeanFreq>=4)add('knowledge',1,'Frequent "what does this mean?" questions');
+
+  const ranked=Object.keys(pts).sort((a,b)=>pts[b]-pts[a]);
+  const top=pts[ranked[0]];
+  const hasData=!!latest||pr.responses>0||shHasTrainResults(sh);
+  let status;
+  if(top>=4)status='intervene';else if(top>=2)status='watch';else status=hasData?'ontrack':'nodata';
+  const primary=top>=2?ranked[0]:null;
+  const secondary=primary?ranked.slice(1).filter(t=>pts[t]>=2):[];
+  return{status,primary,secondary,pts,ev,latest};
+}
+
+function renderPSustain(){
+  const p=getProj();if(!p)return;
+  const el=document.getElementById('ptab-sustain');if(!el)return;
+  const shs=p.stakeholders||[];
+  if(!shs.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups first, then log post-launch observations or collect a pulse survey to diagnose adoption gaps.</p></div>';return;}
+  if(!p.sustainment)p.sustainment={};
+  const dx=shs.map(sh=>({sh,d:diagnoseSustainment(p,sh)}));
+  const order={intervene:0,watch:1,nodata:2,ontrack:3};
+  dx.sort((a,b)=>order[a.d.status]-order[b.d.status]);
+  const count=s=>dx.filter(x=>x.d.status===s).length;
+  const byGap=g=>dx.filter(x=>x.d.primary===g).length;
+  let h=renderSizeExpectations(p);
+  h+='<div class="pl-header">';
+  ['intervene','watch','ontrack','nodata'].forEach(s=>{
+    h+='<div class="pl-stat"><span class="pl-stat-val sus-stat-'+s+'">'+count(s)+'</span><span class="pl-stat-lbl">'+SUS_STATUS[s].label+'</span></div>';
+  });
+  h+='</div>';
+  const flagged=dx.filter(x=>x.d.primary);
+  if(flagged.length){
+    const parts=[];
+    if(byGap('knowledge'))parts.push('<strong>'+byGap('knowledge')+'</strong> need'+(byGap('knowledge')===1?'s':'')+' a targeted refresher');
+    if(byGap('ability'))parts.push('<strong>'+byGap('ability')+'</strong> need'+(byGap('ability')===1?'s':'')+' hands-on support');
+    if(byGap('reinforcement'))parts.push('<strong>'+byGap('reinforcement')+'</strong> need'+(byGap('reinforcement')===1?'s':'')+' reinforcement, not retraining');
+    h+='<div class="sus-summary"><i class="ph ph-target"></i><div><strong>Targeted plan, not blanket retraining.</strong> Of '+shs.length+' group'+(shs.length===1?'':'s')+': '+parts.join(', ')+'.'+(count('ontrack')?' '+count('ontrack')+' on track and should be left alone.':'')+'</div></div>';
+  }else if(count('nodata')===shs.length){
+    h+='<div class="sus-summary sus-summary-muted"><i class="ph ph-info"></i><div>No adoption signals yet. Log 30/60/90-day observations in <strong>Post-Launch</strong>, or collect a <strong>Pulse</strong> survey, and each group will be diagnosed here.</div></div>';
+  }
+  dx.forEach(({sh,d})=>{
+    const st=SUS_STATUS[d.status];
+    h+='<div class="sus-group">';
+    h+='<div class="sus-group-hd"><span class="pl-group-name">'+esc(sh.name)+'</span>';
+    if(d.primary)h+='<span class="sus-gap-chip sus-gap-'+d.primary+'"><i class="ph '+SUS_GAPS[d.primary].icon+'"></i>'+SUS_GAPS[d.primary].label+'</span>';
+    h+='<span class="sus-fc" title="Pre-training adoption risk forecast from Adoption Scoring">Forecast '+esc(forecastLabel(sh))+'</span>';
+    h+='<span class="sus-status '+st.cls+'">'+st.label+'</span></div>';
+    if(d.latest){
+      const l=d.latest;const bits=[];
+      if(l.adoption!==undefined)bits.push('Adoption '+l.adoption+'%');
+      if(l.proficiency!==undefined)bits.push('Proficiency '+l.proficiency+'%');
+      if(l.tickets!==undefined)bits.push(l.tickets+' tickets');
+      h+='<div class="sus-latest">Latest ('+esc(l.label)+'): '+bits.join(' · ')+'</div>';
+    }
+    if(d.primary){
+      const g=SUS_GAPS[d.primary];
+      h+='<div class="sus-body">';
+      h+='<div class="sus-col"><div class="sus-col-hd">Why</div><div class="sus-meaning">'+g.meaning+'</div><ul class="sus-ev">';
+      d.ev[d.primary].forEach(e=>{h+='<li>'+esc(e)+'</li>';});
+      d.secondary.forEach(t=>{d.ev[t].forEach(e=>{h+='<li class="sus-ev-sec"><span class="sus-ev-tag">'+SUS_GAPS[t].label+'</span>'+esc(e)+'</li>';});});
+      h+='</ul></div>';
+      h+='<div class="sus-col"><div class="sus-col-hd">Prescribed: '+g.tag+'</div><ul class="sus-rx">';
+      g.actions.forEach(a=>{h+='<li>'+esc(a)+'</li>';});
+      if(d.primary==='reinforcement'&&sh.rein&&sh.rein.escalation)h+='<li>Escalate per plan: '+esc(sh.rein.escalation)+'</li>';
+      if(d.primary==='reinforcement'&&sh.rein&&sh.rein.owner)h+='<li>Reinforcement owner: '+esc(sh.rein.owner)+'</li>';
+      h+='</ul><div class="sus-avoid"><i class="ph ph-warning"></i>'+esc(g.avoid)+'</div></div>';
+      h+='</div>';
+    }else if(d.status==='ontrack'){
+      h+='<div class="sus-ok">No gap signals. Keep the scheduled checkpoints and do not add extra training for this group.</div>';
+    }else{
+      const weak=Object.keys(d.ev).flatMap(t=>d.ev[t]);
+      h+='<div class="sus-ok">'+(weak.length?'Early signal: '+esc(weak.join('; '))+'. Not enough to act on yet.':'Log a post-launch observation or pulse survey for this group to diagnose it.')+'</div>';
+    }
+    h+=renderSusInterventions(p,sh,d);
+    h+='</div>';
+  });
+  el.innerHTML=h;
+  if(isReadOnly)applyReadOnlyRestrictions();
+}
+// ════════════════════════════════════════════════════════
+// FEATURE: TRAINING TIMELINE BY SIZE
+// UAT complete → build → review → edits → Train the Trainer →
+// trainer readiness → delivery, in business days. Delivery is a
+// throughput calculation from audience headcount and course length.
+// The standard (durations, audiences) is stored per browser and can be
+// imported from a JSON file, so client-specific values stay out of code.
+// ════════════════════════════════════════════════════════
+const TT_COURSES=[
+  {key:'micro',label:'On-demand micro-learning',noT3:true,noReady:true,noDelivery:true},
+  {key:'huddle',label:'Huddle (30 min or less)',perDay:9,noT3:true,noReady:true},
+  {key:'info',label:'Info session (up to 1.5 hr)',perDay:4,makeup:true,noT3:true,noReady:true},
+  {key:'half',label:'Half-day hands-on',perDay:2,makeup:true},
+  {key:'full',label:'Full-day hands-on',perDay:1,makeup:true},
+  {key:'two',label:'2-day hands-on',days:2,makeup:true},
+  {key:'three',label:'3-day hands-on',days:3,makeup:true}
+];
+// Built-in standard: DCAS Training Timeframes by Project Size v1.1 (Oct 6, 2026).
+// XS is not in that standard; its values are placeholders.
+const TT_DEFAULT={
+  cohortSize:20,makeupDays:5,readinessDays:12.5,reviewFloor:5,
+  sizes:{
+    XS:{build:[2,3],review:2,edits:1,t3:[0,1]},
+    S:{build:[5,5],review:5,edits:[2,2],t3:[0,2]},
+    M:{build:[10,10],review:5,edits:[3,3],t3:[2,3]},
+    L:{build:[15,20],review:7,edits:[5,5],t3:[5,5]},
+    XL:{build:[20,25],review:10,edits:[5,5],t3:[5,10]},
+    XXL:{build:[25,30],review:10,edits:[5,8],t3:[10,10]}
+  },
+  audiences:[
+    {id:'dhs',name:'DHS',headcount:360,ownTrainers:true,externalReview:true},
+    {id:'medicaid',name:'Medicaid Branch',headcount:35,ownTrainers:false,externalReview:true},
+    {id:'ddcc',name:'DDCC',headcount:100,ownTrainers:false,externalReview:false}
+  ]
+};
+const TT_KEY='adoptiq_training_standard';
+function getTTStd(){
+  let st={};try{st=JSON.parse(localStorage.getItem(TT_KEY)||'{}')||{};}catch(e){}
+  const d=JSON.parse(JSON.stringify(TT_DEFAULT));
+  return{...d,...st,sizes:{...d.sizes,...(st.sizes||{})},audiences:Array.isArray(st.audiences)?st.audiences:d.audiences};
+}
+function saveTTStd(st){try{localStorage.setItem(TT_KEY,JSON.stringify(st));}catch(e){}}
+function ttRange(v){return Array.isArray(v)?[+v[0]||0,+(v[1]??v[0])||0]:[+v||0,+v||0];}
+function addBizDays(dateStr,n){
+  const d=new Date(dateStr+'T12:00:00');if(isNaN(d))return null;
+  let left=Math.ceil(n);
+  while(left>0){d.setDate(d.getDate()+1);const w=d.getDay();if(w!==0&&w!==6)left--;}
+  return d;
+}
+function bizDaysBetween(a,b){// business days from a to b (negative if b before a)
+  const s=new Date(a);const e=new Date(b);if(isNaN(s)||isNaN(e))return null;
+  const sign=e>=s?1:-1;const from=sign>0?s:e,to=sign>0?e:s;let n=0;const d=new Date(from);
+  while(d<to){d.setDate(d.getDate()+1);const w=d.getDay();if(w!==0&&w!==6&&d<=to)n++;}
+  return n*sign;
+}
+function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function ttFmt(d){return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';}
+function ttDeliveryDays(aud,course,st){
+  if(course.noDelivery)return{cohorts:0,days:0};
+  const cohorts=Math.max(1,Math.ceil((+aud.headcount||0)/(+st.cohortSize||20)));
+  const base=course.perDay?Math.ceil(cohorts/course.perDay):cohorts*course.days;
+  return{cohorts,days:base+(course.makeup?(+st.makeupDays||0):0)};
+}
+function calcTrainingTimeline(p){
+  const st=getTTStd();const tt=p.trainingTimeline||{};const dt=projTTDates(p);const gl=projGoLive(p);
+  const sz=st.sizes[p.size];if(!sz)return{error:'nosize'};
+  const course=TT_COURSES.find(c=>c.key===(tt.course||'full'))||TT_COURSES[4];
+  const auds=st.audiences.filter(a=>(tt.audiences||[]).includes(a.id));
+  if(!course.noDelivery&&!auds.length)return{error:'noaud',course,st};
+  const ownTrainers=auds.some(a=>a.ownTrainers);
+  const external=auds.some(a=>a.externalReview);
+  const perAud=auds.map(a=>({a,...ttDeliveryDays(a,course,st)}));
+  const binding=perAud.reduce((m,x)=>!m||x.days>m.days?x:m,null);
+  const review=Math.max(+sz.review||0,external?(+st.reviewFloor||0):0);
+  const phases=[
+    {key:'build',label:'Build',r:ttRange(sz.build),scales:true},
+    {key:'review',label:'Stakeholder Review',r:[review,review],fixed:external},
+    {key:'edits',label:'Revisions',r:ttRange(sz.edits),scales:true},
+    {key:'t3',label:'Train the Trainer',r:course.noT3?[0,0]:ttRange(sz.t3),scales:true,skip:course.noT3?'Not used for this course length':''},
+    {key:'ready',label:'Trainer Readiness',r:(ownTrainers&&!course.noReady)?[+st.readinessDays||0,+st.readinessDays||0]:[0,0],fixed:true,
+      skip:course.noReady?'Not used for this course length':!ownTrainers?'No audience in scope delivers with its own trainers':''},
+    {key:'deliver',label:'Delivery',r:binding?[binding.days,binding.days]:[0,0],deliver:true,skip:course.noDelivery?'Release and monitor; no scheduled delivery':''}
+  ];
+  const lo=phases.reduce((a,x)=>a+x.r[0],0),hi=phases.reduce((a,x)=>a+x.r[1],0);
+  let finishLo=null,finishHi=null,vsGolive=null,deliveryStart=null;
+  if(dt.uatComplete){
+    finishLo=addBizDays(dt.uatComplete,lo);finishHi=addBizDays(dt.uatComplete,hi);
+    if(gl&&finishHi)vsGolive=bizDaysBetween(isoDate(finishHi),gl);
+    if(!course.noDelivery){const pre=phases.filter(x=>!x.deliver).reduce((a,x)=>a+x.r[1],0);deliveryStart=addBizDays(dt.uatComplete,pre+1);}
+  }
+  const gateBreach=!!(dt.uatComplete&&p.trainingStartDate&&!p.trainingStartAuto&&p.trainingStartDate<dt.uatComplete);
+  // Project Acclimation: Tech Transfer through UAT, before the clock starts
+  let accl=null;
+  if(dt.techTransfer&&dt.uatComplete){
+    const d=bizDaysBetween(dt.techTransfer,dt.uatComplete);
+    accl=d<0?{invalid:true}:{days:d,commitLo:d+lo,commitHi:d+hi};
+  }
+  const checkpoints=gl?[30,60,90].map(n=>{const d=new Date(gl+'T12:00:00');d.setDate(d.getDate()+n);return{n,d};}):[];
+  return{st,sz,course,auds,perAud,binding,phases,lo,hi,finishLo,finishHi,vsGolive,gateBreach,accl,dt,gl,deliveryStart,checkpoints};
+}
+function applyTTDerived(p){
+  if(!p)return false;let changed=applyDerivedFactors(p);
+  const r=calcTrainingTimeline(p);
+  if(!r.error&&r.deliveryStart){
+    const ds=isoDate(r.deliveryStart);
+    if((!p.trainingStartDate||p.trainingStartAuto)&&p.trainingStartDate!==ds){p.trainingStartDate=ds;p.trainingStartAuto=true;changed=true;}
+  }
+  const st=getTTStd();const sel=st.audiences.filter(a=>((p.trainingTimeline||{}).audiences||[]).includes(a.id));
+  if(sel.length){
+    const users=sel.reduce((a,x)=>a+(+x.headcount||0),0);
+    if((!p.estimatedUsers||p.estimatedUsersAuto)&&p.estimatedUsers!==users){p.estimatedUsers=users;p.estimatedUsersAuto=true;changed=true;}
+  }
+  if(changed){
+    if(p===getProj()){
+      const ts=document.getElementById('p-train-start');if(ts)ts.value=p.trainingStartDate||'';
+      const us=document.getElementById('p-users');if(us)us.value=p.estimatedUsers||0;
+    }
+    touch('proj');schedSave();
+  }
+  return changed;
+}
+function syncTT(field,val){
+  const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
+  p.trainingTimeline[field]=val;touch('proj');schedSave();renderPTrainPlan();
+}
+function toggleTTAud(id,on){
+  if(isReadOnly)return;
+  const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
+  const a=new Set(p.trainingTimeline.audiences||[]);on?a.add(id):a.delete(id);
+  p.trainingTimeline.audiences=[...a];
+  if(on){
+    const aud=getTTStd().audiences.find(x=>x.id===id);
+    if(!p.stakeholders)p.stakeholders=[];
+    if(aud&&!p.stakeholders.some(sh=>sh.audienceId===id||(sh.name||'').trim().toLowerCase()===aud.name.trim().toLowerCase())){
+      const sh=newStakeholder(aud.name);sh.audienceId=id;p.stakeholders.push(sh);
+      showSuccess('Added "'+aud.name+'" as a stakeholder group.');
+    }
+  }
+  touch('proj');schedSave();renderPTrainPlan();
+}
+function renderPTrainPlan(){
+  const p=getProj();if(!p)return;
+  const el=document.getElementById('ptab-trainplan');if(!el)return;
+  applyTTDerived(p);
+  const tt=p.trainingTimeline||{};const st=getTTStd();const dt=projTTDates(p);
+  const fromRel=on=>on?'<span class="tt-inherit" title="Inherited from the release. Set a date here to override.">from release</span>':'';
+  let h='<div class="tt-inputs">';
+  h+='<div class="tt-field"><label>Size</label><div class="tt-static">'+(p.size?'<span class="size-badge size-badge-lg">'+esc(p.size)+'</span>':'<em>Set in header</em>')+'</div></div>';
+  h+='<div class="tt-field"><label for="tt-tech">Tech Transfer Start '+fromRel(dt.ttFromRel)+'</label><input type="date" id="tt-tech" value="'+esc(dt.techTransfer)+'" onchange="syncTT(\'techTransfer\',this.value)"></div>';
+  h+='<div class="tt-field"><label for="tt-uat">UAT Complete '+fromRel(dt.uatFromRel)+'</label><input type="date" id="tt-uat" value="'+esc(dt.uatComplete)+'" onchange="syncTT(\'uatComplete\',this.value)"></div>';
+  h+='<div class="tt-field"><label for="tt-course">Course Length</label><select id="tt-course" onchange="syncTT(\'course\',this.value)">';
+  TT_COURSES.forEach(c=>{h+='<option value="'+c.key+'"'+((tt.course||'full')===c.key?' selected':'')+'>'+esc(c.label)+'</option>';});
+  h+='</select></div>';
+  h+='<div class="tt-field tt-aud-field"><label>Audiences in Scope</label><div class="tt-auds">';
+  if(!st.audiences.length)h+='<em class="tt-muted">Add audiences in the training standard below.</em>';
+  st.audiences.forEach(a=>{
+    const on=(tt.audiences||[]).includes(a.id);
+    h+='<label class="tt-aud"><input type="checkbox"'+(on?' checked':'')+' onchange="toggleTTAud(\''+esc(a.id)+'\',this.checked)">'+esc(a.name)+' <span class="tt-muted">~'+(+a.headcount||0)+'</span></label>';
+  });
+  h+='</div></div></div>';
+  const r=calcTrainingTimeline(p);
+  if(r.error==='nosize'){h+='<div class="size-exp size-exp-muted"><i class="ph ph-t-shirt"></i><div>Set this project\'s <strong>T-shirt size</strong> in the header to calculate its training timeline.</div></div>';}
+  else if(r.error==='noaud'){h+='<div class="size-exp size-exp-muted"><i class="ph ph-users-three"></i><div>Select the <strong>audiences in scope</strong>. Delivery time is set by who is trained and the course length, not by size.</div></div>';}
+  else{
+    if(r.gateBreach)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning-octagon"></i><div><strong>Hard gate breached.</strong> Training start ('+fmtDate(p.trainingStartDate)+') is before UAT complete ('+fmtDate(dt.uatComplete)+'). Building materials against an unstable system risks accuracy and forces rework.</div></div>';
+    if(r.vsGolive!==null){
+      if(r.vsGolive<0)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-calendar-x"></i><div><strong>Training finishes after go-live.</strong> At the upper end, the last cohort completes '+Math.abs(r.vsGolive)+' business days after the '+fmtDate(r.gl)+' go-live. Options: move UAT earlier, shorten the course, narrow the audience, or move go-live.</div></div>';
+      else h+='<div class="tt-alert tt-alert-green"><i class="ph ph-calendar-check"></i><div><strong>'+r.vsGolive+' business days of buffer</strong> between the last cohort (upper end) and the '+fmtDate(r.gl)+' go-live.</div></div>';
+    }
+    if(r.accl&&r.accl.invalid)h+='<div class="tt-alert tt-alert-red"><i class="ph ph-warning"></i><div><strong>Check dates.</strong> Tech Transfer start ('+fmtDate(dt.techTransfer)+') is after UAT complete ('+fmtDate(dt.uatComplete)+').</div></div>';
+    h+='<div class="tt-total"><div><div class="tt-total-l">UAT complete to last cohort</div><div class="tt-total-v">'+(r.lo===r.hi?r.hi:r.lo+' to '+r.hi)+' business days</div><div class="tt-total-s">about '+(Math.round(r.lo/5*2)/2)+(r.lo===r.hi?'':' to '+(Math.round(r.hi/5*2)/2))+' weeks</div></div>';
+    if(r.finishHi)h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-v">'+ttFmt(r.finishLo)+(r.lo===r.hi?'':' to '+ttFmt(r.finishHi))+'</div><div class="tt-total-s">from UAT complete '+fmtDate(dt.uatComplete)+(r.deliveryStart?' · delivery starts '+ttFmt(r.deliveryStart):'')+'</div></div>';
+    else h+='<div><div class="tt-total-l">Last cohort finishes</div><div class="tt-total-s">Enter the UAT complete date to see calendar dates.</div></div>';
+    if(r.accl&&!r.accl.invalid)h+='<div><div class="tt-total-l">Training staff committed</div><div class="tt-total-v">'+(r.accl.commitLo===r.accl.commitHi?r.accl.commitHi:r.accl.commitLo+' to '+r.accl.commitHi)+' business days</div><div class="tt-total-s">Tech Transfer to last cohort, incl. '+r.accl.days+' days of acclimation</div></div>';
+    else if(!dt.techTransfer)h+='<div><div class="tt-total-l">Training staff committed</div><div class="tt-total-s">Enter the Tech Transfer start to include Project Acclimation.</div></div>';
+    h+='</div>';
+    // Bar
+    const acclDays=r.accl&&!r.accl.invalid?r.accl.days:0;
+    const scale=Math.max(r.hi+acclDays,1);
+    h+='<div class="tt-bar" role="img" aria-label="Training timeline by phase">';
+    if(acclDays)h+='<div class="tt-seg tt-seg-accl" style="flex:'+(acclDays/scale)+'" title="Project Acclimation: '+acclDays+' d (Tech Transfer through UAT)"><span>Acclimation</span></div><div class="tt-clock" title="UAT complete: the clock starts"></div>';
+    r.phases.filter(x=>x.r[1]>0).forEach(x=>{
+      const cls=x.deliver?'tt-seg-deliver':x.fixed?'tt-seg-fixed':'tt-seg-scale';
+      h+='<div class="tt-seg '+cls+'" style="flex:'+(x.r[1]/scale)+'" title="'+esc(x.label)+': '+(x.r[0]===x.r[1]?x.r[1]:x.r[0]+'–'+x.r[1])+' d"><span>'+esc(x.label.split(' ')[0])+'</span></div>';
+    });
+    h+='</div><div class="tt-leg"><span><i class="tt-sw tt-seg-scale"></i>Scales with size</span><span><i class="tt-sw tt-seg-fixed"></i>Fixed floor</span><span><i class="tt-sw tt-seg-deliver"></i>Delivery: audience × course length</span>'+(acclDays?'<span><i class="tt-sw tt-seg-accl"></i>Acclimation (before the clock)</span>':'')+'</div>';
+    // Phase table
+    let cum=0;
+    h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Phase</th><th>Business Days</th><th>Ends (upper)</th><th>Note</th></tr></thead><tbody>';
+    if(dt.techTransfer)h+='<tr class="tt-row-accl"><td>Project Acclimation</td><td>'+(r.accl&&!r.accl.invalid?r.accl.days:'—')+'</td><td>'+(dt.uatComplete?fmtDate(dt.uatComplete):'—')+'</td><td class="tt-note">Tech Transfer through UAT. Fixed floor before the clock; trainers learn the change and provide QA test scenarios.</td></tr>';
+    r.phases.forEach(x=>{
+      cum+=x.r[1];const end=dt.uatComplete&&x.r[1]>0?ttFmt(addBizDays(dt.uatComplete,cum)):'—';
+      const note=x.skip||(x.deliver&&r.binding?'Binding audience: '+esc(r.binding.a.name)+' ('+r.binding.cohorts+' cohorts'+(r.course.makeup?', incl. '+r.st.makeupDays+'-day make-up':'')+')':x.fixed&&x.r[1]?'Fixed floor':'');
+      h+='<tr'+(x.r[1]?'':' class="size-zero"')+'><td>'+esc(x.label)+'</td><td>'+(x.r[0]===x.r[1]?x.r[1]:x.r[0]+' to '+x.r[1])+'</td><td>'+end+'</td><td class="tt-note">'+note+'</td></tr>';
+    });
+    r.checkpoints.forEach(c=>{h+='<tr class="tt-row-accl"><td>'+c.n+'-day follow-up</td><td>—</td><td>'+ttFmt(c.d)+'</td><td class="tt-note">Post go-live focus group / checkpoint (logged in Post-Launch)</td></tr>';});
+    h+='</tbody></table></div>';
+    if(r.perAud.length>1){
+      h+='<div class="tt-sub">Delivery by audience</div><div class="hm-scroll"><table class="size-tbl"><thead><tr><th>Audience</th><th>Headcount</th><th>Cohorts</th><th>Delivery Days</th></tr></thead><tbody>';
+      r.perAud.forEach(x=>{h+='<tr><td>'+esc(x.a.name)+(x===r.binding?' <span class="size-badge">Binding</span>':'')+'</td><td>~'+(+x.a.headcount||0)+'</td><td>'+x.cohorts+'</td><td>'+x.days+'</td></tr>';});
+      h+='</tbody></table></div>';
+    }
+  }
+  h+=renderJiraCard(p)+renderChangeImpactCard(p);
+  h+=renderTTStdEditor(st);
+  el.innerHTML=h;
+  if(isReadOnly)applyReadOnlyRestrictions();
+}
+function renderTTStdEditor(st){
+  const sizes=PROJ_SIZES.map(x=>x.key);
+  let h='<details class="tt-std"><summary><i class="ph ph-sliders-horizontal"></i> Training standard <span class="tt-muted">(built-in standard; edits saved in this browser)</span></summary><div class="tt-std-body">';
+  h+='<div class="tt-std-actions"><label class="btn-sm tt-file"><i class="ph ph-upload-simple"></i> Import standard (.json)<input type="file" accept=".json,application/json" onchange="importTTStd(this)"></label><button class="btn-sm" onclick="exportTTStd()"><i class="ph ph-download-simple"></i> Export</button><button class="btn-sm" onclick="resetTTStd()">Reset to defaults</button></div>';
+  h+='<div class="tt-std-grid">';
+  [['cohortSize','Cohort size'],['makeupDays','Make-up window (days)'],['readinessDays','Trainer readiness window (days)'],['reviewFloor','External review minimum (days)']].forEach(([k,l])=>{
+    h+='<div class="tt-field"><label>'+l+'</label><input type="number" min="0" step="0.5" value="'+(+st[k]||0)+'" onchange="setTTStd(\''+k+'\',this.value)"></div>';
+  });
+  h+='</div><div class="tt-sub">Effort by size (business days)</div><div class="hm-scroll"><table class="size-tbl tt-std-tbl"><thead><tr><th>Size</th><th>Build (low)</th><th>Build (high)</th><th>Review</th><th>Revisions</th><th>T3 (low)</th><th>T3 (high)</th></tr></thead><tbody>';
+  sizes.forEach(k=>{
+    const z=st.sizes[k]||{};const b=ttRange(z.build),t=ttRange(z.t3);
+    const inp=(field,idx,val)=>'<input type="number" min="0" step="0.5" value="'+val+'" onchange="setTTSize(\''+k+'\',\''+field+'\','+idx+',this.value)">';
+    h+='<tr><td><strong>'+k+'</strong></td><td>'+inp('build',0,b[0])+'</td><td>'+inp('build',1,b[1])+'</td><td>'+inp('review',-1,+z.review||0)+'</td><td>'+inp('edits',-1,ttRange(z.edits)[1])+'</td><td>'+inp('t3',0,t[0])+'</td><td>'+inp('t3',1,t[1])+'</td></tr>';
+  });
+  h+='</tbody></table></div><div class="tt-sub">Audiences</div>';
+  st.audiences.forEach(a=>{
+    h+='<div class="tt-aud-row"><input type="text" value="'+esc(a.name)+'" aria-label="Audience name" onchange="setTTAud(\''+esc(a.id)+'\',\'name\',this.value)"><input type="number" min="0" value="'+(+a.headcount||0)+'" aria-label="Headcount" onchange="setTTAud(\''+esc(a.id)+'\',\'headcount\',this.value)"><label><input type="checkbox"'+(a.ownTrainers?' checked':'')+' onchange="setTTAud(\''+esc(a.id)+'\',\'ownTrainers\',this.checked)"> Own trainers (T3 + readiness)</label><label><input type="checkbox"'+(a.externalReview?' checked':'')+' onchange="setTTAud(\''+esc(a.id)+'\',\'externalReview\',this.checked)"> External review</label><button class="sus-iv-del" title="Remove audience" aria-label="Remove audience" onclick="removeTTAud(\''+esc(a.id)+'\')"><i class="ph ph-x"></i></button></div>';
+  });
+  h+='<button class="btn-sm" onclick="addTTAud()"><i class="ph ph-plus"></i> Add audience</button>';
+  return h+'</div></details>';
+}
+function setTTStd(k,v){const st=getTTStd();st[k]=+v||0;saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function setTTSize(size,field,idx,v){
+  const st=getTTStd();const z={...(st.sizes[size]||{})};
+  if(idx<0)z[field]=+v||0;else{const r=ttRange(z[field]);r[idx]=+v||0;z[field]=r;}
+  st.sizes[size]=z;saveTTStd(st);renderPTrainPlan();keepTTStdOpen();
+}
+function addTTAud(){const st=getTTStd();st.audiences.push({id:'a'+uid(),name:'New audience',headcount:0,ownTrainers:false,externalReview:false});saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function setTTAud(id,field,v){const st=getTTStd();const a=st.audiences.find(x=>x.id===id);if(!a)return;a[field]=field==='headcount'?(+v||0):v;saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function removeTTAud(id){const st=getTTStd();const a=st.audiences.find(x=>x.id===id);if(!a||!confirm('Remove audience "'+a.name+'" from the training standard?'))return;st.audiences=st.audiences.filter(x=>x.id!==id);saveTTStd(st);renderPTrainPlan();keepTTStdOpen();}
+function resetTTStd(){if(!confirm('Reset the training standard to the built-in defaults? Your audiences and durations in this browser will be cleared.'))return;try{localStorage.removeItem(TT_KEY);}catch(e){}renderPTrainPlan();keepTTStdOpen();}
+function keepTTStdOpen(){const d=document.querySelector('#ptab-trainplan .tt-std');if(d)d.open=true;}
+function exportTTStd(){
+  const blob=new Blob([JSON.stringify(getTTStd(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='training-standard.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function importTTStd(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const raw=JSON.parse(rd.result);
+      if(!raw||typeof raw!=='object'||(raw.sizes&&typeof raw.sizes!=='object'))throw new Error('bad');
+      const st={};
+      ['cohortSize','makeupDays','readinessDays','reviewFloor'].forEach(k=>{if(raw[k]!==undefined)st[k]=+raw[k]||0;});
+      if(raw.sizes){st.sizes={};Object.keys(raw.sizes).forEach(k=>{if(PROJ_SIZES.some(x=>x.key===k)){const z=raw.sizes[k]||{};st.sizes[k]={build:ttRange(z.build),review:+z.review||0,edits:ttRange(z.edits),t3:ttRange(z.t3)};}});}
+      if(Array.isArray(raw.audiences))st.audiences=raw.audiences.map(a=>({id:String(a.id||('a'+uid())),name:String(a.name||'Audience'),headcount:+a.headcount||0,ownTrainers:!!a.ownTrainers,externalReview:!!a.externalReview}));
+      saveTTStd({...getTTStd(),...st,sizes:{...getTTStd().sizes,...(st.sizes||{})}});
+      renderPTrainPlan();keepTTStdOpen();showSuccess('Training standard imported.');
+    }catch(e){alert('That file is not a valid training standard.');}
+  };
+  rd.readAsText(file);
+}
+
+
+// ════════════════════════════════════════════════════════
+// PILOT OVERVIEW + STATUS REPORT
+// In pilot view the Overview shows pilot numbers (timeline, buffer,
+// sustainment, size expectations, next actions) instead of KPIs that
+// come from hidden tabs (gates, ADKAR, open issues).
+// ════════════════════════════════════════════════════════
+function pilotStatus(p){
+  const t=calcTrainingTimeline(p);
+  const dx=(p.stakeholders||[]).map(sh=>({sh,d:diagnoseSustainment(p,sh)}));
+  const se=sizeExpectations(p);
+  const seScored=se?se.rows.filter(r=>r.total>0):[];
+  const seMet=seScored.filter(r=>r.met>=r.total).length;
+  const cnt=k=>dx.filter(x=>x.d.status===k).length;
+  const trainers=((p.resources||{}).ocm_train||[]).filter(x=>(x.name||'').trim()).map(x=>x.name.trim());
+  const impl=((p.resources||{}).ocm_impl||[]).filter(x=>(x.name||'').trim()).map(x=>x.name.trim());
+  const actions=[];
+  const act=(sev,text,tab)=>actions.push({sev,text,tab});
+  if(!p.size)act('amber','Set the project’s T-shirt size in the header.',null);
+  else if(t.error==='noaud')act('amber','Select the audiences in scope in Training Timeline.','trainplan');
+  if(!t.error&&!t.dt.uatComplete)act('amber','Enter the UAT complete date (on the release, or override on this project).','trainplan');
+  if(!t.error&&t.gateBreach)act('red','Hard gate: Training Start is before UAT complete. Move training or confirm UAT.','trainplan');
+  if(!t.error&&t.vsGolive!==null&&t.vsGolive<0)act('red','Training finishes '+Math.abs(t.vsGolive)+' business days after go-live. Rescope the course or audience, or move dates.','trainplan');
+  if(!trainers.length)act('amber','Name the OCM Training lead.','resources');
+  if(!impl.length)act('amber','Name the OCM Implementation lead.','resources');
+  const ji=jiraTrainingImpact(p);
+  if(ji&&ji.blocked)act(ji.buildStarted?'red':'amber',ji.blocked+' OCM item'+(ji.blocked===1?' has':'s have')+' not passed UAT, so materials can’t be built for '+(ji.blocked===1?'it':'them')+' yet.','trainplan');
+  if(ji&&ji.withDefects)act('amber',ji.withDefects+' OCM item'+(ji.withDefects===1?' has':'s have')+' open defects; plan workaround content or rework.','trainplan');
+  if(ji&&ji.late)act('amber',ji.late+' OCM item'+(ji.late===1?' was':'s were')+' added after UAT; check the training build plan.','trainplan');
+  const ci=ji&&jiraChangeImpact(p);
+  if(ci){
+    ci.missingAud.forEach(a=>act('amber',a.name+' is affected by '+a.count+' Jira change'+(a.count===1?'':'s')+' but isn’t in this training timeline.','trainplan'));
+    ci.gaps.forEach(g=>act('amber',g.n+' '+g.label+'. '+g.why,'trainplan'));
+  }
+  dx.filter(x=>x.d.status==='intervene').forEach(x=>{
+    const g=SUS_GAPS[x.d.primary];
+    const ivs=(((p.sustainment||{})[x.sh.id]||{}).interventions||[]).filter(i=>i.type===x.d.primary&&i.status!=='Verified');
+    act('red',x.sh.name+': '+g.label.toLowerCase()+'. '+(ivs.length?g.tag+' '+ivs[ivs.length-1].status.toLowerCase()+'; confirm it at the next checkpoint.':'Log a '+g.tag.toLowerCase()+' intervention.'),'sustain');
+  });
+  // Pulse is deferred until the Microsoft Forms import exists, so it stays in the checklist but not in actions.
+  if(se)se.rows.filter(r=>r.total>0&&r.met<r.total&&!/Pulse/.test(r.label)).forEach(r=>act('amber',r.label+' ('+r.met+' of '+r.total+').',/checkpoint/i.test(r.label)?'postlaunch':'adoption'));
+  let rag='green';
+  if(actions.some(a=>a.sev==='red'))rag='red';else if(actions.length||cnt('watch')||(t.vsGolive!==null&&t.vsGolive<5))rag='amber';
+  return{t,dx,se,seScored,seMet,cnt,trainers,impl,actions,rag};
+}
+function goPTab(id){const b=[...document.querySelectorAll('#proj-nav-tabs .nav-btn')].find(x=>(x.getAttribute('onclick')||'').includes("'"+id+"'"));if(b)showProjTab(id,b);}
+function renderPilotOverview(p){
+  const ov=document.getElementById('psec-overview');if(!ov)return;
+  const on=pilotOn();
+  ov.classList.toggle('pilot-ov',on);
+  let box=document.getElementById('pilot-ov');
+  if(!box){box=document.createElement('div');box.id='pilot-ov';ov.insertBefore(box,ov.firstChild);}
+  if(!on){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='';
+  const s=pilotStatus(p);const t=s.t;
+  const ragLbl={green:'On Track',amber:'Watch',red:'Action Needed'}[s.rag];
+  const kc=(cls,l,v,sub)=>'<div class="kc '+cls+'"><div class="kc-l">'+l+'</div><div class="kc-v sm">'+v+'</div><div class="kc-s">'+sub+'</div></div>';
+  let h='<div class="pilot-ov-hd"><span class="pilot-rag pilot-rag-'+s.rag+'">'+ragLbl+'</span>';
+  h+='<span class="pilot-owner">OCM Training lead: <strong>'+(s.trainers.length?esc(s.trainers.join(', ')):'not assigned')+'</strong> · OCM Implementation lead: <strong>'+(s.impl.length?esc(s.impl.join(', ')):'not assigned')+'</strong></span>';
+  h+='<button class="btn-outline" onclick="exportStatusReport()"><i class="ph ph-file-text"></i> Status report</button></div>';
+  h+='<div class="kpi-strip">';
+  if(t.error){h+=kc('cn','Last Cohort','—',t.error==='nosize'?'Set the size':'Select audiences');}
+  else h+=kc('cn','Last Cohort',t.finishHi?ttFmt(t.finishHi):'—',t.finishHi?(t.lo===t.hi?t.hi:t.lo+'–'+t.hi)+' business days from UAT':'Enter UAT complete');
+  const buf=t.error||t.vsGolive===null?'—':(t.vsGolive<0?Math.abs(t.vsGolive)+' bus. days late':t.vsGolive+' bus. days');
+  h+=kc(t.vsGolive!==null&&t.vsGolive<0?'cr':'cg','Buffer to Go-Live',buf,projGoLive(p)?'Go-live '+fmtDate(projGoLive(p)):'No go-live date');
+  h+=kc('cb','Delivery Starts',!t.error&&t.deliveryStart?ttFmt(t.deliveryStart):'—',!t.error?esc(t.course.label)+(t.binding?' · '+esc(t.binding.a.name):''):'From Training Timeline');
+  h+=kc(s.cnt('intervene')?'cr':'cg','Groups to Intervene',String(s.cnt('intervene')),s.cnt('watch')+' watch · '+s.cnt('ontrack')+' on track');
+  h+=kc('ca','Size Expectations',s.se?s.seMet+' of '+s.seScored.length:'—',s.se?'Size '+esc(p.size)+' standard':'Set the size');
+  h+='</div>';
+  h+='<div class="panel"><div class="panel-hd"><div><div class="pt">Next Actions</div><div class="ps-text">Generated from the timeline, sustainment diagnosis, and size expectations.</div></div></div><div class="pb">';
+  if(!s.actions.length)h+='<div class="sus-ok">Nothing outstanding. Keep the scheduled checkpoints.</div>';
+  else{h+='<ul class="pilot-actions">';s.actions.slice(0,10).forEach(a=>{h+='<li class="pilot-act-'+a.sev+'"><i class="ph '+(a.sev==='red'?'ph-warning-circle':'ph-arrow-circle-right')+'"></i><span>'+esc(a.text)+'</span>'+(a.tab?'<button class="btn-sm" onclick="goPTab(\''+a.tab+'\')">Open</button>':'')+'</li>';});h+='</ul>';}
+  h+='</div></div>';
+  box.innerHTML=h;
+}
+function exportStatusReport(){
+  const p=getProj();const r=relOfProj(p);if(!p)return;
+  const s=pilotStatus(p);const t=s.t;
+  const e=esc;const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const ragLbl={green:'On Track',amber:'Watch',red:'Action Needed'}[s.rag];
+  const row=(k,v)=>'<tr><th>'+k+'</th><td>'+v+'</td></tr>';
+  let b='<h1>'+e(p.name)+' <span class="rag rag-'+s.rag+'">'+ragLbl+'</span></h1>';
+  b+='<div class="meta">'+e(r?r.name:'')+' · Status as of '+today+(p.size?' · Size '+e(p.size):'')+'</div>';
+  b+='<table class="kv">'+row('OCM Training lead',e(s.trainers.join(', ')||'Not assigned'))+row('OCM Implementation lead',e(s.impl.join(', ')||'Not assigned'))+row('Go-live',projGoLive(p)?fmtDate(projGoLive(p)):'—')+'</table>';
+  b+='<h2>Training timeline</h2>';
+  if(t.error)b+='<p class="muted">'+(t.error==='nosize'?'Project size not set.':'Audiences not selected.')+'</p>';
+  else{
+    b+='<table class="kv">'+row('Course',e(t.course.label)+(t.binding?' · binding audience '+e(t.binding.a.name)+' ('+t.binding.cohorts+' cohorts)':''))
+      +(t.dt.techTransfer?row('Tech Transfer',fmtDate(t.dt.techTransfer)):'')+row('UAT complete',t.dt.uatComplete?fmtDate(t.dt.uatComplete):'Not set')
+      +(t.deliveryStart?row('Delivery starts',ttFmt(t.deliveryStart)):'')+(t.finishHi?row('Last cohort',ttFmt(t.finishLo)+(t.lo===t.hi?'':' to '+ttFmt(t.finishHi))):'')
+      +row('UAT to last cohort',(t.lo===t.hi?t.hi:t.lo+' to '+t.hi)+' business days')
+      +(t.vsGolive!==null?row('Buffer to go-live',t.vsGolive<0?'<strong class="red">'+Math.abs(t.vsGolive)+' business days late</strong>':t.vsGolive+' business days'):'')
+      +(t.checkpoints.length?row('30 / 60 / 90 follow-ups',t.checkpoints.map(c=>ttFmt(c.d)).join(' · ')):'')+'</table>';
+  }
+  b+='<h2>Adoption by group</h2>';
+  if(!s.dx.length)b+='<p class="muted">No stakeholder groups yet.</p>';
+  else{
+    b+='<table class="grid"><tr><th>Group</th><th>Status</th><th>Forecast</th><th>Training (L1/L2)</th><th>Latest</th><th>Gap / action</th><th>Intervention</th></tr>';
+    s.dx.forEach(({sh,d})=>{
+      const l=d.latest;const lat=l?[l.adoption!==undefined?'Adoption '+l.adoption+'%':'',l.proficiency!==undefined?'Prof. '+l.proficiency+'%':''].filter(Boolean).join(', ')+' ('+e(l.label)+')':'—';
+      const ivs=(((p.sustainment||{})[sh.id]||{}).interventions||[]);const last=ivs[ivs.length-1];
+      const tr=shTrainResults(sh);const trTxt=shHasTrainResults(sh)||tr.confidence!==null?[tr.completion!==null?tr.completion+'% completed':'',tr.pass!==null?tr.pass+'% passed':'',tr.confidence!==null?'confidence '+tr.confidence+'/5':''].filter(Boolean).join(', '):'—';
+      b+='<tr><td>'+e(sh.name)+'</td><td>'+SUS_STATUS[d.status].label+'</td><td>'+e(forecastLabel(sh))+'</td><td>'+trTxt+'</td><td>'+lat+'</td><td>'+(d.primary?SUS_GAPS[d.primary].label+': '+e(SUS_GAPS[d.primary].actions[0]):'—')+'</td><td>'+(last?e(SUS_GAPS[last.type].tag)+' · '+e(last.status)+(last.note?' · '+e(last.note):''):'—')+'</td></tr>';
+    });
+    b+='</table>';
+  }
+  const jr=jiraTrainingImpact(p);
+  if(jr&&jr.total){
+    b+='<h2>OCM-tagged changes (from Jira)</h2><p>'+jr.cleared+' of '+jr.total+' OCM items have passed UAT and are cleared for material development'+(jr.withDefects?'; '+jr.withDefects+' of those have open defects':'')+(jr.late?'; '+jr.late+' added after UAT':'')+'.</p>';
+    const blocking=jr.rows.filter(x=>x.rank<3);
+    if(blocking.length)b+='<table class="grid"><tr><th>Item</th><th>Stage</th><th>Training implication</th></tr>'+blocking.map(x=>'<tr><td>'+e(x.key)+' '+e(x.summary)+'</td><td>'+e(x.state)+'</td><td>'+e(x.impl)+'</td></tr>').join('')+'</table>';
+    const ci=jiraChangeImpact(p);
+    if(ci&&ci.byAud.length)b+='<h2>Impact by audience (from Jira)</h2><table class="grid"><tr><th>Audience</th><th>OCM changes</th><th>Programs</th><th>Passed UAT</th><th>Not past UAT</th><th>In timeline</th></tr>'+ci.byAud.map(a=>'<tr><td>'+e(a.name)+'</td><td>'+a.count+'</td><td>'+e(a.programs.join(', '))+'</td><td>'+a.cleared+'</td><td>'+a.blocked+'</td><td>'+(a.inTimeline?'Yes':'<span class="red">No</span>')+'</td></tr>').join('')+'</table>';
+  }
+  b+='<h2>Next actions</h2>';
+  b+=s.actions.length?'<ol>'+s.actions.map(a=>'<li'+(a.sev==='red'?' class="red"':'')+'>'+e(a.text)+'</li>').join('')+'</ol>':'<p class="muted">Nothing outstanding.</p>';
+  if(s.se){b+='<h2>Size '+e(p.size)+' expectations ('+s.seMet+' of '+s.seScored.length+' met)</h2><ul>'+s.se.rows.map(x=>'<li>'+(x.total===0?'○':x.met>=x.total?'✓':'✗')+' '+e(x.label)+(x.total?' ('+x.met+'/'+x.total+')':'')+'</li>').join('')+'</ul>';}
+  const css='body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1a2a3a;max-width:820px;margin:24px auto;padding:0 16px;font-size:13px;line-height:1.45;background:#fff}h1{font-size:20px;color:#0b1c3f;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#0b1c3f;border-bottom:2px solid #0b1c3f;padding-bottom:3px;margin:22px 0 8px}.meta{color:#4a5568;margin-bottom:12px}.rag{font-size:11px;padding:2px 8px;border-radius:4px;vertical-align:middle;margin-left:6px}.rag-green{background:#f0f7f0;color:#2f7b2e}.rag-amber{background:#fdf3ee;color:#a44918}.rag-red{background:#fef2f2;color:#b91c1c}table{border-collapse:collapse;width:100%}.kv th{text-align:left;width:190px;color:#4a5568;font-weight:600;padding:3px 8px 3px 0;vertical-align:top}.kv td{padding:3px 0}.grid th,.grid td{border:1px solid #ddd8d0;padding:5px 7px;text-align:left;vertical-align:top;font-size:12px}.grid th{background:#f7f6f4}.red{color:#b91c1c}.muted{color:#8a96a3}.bar{position:sticky;top:0;background:#fff;padding:8px 0;margin-bottom:8px;border-bottom:1px solid #eee}.bar button{font:inherit;padding:6px 12px;margin-right:6px;cursor:pointer}@media print{.bar{display:none}body{margin:0}}';
+  const html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+e(p.name)+' status</title><style>'+css+'</style></head><body><div class="bar"><button onclick="window.print()">Print / Save as PDF</button><span class="muted">Or select all and paste into an email.</span></div>'+b+'</body></html>';
+  const w=window.open('','_blank');
+  if(!w){showSuccess('Allow pop-ups to open the status report.');return;}
+  w.document.open();w.document.write(html);w.document.close();
+}
+// Expected OCM intensity by project T-shirt size
+const SIZE_OCM={
+  XS:{iv:['d30'],pulse:'one',l3:false,rein:false,esc:false},
+  S:{iv:['d30'],pulse:'one',l3:false,rein:true,esc:false},
+  M:{iv:['d30','d60'],pulse:'each',l3:true,rein:true,esc:false},
+  L:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:false},
+  XL:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:true},
+  XXL:{iv:['d30','d60','d90'],pulse:'each',l3:true,rein:true,esc:true}
+};
+function sizeExpectations(p){
+  const exp=SIZE_OCM[p.size];if(!exp)return null;
+  const shs=p.stakeholders||[];const n=shs.length;
+  const pr=p.pulseResults||{};const pl=p.postLaunch||{};
+  const rows=[];
+  const withPulse=shs.filter(sh=>(pr[sh.id]||{}).responses>0).length;
+  if(exp.pulse==='one')rows.push({label:'Pulse survey collected (at least one group)',met:withPulse>0?1:0,total:1});
+  else rows.push({label:'Pulse survey collected for every group',met:withPulse,total:n});
+  if(exp.rein)rows.push({label:'Reinforcement owner named for every group',met:shs.filter(sh=>sh.rein&&sh.rein.owner).length,total:n});
+  if(exp.l3)rows.push({label:'Kirkpatrick L3 behavior defined for every group',met:shs.filter(sh=>sh.kirk&&sh.kirk.L3&&sh.kirk.L3.observable).length,total:n});
+  if(exp.esc)rows.push({label:'Escalation path defined for every group',met:shs.filter(sh=>sh.rein&&sh.rein.escalation).length,total:n});
+  const days=projGoLive(p)?Math.floor((new Date()-new Date(projGoLive(p)))/864e5):-1;
+  const due=exp.iv.filter(k=>days>=parseInt(k.substring(1)));
+  const ivLabel=exp.iv.map(k=>k.substring(1)).join('/')+'-day checkpoints';
+  if(due.length){
+    let met=0;shs.forEach(sh=>due.forEach(k=>{if(((pl[sh.id]||{})[k]||{}).adoption!==undefined)met++;}));
+    rows.push({label:'Post-launch '+ivLabel+' logged ('+due.length+' due so far)',met,total:n*due.length});
+  }else rows.push({label:'Post-launch '+ivLabel+' (start after go-live)',met:0,total:0});
+  return{exp,rows};
+}
+function renderSizeExpectations(p){
+  const se=sizeExpectations(p);
+  if(!se)return'<div class="size-exp size-exp-muted"><i class="ph ph-t-shirt"></i><div>Set this project\'s <strong>T-shirt size</strong> in the header to see the OCM intensity expected for its size.</div></div>';
+  const scored=se.rows.filter(r=>r.total>0);
+  const met=scored.filter(r=>r.met>=r.total).length;
+  let h='<div class="size-exp"><div class="size-exp-hd"><span class="size-badge size-badge-lg">'+esc(p.size)+'</span><span><strong>Expected OCM intensity for a size '+esc(p.size)+' project</strong> &middot; '+met+' of '+scored.length+' met</span></div><ul class="size-exp-list">';
+  se.rows.forEach(r=>{
+    const na=r.total===0;const ok=!na&&r.met>=r.total;
+    h+='<li class="'+(na?'size-exp-na':ok?'size-exp-ok':'size-exp-miss')+'"><i class="ph '+(na?'ph-clock':ok?'ph-check-circle':'ph-x-circle')+'"></i>'+esc(r.label)+(na?'':' <span class="size-exp-ct">'+r.met+'/'+r.total+'</span>')+'</li>';
+  });
+  return h+'</ul></div>';
+}
+function renderSizePortfolio(){
+  const el=document.getElementById('size-panel');if(!el)return;
+  const keys=PROJ_SIZES.map(x=>x.key).concat(['']);
+  const label=k=>k||'Unsized';
+  const tot={};keys.forEach(k=>tot[k]=0);
+  const unsized=[];let totalPts=0;
+  const rows=releases.map(r=>{
+    const c={};keys.forEach(k=>c[k]=0);let pts=0;
+    (r.projects||[]).filter(isActiveProj).forEach(p=>{
+      const k=PROJ_SIZES.some(x=>x.key===p.size)?p.size:'';
+      c[k]++;tot[k]++;pts+=sizePts(p);
+      if(!k)unsized.push({r,p});
+    });
+    totalPts+=pts;
+    return{r,c,pts};
+  }).filter(x=>keys.some(k=>x.c[k]));
+  if(!rows.length){el.innerHTML='<div class="wkl-empty">No active projects.</div>';return;}
+  let h='<div class="sat-alert-strip">';
+  keys.forEach(k=>{h+='<div class="sat-alert-item"><span class="sat-alert-val">'+tot[k]+'</span><span class="sat-alert-lbl">'+label(k)+'</span></div>';});
+  h+='<div class="sat-alert-item"><span class="sat-alert-val">'+totalPts+'</span><span class="sat-alert-lbl">Load Points</span></div></div>';
+  h+='<div class="hm-scroll"><table class="size-tbl"><thead><tr><th>Release</th>'+keys.map(k=>'<th>'+label(k)+'</th>').join('')+'<th>Load Pts</th></tr></thead><tbody>';
+  rows.forEach(({r,c,pts})=>{
+    h+='<tr><td><a href="#" onclick="openRelease('+r.id+');return false">'+esc(r.name)+'</a></td>'+keys.map(k=>'<td'+(c[k]?'':' class="size-zero"')+'>'+(c[k]||'·')+'</td>').join('')+'<td><strong>'+pts+'</strong></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  if(unsized.length){
+    h+='<div class="size-unsized"><strong>'+unsized.length+' unsized</strong> (counted as M until sized): '+unsized.map(({r,p})=>'<a href="#" onclick="openProjectFromPortfolio('+r.id+','+p.id+');return false">'+esc(p.name)+'</a>').join(', ')+'</div>';
+  }
+  el.innerHTML=h;
+}
+function renderSusInterventions(p,sh,d){
+  const ivs=((p.sustainment[sh.id]||{}).interventions)||[];
+  let h='<div class="sus-iv-sec"><div class="sus-iv-hd"><span>Interventions</span>';
+  const type=d.primary||'knowledge';
+  h+='<button class="btn-sm" onclick="addSusIntervention('+sh.id+',\''+type+'\')"><i class="ph ph-plus"></i> Log '+SUS_GAPS[type].tag+'</button></div>';
+  if(!ivs.length){h+='<div class="sus-iv-empty">None logged. Record what you deliver so the next checkpoint shows whether it worked.</div>';}
+  ivs.forEach(iv=>{
+    h+='<div class="sus-iv-row">';
+    h+='<select class="sus-iv-type" aria-label="Intervention type" onchange="updateSusIntervention('+sh.id+','+iv.id+',\'type\',this.value)">';
+    Object.keys(SUS_GAPS).forEach(k=>{h+='<option value="'+k+'"'+(iv.type===k?' selected':'')+'>'+SUS_GAPS[k].tag+'</option>';});
+    h+='</select>';
+    h+='<input type="date" aria-label="Intervention date" value="'+esc(iv.date||'')+'" onchange="updateSusIntervention('+sh.id+','+iv.id+',\'date\',this.value)">';
+    h+='<input type="text" class="sus-iv-note" aria-label="Intervention description" placeholder="What was delivered, to whom..." value="'+esc(iv.note||'')+'" oninput="updateSusIntervention('+sh.id+','+iv.id+',\'note\',this.value)">';
+    h+='<select aria-label="Intervention status" onchange="updateSusIntervention('+sh.id+','+iv.id+',\'status\',this.value)">';
+    SUS_IV_STATUSES.forEach(s=>{h+='<option'+(iv.status===s?' selected':'')+'>'+s+'</option>';});
+    h+='</select>';
+    h+='<button class="sus-iv-del" title="Remove intervention" aria-label="Remove intervention" onclick="removeSusIntervention('+sh.id+','+iv.id+')"><i class="ph ph-x"></i></button>';
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+function susIvList(shId){
+  const p=getProj();if(!p)return null;
+  if(!p.sustainment)p.sustainment={};
+  if(!p.sustainment[shId])p.sustainment[shId]={interventions:[]};
+  return p.sustainment[shId].interventions;
+}
+function addSusIntervention(shId,type){
+  const list=susIvList(shId);if(!list)return;
+  list.push({id:uid(),type,date:new Date().toISOString().split('T')[0],note:'',status:'Planned'});
+  touch('proj');schedSave();renderPSustain();
+}
+function updateSusIntervention(shId,ivId,field,value){
+  const list=susIvList(shId);if(!list)return;
+  const iv=list.find(x=>x.id===ivId);if(!iv)return;
+  iv[field]=value;touch('proj');schedSave();
+}
+function removeSusIntervention(shId,ivId){
+  const list=susIvList(shId);if(!list)return;
+  const i=list.findIndex(x=>x.id===ivId);if(i<0)return;
+  if(list[i].note&&!confirm('Remove this intervention record?'))return;
+  list.splice(i,1);touch('proj');schedSave();renderPSustain();
 }
 
 // ════════════════════════════════════════════════════════
@@ -8137,7 +9441,7 @@ function collectPulseInsightsData(p){
 }
 
 async function callPulseInsights(data){
-  const response=await fetch(PULSE_INSIGHTS_URL,{
+  const response=await aiFetch(PULSE_INSIGHTS_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
     body:JSON.stringify(data)
@@ -8459,6 +9763,7 @@ function pdfCheckPage(doc,y,w,h,pg,needed){
 }
 
 function exportProjectPDF(){
+  if(pilotOn()){exportStatusReport();return;}
   if(!window.jspdf){showSuccess('PDF engine is loading. Try again in a moment.');return;}
   const p=getProj();const r=getRel();if(!p||!r)return;
   migrateResources(p);
@@ -8839,7 +10144,7 @@ function collectNarrativeData(p){
 }
 
 async function fetchNarrative(type,audience,data){
-  const response=await fetch(NARRATIVE_URL,{
+  const response=await aiFetch(NARRATIVE_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+TRAJ_ANON_KEY},
     body:JSON.stringify({deliverableType:type,audience,projectData:data})
@@ -8858,7 +10163,7 @@ async function executeGenerate(){
 
   let narrative=null;
 
-  if(_genAIEnabled){
+  if(_genAIEnabled&&aiAllowed()){
     if(status){status.style.display='block';status.className='gen-status';status.textContent='Generating AI narrative…';}
     if(btn){btn.disabled=true;btn.textContent='Generating…';}
     try{
@@ -10061,7 +11366,7 @@ function genReadinessRec(aiNarrative,audience){
   const fwPctP=fwScoresP.length?Math.round(fwScoresP.reduce((a,b)=>a+b,0)/fwScoresP.length/5*100):0;
   const sentPctP=shs.length?Math.round(shs.reduce((a,sh)=>{const ps=p.pulseResults?.[sh.id]?.scores||{};return a+sentimentScore(sh,ps);},0)/shs.length):50;
   const kirkPctsP=shs.map(sh=>{if(!sh?.kirk)return 0;let f=0;const k=sh.kirk;if(k.L1?.method)f++;if(k.L1?.timing)f++;if(k.L2?.method)f++;if(k.L2?.assessment)f++;if(k.L3?.observable)f++;if(k.L3?.interval)f++;if(k.L4?.outcome)f++;if(k.L4?.metric)f++;return Math.round(f/8*100);});
-  const trainPctP=kirkPctsP.length?Math.round(kirkPctsP.reduce((a,b)=>a+b,0)/kirkPctsP.length):0;
+  const trainPctP=shsTrainPct(shs);
   const lhDataP=calcLifecycleHealth(p);const lcPctP=lhDataP.score;
   const commsDimsP=dims.filter(d=>['A1','d1','d7','d8'].includes(d.key));
   const commsAvgP=commsDimsP.length?commsDimsP.reduce((a,d)=>a+(p.adkarScores?.[d.key]||3),0)/commsDimsP.length:3;
@@ -10182,8 +11487,42 @@ function genFullPackage(){
 let currentUserRole='owner'; // default for own releases
 let isDemoMode=false;
 
+// ── AI features: demo only. Live project data is never sent to AI endpoints. ──
+function aiAllowed(){return isDemoMode;}
+function aiFetch(url,opts){
+  if(!aiAllowed())return Promise.reject(new Error('AI features are turned off for live data'));
+  return fetch(url,opts);
+}
+function applyAIMode(){document.body.classList.toggle('ai-off',!aiAllowed());}
+
+// ── Pilot view: live projects show only the pilot tabs unless "All tabs" is chosen ──
+const PILOT_TABS=['overview','trainplan','adoption','postlaunch','sustain','resources'];
+function pilotOn(){
+  let pref=null;try{pref=localStorage.getItem('adoptiq_pilot_view');}catch(e){}
+  return pref?pref==='on':!isDemoMode;
+}
+function applyPilotView(){
+  const on=pilotOn();
+  let activeHidden=false;
+  document.querySelectorAll('#proj-nav-tabs .nav-btn').forEach(b=>{
+    const m=(b.getAttribute('onclick')||'').match(/showProjTab\('(\w+)'/);if(!m)return;
+    const hide=on&&!PILOT_TABS.includes(m[1]);
+    b.classList.toggle('pilot-hidden',hide);
+    if(hide&&b.classList.contains('active'))activeHidden=true;
+  });
+  const t=document.getElementById('pilot-toggle');
+  if(t){t.textContent=on?'All tabs':'Pilot view';t.title=on?'Show every project tab':'Show only the pilot tabs';}
+  if(activeHidden){const first=document.querySelector('#proj-nav-tabs .nav-btn');if(first)showProjTab('overview',first);}
+  checkNavOverflow();
+}
+function togglePilotView(){
+  try{localStorage.setItem('adoptiq_pilot_view',pilotOn()?'off':'on');}catch(e){}
+  applyPilotView();
+  if(getProj())renderPOverview();
+}
+
 function setDemoMode(on){
-  isDemoMode=on;
+  isDemoMode=on;applyAIMode();applyPilotView();
   ['demo-banner-p','demo-banner-r','demo-banner-proj'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display=on?'inline-block':'none';
   });
@@ -10319,7 +11658,7 @@ function applyRoleRestrictions(){
   if(role==='viewer'){
     document.querySelectorAll('#v-release input,#v-release select,#v-release textarea,#v-project input,#v-project select,#v-project textarea').forEach(el=>{el.disabled=true;});
     document.querySelectorAll('#v-release button,#v-project button').forEach(el=>{
-      if(!el.textContent.includes('Export')&&!el.textContent.includes('Back')&&!el.textContent.includes('Team'))el.disabled=true;
+      if(!el.textContent.includes('Export')&&!el.textContent.includes('Back')&&!el.textContent.includes('Team')&&el.id!=='pilot-toggle')el.disabled=true;
     });
   }
 }
@@ -10338,8 +11677,8 @@ async function closeWelcome(){
 async function loadDemoData(){
   releases=[];
   // Release 1: Q3 EHR Migration (Healthcare)
-  const r1=newRelease('Q3 EHR Migration',['HCA Healthcare','Cigna'],'2026-07-15','Development');
-  const p1a=newProject('Clinical Workflow',['HCA Healthcare'],4200);
+  const r1=newRelease('Q3 EHR Migration',['Northbrook Health System','Lakeside Health Plan'],'2026-07-15','Development');
+  const p1a=newProject('Clinical Workflow',['Northbrook Health System'],4200);
   p1a.status='In Progress';
   p1a.gateState={g1_0:'green',g1_1:'green',g1_2:'yellow',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'yellow',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'yellow',g3_1:'green'};
   migrateResources(p1a);
@@ -10356,7 +11695,7 @@ async function loadDemoData(){
     {id:uid(),type:'constraint',title:'Go-live cannot occur during Joint Commission survey window',description:'Regulatory constraint: the hospital cannot introduce major system changes during the scheduled Joint Commission review period (July 10-24).',status:'Open',severity:'High',owner:'Dr. Rachel Goldman',dueDate:'',created:'2026-04-01T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:'Regulatory'}
   ];
   p1a.stakeholders=[{id:uid(),name:'Attending Physicians',factors:{resistance:4,env:3,window:2,complexity:5,saturation:4,leadership:4},objectives:['Document patient encounters in new EHR','Generate clinical quality reports'],kirk:{L1:{method:'In-person workshop',timing:'Pre-go-live'},L2:{method:'Case-based assessment',assessment:'90% accuracy'},L3:{observable:'Documentation compliance',interval:'14-day post go-live'},L4:{outcome:'Zero clinical safety events',metric:'Safety event tracker'}},rein:{owner:'Chief Medical Officer',activities:'Weekly physician council + lunch sessions',intervals:['Week 1','Week 2','Week 3'],escalation:'Escalate if < 80% documentation compliance'}}];
-  const p1b=newProject('Nursing Documentation',['HCA Healthcare'],8500);
+  const p1b=newProject('Nursing Documentation',['Northbrook Health System'],8500);
   p1b.status='In Progress';
   p1b.gateState={g1_0:'green',g1_1:'yellow',g1_2:'green',g1_3:'yellow',g1_4:'yellow',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'yellow',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'yellow'};
   migrateResources(p1b);
@@ -10410,8 +11749,8 @@ async function loadDemoData(){
   releases.push(r1);
 
   // Release 2: Core Banking Modernization (Financial Services)
-  const r2=newRelease('Core Banking Modernization',['JPMorgan','Deloitte'],'2026-08-30','Testing');
-  const p2a=newProject('Teller Platform',['JPMorgan'],2800);
+  const r2=newRelease('Core Banking Modernization',['Harborview Bank','Meridian Advisory'],'2026-08-30','Testing');
+  const p2a=newProject('Teller Platform',['Harborview Bank'],2800);
   p2a.status='In Progress';
   p2a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'yellow',g1_4:'green',g2_0:'yellow',g2_1:'green',g2_2:'green',g2_3:'yellow',g2_4:'yellow',g2_5:'green',g3_0:'yellow',g3_1:'yellow'};
   migrateResources(p2a);
@@ -10427,7 +11766,7 @@ async function loadDemoData(){
     {id:uid(),type:'constraint',title:'No deployments during Q3 earnings blackout',description:'Finance mandates a change freeze during Q3 earnings preparation (Aug 15-Sep 5).',status:'Open',severity:'Medium',owner:'David Thompson',dueDate:'',created:'2026-04-01T10:00:00Z',probability:'',impact:'',mitigation:'',dependsOn:'',validationMethod:'',constraintType:'Schedule'}
   ];
   p2a.stakeholders=[{id:uid(),name:'Branch Tellers',factors:{resistance:3,env:3,window:3,complexity:3,saturation:2,leadership:3},objectives:['Process deposits/withdrawals','Handle wire transfers','Customer authentication verification'],kirk:{L1:{method:'Role-based training modules',timing:'2 weeks pre-go-live'},L2:{method:'Transaction simulation',assessment:'100 test cases'},L3:{observable:'Avg transaction time',interval:'14-day post go-live'},L4:{outcome:'Zero fraudulent transactions',metric:'Risk dashboard'}},rein:{owner:'Branch Managers',activities:'Daily check-ins + super-user support',intervals:['Week 1','Week 2','Week 4'],escalation:'Escalate if transaction errors exceed 0.5%'}}];
-  const p2b=newProject('Online Banking',['JPMorgan'],45000);
+  const p2b=newProject('Online Banking',['Harborview Bank'],45000);
   p2b.status='Not Started';
   p2b.golive='2026-08-30';
   p2b.gateState={g1_0:'yellow',g1_1:'yellow',g1_2:'red',g1_3:'red',g1_4:'red'};
@@ -10472,9 +11811,9 @@ async function loadDemoData(){
   r2.projects=[p2a,p2b];
   releases.push(r2);
 
-  // Release 3: SAP S/4HANA Cutover (Manufacturing)
-  const r3=newRelease('SAP S/4HANA Cutover',['Accenture','SAP'],'2026-09-15','Development');
-  const p3a=newProject('Shop Floor MES',['Accenture'],650);
+  // Release 3: ERP Manufacturing Cutover (Manufacturing)
+  const r3=newRelease('ERP Manufacturing Cutover',['Corvalis Manufacturing','Keystone Systems'],'2026-09-15','Development');
+  const p3a=newProject('Shop Floor MES',['Corvalis Manufacturing'],650);
   p3a.status='Not Started';
   p3a.gateState={g1_0:'red',g1_1:'red',g1_2:'yellow',g1_3:'yellow',g1_4:'red',g2_0:'red',g2_1:'red',g2_2:'yellow',g2_3:'red',g2_4:'red',g2_5:'yellow',g3_0:'red',g3_1:'red'};
   migrateResources(p3a);
@@ -10509,7 +11848,7 @@ async function loadDemoData(){
   if(p3a.stakeholders[1]){
     p3a.stakeholders[1].trust=3;
     p3a.stakeholders[1].trustHistory=[{date:'2025-11-01',value:3,note:''},{date:'2026-01-01',value:3,note:'Stable'}];
-    p3a.stakeholders[1].touchpoints=[{id:uid(),date:'2025-12-01',type:'Training Session',description:'SAP warehouse basics overview',trustImpact:'Increased'}];
+    p3a.stakeholders[1].touchpoints=[{id:uid(),date:'2025-12-01',type:'Training Session',description:'ERP warehouse basics overview',trustImpact:'Increased'}];
     p3a.stakeholders[1].anxietyIndicators={whatDoesThisMeanFreq:3,extraReviewCycles:1,escalations:0,attendanceDrop:false};
   }
   // HR Business Partners — healthy
@@ -10531,16 +11870,16 @@ async function loadDemoData(){
   r3.projects=[p3a];
   releases.push(r3);
 
-  // Release 4: Müller & Sons CRM Go-Live (Edge case - international)
-  const r4=newRelease('Müller & Sons CRM Go-Live',['Salesforce','Müller & Sons AG'],'2026-06-30','Testing');
-  const p4a=newProject('Client 360° Dashboard <Beta>',['Müller & Sons AG'],3200);
+  // Release 4: Calloway & Sons CRM Go-Live (Edge case - international)
+  const r4=newRelease('Calloway & Sons CRM Go-Live',['Quillon CRM','Calloway & Sons Ltd'],'2026-06-30','Testing');
+  const p4a=newProject('Client 360° Dashboard <Beta>',['Calloway & Sons Ltd'],3200);
   p4a.status='In Progress';
   p4a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'yellow',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'yellow',g3_0:'green',g3_1:'green'};
   migrateResources(p4a);
   p4a.resources.ocm_train=[{name:'François Dupont',contact:''}];
   p4a.resources.ocm_impl=[{name:'Hans Mueller',contact:''}];
   p4a.resources.pm=[{name:'Giulia Rossi',contact:''}];
-  const p4b=newProject('',['Müller & Sons AG'],0);
+  const p4b=newProject('',['Calloway & Sons Ltd'],0);
   p4b.status='Not Started';
   migrateResources(p4b);
   // Client 360 — on track
@@ -10557,8 +11896,8 @@ async function loadDemoData(){
   releases.push(r4);
 
   // Release 5: State Benefits Portal (Government - Live)
-  const r5=newRelease('State Benefits Portal Modernization',['GSA','DeloitteGov'],'2025-11-30','Active Production');
-  const p5a=newProject('Case Management System',['GSA'],12500);
+  const r5=newRelease('State Benefits Portal Modernization',['Commonwealth Benefits Agency','Civic Systems Partners'],'2025-11-30','Active Production');
+  const p5a=newProject('Case Management System',['Commonwealth Benefits Agency'],12500);
   p5a.status='Complete';
   p5a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
   migrateResources(p5a);
@@ -10567,7 +11906,7 @@ async function loadDemoData(){
   p5a.resources.pm=[{name:'Rebecca Martinez',contact:''}];
   p5a.resources.func=[{name:'Dr. Jonathan Lee',contact:''}];
   p5a.stakeholders=[{id:uid(),name:'Case Workers',factors:{resistance:2,env:3,window:4,complexity:3,saturation:2,leadership:4},objectives:['Manage benefit applications','Process claims quickly','Document client interactions'],kirk:{L1:{method:'Classroom + online modules',timing:'6 weeks pre-launch'},L2:{method:'Job shadowing + practice cases',assessment:'100% accuracy required'},L3:{observable:'Case processing time',interval:'30-day post launch'},L4:{outcome:'Zero benefits processing delays',metric:'Claims dashboard'}},rein:{owner:'Regional Director',activities:'Weekly supervisor check-ins + monthly town halls',intervals:['Weekly','Monthly'],escalation:'Escalate if processing time exceeds SLA'}},{id:uid(),name:'Agency Leadership',factors:{resistance:1,env:4,window:5,complexity:2,saturation:1,leadership:5},objectives:['Monitor system performance','Meet constituent service metrics','Track budget savings'],kirk:{L1:{method:'Executive briefing',timing:'2 weeks pre-launch'},L2:{method:'Dashboard training',assessment:'Operational proficiency'},L3:{observable:'System availability',interval:'Ongoing'},L4:{outcome:'90% constituent satisfaction',metric:'Feedback surveys'}},rein:{owner:'Deputy Commissioner',activities:'Monthly performance reviews + quarterly steering committee',intervals:['Monthly','Quarterly'],escalation:'Escalate if system availability < 99.5%'}}];
-  const p5b=newProject('Public Portal & Self-Service',['GSA'],8300);
+  const p5b=newProject('Public Portal & Self-Service',['Commonwealth Benefits Agency'],8300);
   p5b.status='Completed';
   p5b.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green'};
   migrateResources(p5b);
@@ -10612,8 +11951,8 @@ async function loadDemoData(){
   releases.push(r5);
 
   // Release 6: Completed project with post-launch data
-  const r6=newRelease('Payroll Modernization',['ADP','Deloitte'],'2026-02-15','Complete');
-  const p6a=newProject('Payroll Engine',['ADP'],1200);
+  const r6=newRelease('Payroll Modernization',['Halvorsen Payroll','Meridian Advisory'],'2026-02-15','Complete');
+  const p6a=newProject('Payroll Engine',['Halvorsen Payroll'],1200);
   p6a.status='Complete';p6a.golive='2026-02-15';
   p6a.gateState={g1_0:'green',g1_1:'green',g1_2:'green',g1_3:'green',g1_4:'green',g2_0:'green',g2_1:'green',g2_2:'green',g2_3:'green',g2_4:'green',g2_5:'green',g3_0:'green',g3_1:'green',g3_2:'green',g3_3:'green',g3_4:'green',g3_5:'green',g4_0:'green',g4_1:'green',g4_2:'green',g4_3:'green',g4_4:'green',g4_5:'green'};
   migrateResources(p6a);
@@ -10625,7 +11964,12 @@ async function loadDemoData(){
   // Post-launch observation data
   p6a.postLaunch={};
   p6a.postLaunch[p6a.stakeholders[0].id]={d30:{adoption:82,tickets:14,proficiency:78,notes:'Strong adoption, minor issues with garnishment module.'},d60:{adoption:91,tickets:6,proficiency:88,notes:'Significant improvement. Team is self-sufficient.'}};
-  p6a.postLaunch[p6a.stakeholders[1].id]={d30:{adoption:68,tickets:22,proficiency:65,notes:'Struggling with new report builder. Additional coaching scheduled.'}};
+  p6a.postLaunch[p6a.stakeholders[1].id]={d30:{adoption:68,tickets:22,proficiency:65,notes:'Struggling with new report builder. Additional coaching scheduled.'},d60:{adoption:70,tickets:26,proficiency:58,notes:'Report builder errors persist. Several HRBPs exporting to Excel instead.'}};
+  // Third group: proficient but drifting back to the old process (reinforcement gap)
+  p6a.stakeholders.push({id:uid(),name:'People Managers',agency:'',stakeholderType:'end_user_group',roleCategory:'',factors:{resistance:3,env:4,window:3,complexity:2,saturation:4,leadership:3},objectives:['Approve timesheets in the new system','Review team payroll exceptions'],kirk:{L1:{method:'Manager briefing',timing:'1 week pre go-live'},L2:{method:'Approval walkthrough',assessment:'Pass/Fail'},L3:{observable:'In-system approvals vs email approvals',interval:'30'},L4:{outcome:'On-time approvals every cycle',metric:'Approval SLA'}},rein:{owner:'',activities:'',intervals:['30 Days'],escalation:'VP of HR via monthly ops review'},trust:3,trustHistory:[],preconceptions:[],touchpoints:[],anxietyIndicators:{whatDoesThisMeanFreq:1,extraReviewCycles:0,escalations:0,attendanceDrop:false}});
+  p6a.postLaunch[p6a.stakeholders[2].id]={d30:{adoption:86,tickets:5,proficiency:84,notes:'Strong start after go-live briefing.'},d60:{adoption:71,tickets:4,proficiency:83,notes:'Approvals drifting back to email. Payroll team chasing managers.'}};
+  p6a.sustainment={};
+  p6a.sustainment[p6a.stakeholders[1].id]={interventions:[{id:uid(),type:'knowledge',date:'2026-04-20',note:'Report builder refresher (45 min) for HRBPs who exported to Excel',status:'Planned'}]};
   // Lifecycle signals — healthy project
   p6a.lifecycleSignals={
     requirements:{onSchedule:true,daysVariance:0,reviewCycles:2,disputes:false,disputeNotes:''},
@@ -10671,6 +12015,9 @@ async function loadDemoData(){
   ];
   r6.projects=[p6a];
   releases.push(r6);
+  // T-shirt sizes (one left unsized to show the prompt)
+  const demoSizes={'Clinical Workflow':'XL','Nursing Documentation':'L','Teller Platform':'L','Online Banking':'M','Shop Floor MES':'M','Case Management System':'XL','Public Portal & Self-Service':'M','Payroll Engine':'M'};
+  releases.forEach(r=>r.projects.forEach(p=>{if(demoSizes[p.name])p.size=demoSizes[p.name];}));
 
   await saveData();setDemoMode(true);renderPortfolio();renderAlerts();showSuccess('You\u2019re in demo mode. Explore freely \u2014 nothing here is real data.');
   initTopBrand();
@@ -10820,7 +12167,7 @@ function applyReadOnlyRestrictions(){
   // Disable action buttons (but keep navigation, export, and theme buttons)
   document.querySelectorAll('#v-portfolio button,#v-release button,#v-project button').forEach(el=>{
     const txt=el.textContent||'';
-    const isNav=el.classList.contains('nav-btn')||el.classList.contains('theme-btn')||el.classList.contains('btn-profile');
+    const isNav=el.classList.contains('nav-btn')||el.classList.contains('theme-btn')||el.classList.contains('btn-profile')||el.id==='pilot-toggle';
     const isExport=txt.includes('Export')||txt.includes('Audit');
     const isBack=txt.includes('Back')||txt.includes('Portfolio');
     const isOpen=txt.includes('Open')||el.classList.contains('btn-sm');
@@ -10986,7 +12333,7 @@ function generateDemoSnapshots(){
           {id:3,name:'Teller Platform',gateScore:baseGates[idx]+3,adkarAvg:baseAdkar[idx].toFixed(1),flags:Math.max(0,baseFlags[idx]-5),status:'In Progress'},
           {id:4,name:'Online Banking',gateScore:Math.max(0,baseGates[idx]-5),adkarAvg:(baseAdkar[idx]-0.2).toFixed(1),flags:baseFlags[idx],status:'Not Started'}
         ]},
-        {id:3,name:'SAP S/4HANA Cutover',projects:[
+        {id:3,name:'ERP Manufacturing Cutover',projects:[
           {id:5,name:'Shop Floor MES',gateScore:Math.max(0,baseGates[idx]-8),adkarAvg:(baseAdkar[idx]-0.3).toFixed(1),flags:Math.min(22,baseFlags[idx]+3),status:'Not Started'}
         ]},
         {id:4,name:'M\u00FCller & Sons CRM Go-Live',projects:[
@@ -11285,3 +12632,5 @@ if(checkReadOnlyParam()){
   });
 }
 initAuth();
+
+applyAIMode();
