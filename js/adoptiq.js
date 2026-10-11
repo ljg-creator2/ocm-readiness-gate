@@ -4379,8 +4379,8 @@ function parseLooseDate(v){
 // Reads a Jira issue export (CSV or Excel). Field matching is adjustable because
 // every Jira is configured differently; defaults follow DCAS conventions.
 const JIRA_MAP_KEY='adoptiq_jira_map';
-const JIRA_MAP_DEFAULT={ocmTag:'OCM Needed',ocmReady:'OCM Ready',qaPass:'QA (Passed|Complete|Done)',uatPass:'UAT (Passed|Complete|Done|Signed ?off)',done:'Done|Closed|Resolved|Released|Deployed'};
-const JIRA_MAP_LABELS={ocmTag:'OCM tag (label, component or field value)',ocmReady:'OCM ready status',qaPass:'Status meaning QA passed',uatPass:'Status meaning UAT passed',done:'Statuses that mean finished'};
+const JIRA_MAP_DEFAULT={ocmTag:'OCM Needed',ocmReady:'OCM Ready',qaPass:'QA (Passed|Complete|Done)',uatPass:'UAT (Passed|Complete|Done|Signed ?off)',done:'Done|Closed|Resolved|Released|Deployed',impactCol:'impact summary|change impact|training impact'};
+const JIRA_MAP_LABELS={ocmTag:'OCM tag (label, component or field value)',ocmReady:'OCM ready status',qaPass:'Status meaning QA passed',uatPass:'Status meaning UAT passed',done:'Statuses that mean finished',impactCol:'Impact summary column name (e.g. written by Jira AI)'};
 function getJiraMap(){let m={};try{m=JSON.parse(localStorage.getItem(JIRA_MAP_KEY)||'{}')||{};}catch(e){}return{...JIRA_MAP_DEFAULT,...m};}
 function setJiraMap(k,v){const m=getJiraMap();m[k]=v||JIRA_MAP_DEFAULT[k];try{localStorage.setItem(JIRA_MAP_KEY,JSON.stringify(m));}catch(e){}if(_jiraRows)refreshJiraPlan();}
 function jiraRe(p){try{return new RegExp(p,'i');}catch(e){return /$^/;}}
@@ -4439,7 +4439,8 @@ function planJiraImport(rows){
     epicName:jiraCols(rows,/^(parent\s*summary|epic\s*name|custom field \(epic name\))(_\d+)?$/i),epicKey:jiraCols(rows,/^(parent\s*key|epic\s*link|parent|custom field \(epic link\))(_\d+)?$/i),
     links:jiraCols(rows,/(issue\s*link|linked\s*issues)/i),defectLinks:jiraCols(rows,/issue\s*link\s*\(defect\)/i),
     qa:jiraCols(rows,/\bqa\b/i).filter(c=>!/summary|needed/i.test(c)),uat:jiraCols(rows,/\buat\b/i).filter(c=>!/summary|needed/i.test(c)),
-    ocmField:jiraCols(rows,jiraRe(jm.ocmTag)),programs:jiraCols(rows,/impacted programs/i),appcat:jiraCols(rows,/application category/i)};
+    ocmField:jiraCols(rows,jiraRe(jm.ocmTag)),programs:jiraCols(rows,/impacted programs/i),appcat:jiraCols(rows,/application category/i),
+    accept:jiraCols(rows,/acceptance criteria/i),bizReview:jiraCols(rows,/business review status/i),impact:jiraCols(rows,jiraRe(jm.impactCol)).filter(c=>!/impacted programs/i.test(c))};
   const versions=[...new Set(rows.flatMap(x=>C.fix.map(c=>String(x[c]||'').trim()).filter(Boolean)))];
   const norm=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const rn=norm(r?r.name:'');
@@ -4458,8 +4459,12 @@ function planJiraImport(rows){
     const uatPassed=!bug&&(reUAT.test(status)||ready||finished||/pass/i.test(jiraVal(x,C.uat)));
     const qaPassed=!bug&&(uatPassed||reQA.test(status)||/\buat\b/i.test(status)||/pass/i.test(jiraVal(x,C.qa)));
     const tagText=[jiraVal(x,C.labels),jiraVal(x,C.comps)].join(' ');
-    return{key:jiraVal(x,C.key),summary:jiraVal(x,C.summary),type,status,bug,
-      ocm:!bug&&(reTag.test(tagText)||C.ocmField.some(c=>yes(x[c]))||ready),ready,qaPassed,uatPassed,
+    const ocmVals=C.ocmField.map(c=>String(x[c]||'').trim()).filter(Boolean);
+    const programList=[...new Set(C.programs.flatMap(c=>String(x[c]||'').split(/;/)).map(t=>t.trim()).filter(Boolean))];
+    const isOcm=!bug&&(reTag.test(tagText)||C.ocmField.some(c=>yes(x[c]))||ready);
+    return{programList,hasAccept:C.accept.length?!!jiraVal(x,C.accept):null,ocmFieldBlank:C.ocmField.length>0&&!ocmVals.length,bizReview:jiraVal(x,C.bizReview),impactNote:jiraVal(x,C.impact),
+      ocmBlank:!bug&&!isOcm&&C.ocmField.length>0&&!ocmVals.length,key:jiraVal(x,C.key),summary:jiraVal(x,C.summary),type,status,bug,
+      ocm:isOcm,ready,qaPassed,uatPassed,
       open:bug?(!finished&&!/closed|resolved|done|fixed|cancel|won.?t/i.test(status)):false,
       created:parseLooseDate(jiraVal(x,C.created)),date:parseLooseDate(jiraVal(x,C.due))||parseLooseDate(jiraVal(x,C.resolved)),
       epic:jiraVal(x,C.epicName)||jiraVal(x,C.epicKey),
@@ -4467,7 +4472,7 @@ function planJiraImport(rows){
       programs:C.programs.map(c=>String(x[c]||'').trim()).filter(Boolean).join(', '),appcat:jiraVal(x,C.appcat),
       tags:(jiraVal(x,C.labels)+' '+jiraVal(x,C.env)+' '+jiraVal(x,C.summary)).toLowerCase()};
   });
-  const plan={file:_jiraFile,version,versions,rows:inScope.length,changes:[],projects:[],epics:[],statuses:statusCount,defectStatuses:defectStatusCount,unmatched:{ocm:0,bugs:0}};
+  const plan={file:_jiraFile,version,versions,rows:inScope.length,programs:[...new Set(issues.filter(i=>!i.bug).flatMap(i=>i.programList))].sort(),changes:[],projects:[],epics:[],statuses:statusCount,defectStatuses:defectStatusCount,unmatched:{ocm:0,bugs:0}};
   if(!r)return plan;
   const pick=(re,which)=>{const ds=issues.filter(i=>!i.bug&&re.test(i.summary)).map(i=>i.date).filter(Boolean).sort();return ds.length?(which==='min'?ds[0]:ds[ds.length-1]):'';};
   const uat=pick(/\bUAT\b|user acceptance/i,'max'),tt=pick(/tech(nical)?\s*transfer/i,'min'),gl=pick(/go[- ]?live|cutover|production (deploy|release)|deploy to prod/i,'max');
@@ -4508,7 +4513,8 @@ function planJiraImport(rows){
       o.defects=keys.map(k=>{const d=byKey[k];return d&&d.bug?{key:k,summary:d.summary,status:d.status,open:d.open}:{key:k,summary:'',status:'',open:null};});
     });
     plan.projects.push({target,isNew,id:p?p.id:null,name:p?p.name:epic,epics:[...new Set(mine.filter(i=>!i.bug).map(i=>i.epic))],
-      items:ocm.map(o=>({key:o.key,summary:o.summary,status:o.status,ready:o.ready,qaPassed:o.qaPassed,uatPassed:o.uatPassed,created:o.created,defects:o.defects,programs:o.programs,appcat:o.appcat})),
+      items:ocm.map(o=>({key:o.key,summary:o.summary,status:o.status,ready:o.ready,qaPassed:o.qaPassed,uatPassed:o.uatPassed,created:o.created,defects:o.defects,programs:o.programs,appcat:o.appcat,programList:o.programList,hasAccept:o.hasAccept,ocmFieldBlank:o.ocmFieldBlank,bizReview:o.bizReview,impactNote:o.impactNote})),
+      untriaged:mine.filter(i=>i.ocmBlank).map(i=>({key:i.key,summary:i.summary,programList:i.programList})),
       ocm:ocm.length,ready:ocm.filter(o=>o.ready).length,uatPassed:ocm.filter(o=>o.uatPassed).length,
       openOnOcm:ocm.filter(o=>o.defects.some(d=>d.open)).length,unknownDefects:ocm.reduce((a,o)=>a+o.defects.filter(d=>d.open===null).length,0),
       uatDefects:bugs.filter(d=>/\buat\b/.test(d.tags)).length,trainDefects:bugs.filter(d=>/train/.test(d.tags)).length,bugs:bugs.length});
@@ -4544,6 +4550,7 @@ function renderJiraPlan(pl){
     });
     h+='</tbody></table>';
   }
+  h+=renderProgMapTable(pl.programs);
   if(!pl.changes.length&&!pl.projects.length)return h+'<div class="import-status">Nothing to update. No dated UAT, Tech Transfer or go-live items, and no stories assigned to a project.</div></div>';
   h+='<div class="tt-sub">Will update</div><table class="size-tbl"><thead><tr><th>Item</th><th>Now</th><th>From Jira</th></tr></thead><tbody>';
   pl.changes.forEach(c=>{h+='<tr><td>'+esc(c.label)+'</td><td>'+(c.from?fmtDate(c.from):'—')+'</td><td><strong>'+fmtDate(c.to)+'</strong></td></tr>';});
@@ -4570,7 +4577,7 @@ function applyJiraPlan(){
       p.lifecycleSignals.testing=Object.assign({},p.lifecycleSignals.testing,{uatDefects:x.uatDefects});
       p.lifecycleSignals.training=Object.assign({},p.lifecycleSignals.training,{envDefects:x.trainDefects});
     }
-    p.jira={importedAt:now,file:pl.file,version:pl.version,items:x.items,uatDefects:x.uatDefects,trainDefects:x.trainDefects,bugs:x.bugs};
+    p.jira={importedAt:now,file:pl.file,version:pl.version,items:x.items,untriaged:x.untriaged||[],uatDefects:x.uatDefects,trainDefects:x.trainDefects,bugs:x.bugs};
     applyTTDerived(p);
   });
   const entry={at:now,file:pl.file,version:pl.version,rows:pl.rows,changes:pl.changes,projects:pl.projects.map(x=>({id:x.id,name:x.name+(x.createdNew?' (new project)':''),line:jiraProjLine(x),blocked:x.ocm-x.uatPassed,openOnOcm:x.openOnOcm})),unmatched:pl.unmatched};
@@ -4600,6 +4607,70 @@ function renderRelJiraLast(r){
   const el=document.getElementById('r-jira-last');if(!el)return;
   const e=(r.jiraLog||[])[0];
   el.innerHTML=e?'Last import '+new Date(e.at).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · <a href="#" onclick="showJiraLog();return false">view changes</a>':'Not imported yet';
+}
+// Program → audience map. Saved on the release so every lead sees the same groups;
+// the browser copy only seeds a release that has no map yet.
+const PROG_MAP_KEY='adoptiq_jira_programs';
+function getProgMap(r){
+  r=r||getRel();
+  if(r&&r.jiraProgMap)return r.jiraProgMap;
+  try{return JSON.parse(localStorage.getItem(PROG_MAP_KEY)||'{}')||{};}catch(e){return{};}
+}
+function setProgMap(prog,aud,on){
+  if(isReadOnly)return;
+  const r=getRel();const m={...getProgMap(r)};const a=new Set(m[prog]||[]);on?a.add(aud):a.delete(aud);m[prog]=[...a];
+  if(r){r.jiraProgMap=m;touch('rel');schedSave();}
+  try{localStorage.setItem(PROG_MAP_KEY,JSON.stringify(m));}catch(e){}
+  if(_jiraRows&&document.getElementById('jira-preview'))refreshJiraPlan();
+  const pj=getProj();if(pj&&document.getElementById('v-project')&&document.getElementById('v-project').classList.contains('active'))renderPTrainPlan();
+}
+function itemPrograms(it){return it.programList||(it.programs?String(it.programs).split(/\s*[,;]\s*/).filter(Boolean):[]);}
+function renderProgMapTable(progs,r){
+  if(!progs||!progs.length)return'';
+  const auds=getTTStd().audiences||[];const m=getProgMap(r);
+  const unmapped=progs.filter(pr=>!(m[pr]||[]).length).length;
+  let h='<div class="tt-sub">Who each program affects</div><p class="tt-muted">Tick the audiences each Jira program affects. AdoptIQ remembers this for future imports'+(unmapped?'. <strong>'+unmapped+' of '+progs.length+' not mapped yet.</strong>':'.')+'</p>';
+  h+='<div class="hm-scroll"><table class="size-tbl prog-map"><thead><tr><th>Impacted program</th>'+auds.map(a=>'<th>'+esc(a.name)+'</th>').join('')+'</tr></thead><tbody>';
+  progs.forEach(pr=>{h+='<tr><td>'+esc(pr)+'</td>'+auds.map(a=>'<td><input type="checkbox" aria-label="'+esc(pr)+' affects '+esc(a.name)+'" data-prog="'+esc(pr)+'"'+((m[pr]||[]).includes(a.id)?' checked':'')+' onchange="setProgMap(this.dataset.prog,\''+a.id+'\',this.checked)"'+(isReadOnly?' disabled':'')+'></td>').join('')+'</tr>';});
+  return h+'</tbody></table></div>';
+}
+function jiraChangeImpact(p){
+  const ji=jiraTrainingImpact(p);if(!ji)return null;
+  const auds=getTTStd().audiences||[];const rel=relOfProj(p);const m=getProgMap(rel);
+  const inTT=new Set((p.trainingTimeline&&p.trainingTimeline.audiences)||[]);
+  const audsOf=it=>[...new Set(itemPrograms(it).flatMap(pr=>m[pr]||[]))];
+  const byAud=auds.map(a=>{
+    const its=ji.rows.filter(it=>audsOf(it).includes(a.id));
+    return{id:a.id,name:a.name,count:its.length,programs:[...new Set(its.flatMap(it=>itemPrograms(it).filter(pr=>(m[pr]||[]).includes(a.id))))],
+      cleared:its.filter(it=>it.uatPassed).length,blocked:its.filter(it=>!it.uatPassed).length,inTimeline:inTT.has(a.id)};
+  }).filter(x=>x.count);
+  const gaps=[];
+  {const g=ji.rows.filter(it=>it.hasAccept===false);if(g.length)gaps.push({id:'accept',n:g.length,keys:g.map(x=>x.key),label:'OCM item'+(g.length===1?' has':'s have')+' no acceptance criteria',why:'Nothing is defined to train to. Ask the BA before building materials.'});}
+  {const g=ji.rows.filter(it=>it.bizReview&&!(/approv|complete|done|sign/i.test(it.bizReview)&&!/\b(not|un\w*|reject\w*|pend\w*|deni\w*|return\w*)\b/i.test(it.bizReview)));if(g.length)gaps.push({id:'biz',n:g.length,keys:g.map(x=>x.key),label:'OCM item'+(g.length===1?'':'s')+' with business review not approved ('+[...new Set(g.map(x=>x.bizReview))].join(', ')+')',why:'Scope may still change. Confirm before you finalize content.'});}
+  {const g=(p.jira.untriaged||[]);if(g.length)gaps.push({id:'triage',n:g.length,keys:g.map(x=>x.key),label:'stor'+(g.length===1?'y has':'ies have')+' “OCM Needed?” left blank',why:'Not triaged for OCM. Ask the product owner to mark Yes or No so nothing slips past training.'});}
+  {const g=ji.rows.filter(it=>it.ready&&it.ocmFieldBlank);if(g.length)gaps.push({id:'hygiene',n:g.length,keys:g.map(x=>x.key),label:'item'+(g.length===1?' is':'s are')+' OCM Ready but “OCM Needed?” is blank',why:'Counted as OCM here. Confirm the triage in Jira so the record is clean.'});}
+  {const g=ji.rows.filter(it=>!itemPrograms(it).length||!audsOf(it).length);if(g.length){const progs=[...new Set(g.flatMap(itemPrograms))];gaps.push({id:'map',n:g.length,keys:g.map(x=>x.key),label:'OCM item'+(g.length===1?' is':'s are')+' not linked to an audience'+(progs.length?' (unmapped: '+progs.join(', ')+')':' (no impacted program)'),why:'You can’t tell who needs training. Tick the audiences under “Who each program affects” below.'});}}
+  return{ji,byAud,gaps,notes:ji.rows.filter(it=>it.impactNote).map(it=>({key:it.key,summary:it.summary,note:it.impactNote})),missingAud:byAud.filter(x=>!x.inTimeline),allPrograms:[...new Set(ji.rows.flatMap(itemPrograms))].sort(),rel};
+}
+function renderChangeImpactCard(p){
+  const ci=jiraChangeImpact(p);if(!ci||!ci.ji.total)return'';
+  let h='<div class="jira-card"><div class="jira-card-hd"><strong>Change impact (from Jira)</strong><span class="tt-muted">rules-based; no AI</span></div>';
+  if(ci.byAud.length){
+    h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Audience</th><th>OCM changes</th><th>Programs</th><th>Passed UAT</th><th>Not past UAT</th><th>In this timeline</th></tr></thead><tbody>';
+    ci.byAud.forEach(a=>{h+='<tr><td><strong>'+esc(a.name)+'</strong></td><td>'+a.count+'</td><td class="tt-note">'+esc(a.programs.join(', '))+'</td><td>'+a.cleared+'</td><td>'+(a.blocked||'—')+'</td><td>'+(a.inTimeline?'Yes':isReadOnly?'No':'<button class="btn-sm" onclick="toggleTTAud(\''+a.id+'\',true)">Add to timeline</button>')+'</td></tr>';});
+    h+='</tbody></table></div>';
+  }else h+='<p class="tt-muted">No audiences linked yet. Tick which audiences each program affects below.</p>';
+  if(ci.gaps.length){
+    h+='<div class="tt-sub">Gaps to close</div><ul class="ci-gaps">';
+    ci.gaps.forEach(g=>{h+='<li><strong>'+g.n+' '+esc(g.label)+'.</strong> '+esc(g.why)+' <span class="tt-muted">'+esc(g.keys.slice(0,8).join(', '))+(g.keys.length>8?' …':'')+'</span></li>';});
+    h+='</ul>';
+  }else h+='<p class="tt-muted">No gaps found in the Jira fields.</p>';
+  if(ci.allPrograms.length){
+    const m=getProgMap(ci.rel);const open=ci.allPrograms.some(pr=>!(m[pr]||[]).length);
+    h+='<details class="ci-map"'+(open?' open':'')+'><summary>Who each program affects'+(open?'':' (all mapped)')+'</summary>'+renderProgMapTable(ci.allPrograms,ci.rel).replace(/^<div class="tt-sub">[^<]*<\/div>/,'')+'</details>';
+  }
+  if(ci.notes.length){h+='<div class="tt-sub">Impact summaries from Jira</div><ul class="ci-gaps">';ci.notes.forEach(n=>{h+='<li><strong>'+esc(n.key)+'</strong> '+esc(n.note)+'</li>';});h+='</ul>';}
+  return h+'</div>';
 }
 // Training implications of the project's last Jira import
 function jiraTrainingImpact(p){
@@ -8566,6 +8637,7 @@ function syncTT(field,val){
   p.trainingTimeline[field]=val;touch('proj');schedSave();renderPTrainPlan();
 }
 function toggleTTAud(id,on){
+  if(isReadOnly)return;
   const p=getProj();if(!p)return;if(!p.trainingTimeline)p.trainingTimeline={};
   const a=new Set(p.trainingTimeline.audiences||[]);on?a.add(id):a.delete(id);
   p.trainingTimeline.audiences=[...a];
@@ -8642,7 +8714,7 @@ function renderPTrainPlan(){
       h+='</tbody></table></div>';
     }
   }
-  h+=renderJiraCard(p);
+  h+=renderJiraCard(p)+renderChangeImpactCard(p);
   h+=renderTTStdEditor(st);
   el.innerHTML=h;
   if(isReadOnly)applyReadOnlyRestrictions();
@@ -8730,6 +8802,11 @@ function pilotStatus(p){
   if(ji&&ji.blocked)act(ji.buildStarted?'red':'amber',ji.blocked+' OCM item'+(ji.blocked===1?' has':'s have')+' not passed UAT, so materials can’t be built for '+(ji.blocked===1?'it':'them')+' yet.','trainplan');
   if(ji&&ji.withDefects)act('amber',ji.withDefects+' OCM item'+(ji.withDefects===1?' has':'s have')+' open defects; plan workaround content or rework.','trainplan');
   if(ji&&ji.late)act('amber',ji.late+' OCM item'+(ji.late===1?' was':'s were')+' added after UAT; check the training build plan.','trainplan');
+  const ci=ji&&jiraChangeImpact(p);
+  if(ci){
+    ci.missingAud.forEach(a=>act('amber',a.name+' is affected by '+a.count+' Jira change'+(a.count===1?'':'s')+' but isn’t in this training timeline.','trainplan'));
+    ci.gaps.forEach(g=>act('amber',g.n+' '+g.label+'. '+g.why,'trainplan'));
+  }
   dx.filter(x=>x.d.status==='intervene').forEach(x=>{
     const g=SUS_GAPS[x.d.primary];
     const ivs=(((p.sustainment||{})[x.sh.id]||{}).interventions||[]).filter(i=>i.type===x.d.primary&&i.status!=='Verified');
@@ -8807,6 +8884,8 @@ function exportStatusReport(){
     b+='<h2>OCM-tagged changes (from Jira)</h2><p>'+jr.cleared+' of '+jr.total+' OCM items have passed UAT and are cleared for material development'+(jr.withDefects?'; '+jr.withDefects+' of those have open defects':'')+(jr.late?'; '+jr.late+' added after UAT':'')+'.</p>';
     const blocking=jr.rows.filter(x=>x.rank<3);
     if(blocking.length)b+='<table class="grid"><tr><th>Item</th><th>Stage</th><th>Training implication</th></tr>'+blocking.map(x=>'<tr><td>'+e(x.key)+' '+e(x.summary)+'</td><td>'+e(x.state)+'</td><td>'+e(x.impl)+'</td></tr>').join('')+'</table>';
+    const ci=jiraChangeImpact(p);
+    if(ci&&ci.byAud.length)b+='<h2>Impact by audience (from Jira)</h2><table class="grid"><tr><th>Audience</th><th>OCM changes</th><th>Programs</th><th>Passed UAT</th><th>Not past UAT</th><th>In timeline</th></tr>'+ci.byAud.map(a=>'<tr><td>'+e(a.name)+'</td><td>'+a.count+'</td><td>'+e(a.programs.join(', '))+'</td><td>'+a.cleared+'</td><td>'+a.blocked+'</td><td>'+(a.inTimeline?'Yes':'<span class="red">No</span>')+'</td></tr>').join('')+'</table>';
   }
   b+='<h2>Next actions</h2>';
   b+=s.actions.length?'<ol>'+s.actions.map(a=>'<li'+(a.sev==='red'?' class="red"':'')+'>'+e(a.text)+'</li>').join('')+'</ol>':'<p class="muted">Nothing outstanding.</p>';

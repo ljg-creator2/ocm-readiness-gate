@@ -2757,6 +2757,11 @@ body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-ca
 .r-jira-last a{color:var(--gold-light,#e5cc94)}
 .jira-map{margin-top:10px;font-family:var(--font-body);font-size:12px}
 .jira-map summary{cursor:pointer;font-weight:700;color:var(--ink)}
+.ci-gaps{margin:6px 0 4px 18px;padding:0;font-size:12px;line-height:1.5}
+.ci-gaps li{margin-bottom:5px}
+.ci-map{margin-top:10px;font-size:12px}
+.ci-map summary{cursor:pointer;font-weight:700;color:var(--ink)}
+.prog-map td:not(:first-child),.prog-map th:not(:first-child){text-align:center}
 .jira-help ol{margin:6px 0 4px 18px;padding:0;line-height:1.5}
 .jira-help li{margin-bottom:6px}
 .jira-jql{display:flex;gap:6px;margin-top:4px}
