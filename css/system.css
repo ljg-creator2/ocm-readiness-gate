@@ -36,7 +36,7 @@
   --bg-landing-section:#F7F2E9;   /* landing secondary sections */
   --bg-signin-brand:#071B33;      /* sign-in left panel */
   --bg-signin-form:#F7F2E9;       /* sign-in right panel */
-  --bg-app:#FCFBF9;               /* Command Center and app main background */
+  --bg-app:#FFFFFF;               /* Command Center and app main background (Pure White, per LaKenya) */
   --bg-sidebar:#071B33;           /* app sidebar */
   --bg-card:#FFFFFF;              /* dashboard cards */
   --bg-greeting:#F7F2E9;          /* greeting banner */

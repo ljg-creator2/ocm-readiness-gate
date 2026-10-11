@@ -45,7 +45,7 @@ Use these tokens; never write the hex directly in a component.
 | Landing secondary sections | `--bg-landing-section` | #F7F2E9 |
 | Sign-in left panel | `--bg-signin-brand` | #071B33 |
 | Sign-in right panel | `--bg-signin-form` | #F7F2E9 |
-| Command Center and app main background | `--bg-app` | #FCFBF9 |
+| Command Center and app main background | `--bg-app` | #FFFFFF (Pure White) |
 | App sidebar | `--bg-sidebar` | #071B33 |
 | Dashboard cards | `--bg-card` | #FFFFFF |
 | Greeting banner | `--bg-greeting` | #F7F2E9 |
