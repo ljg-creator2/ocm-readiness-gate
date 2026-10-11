@@ -149,3 +149,4 @@ body.tr-dlg-open{overflow:hidden}
 .tr-suggest li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap}
 .tr-suggest-t{display:flex;flex-direction:column;min-width:0;font-size:13.5px}
 .tr-suggest-a{display:flex;gap:8px;align-items:center;flex:none}
+.tr-hist li>span>.tr-sub{display:block}

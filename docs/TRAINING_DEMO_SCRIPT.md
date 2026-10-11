@@ -43,6 +43,16 @@ Open it from **Initiatives → Benefits Modernization → Benefits Renewal Notic
 - **Q3 EHR Migration → Clinical Workflow** shows suggestions from its CRAID log and Impact Assessment.
 - Nothing is added until someone selects **Review and add** and saves. A later Jira import that shows progress raises a "review" prompt. It never changes a record by itself.
 
+## Environments (Delivery & Capacity → Environments)
+- The release lists its environments: QA, UAT, Pre-production, TRN-1, TRN-2 and Production. Each shows its purpose, whether it holds personal data, its maintenance window and its training logins.
+- The ENV-77 deployment to TRN-2 is recorded. It came before the intake scenario passed, so nothing needed a re-run.
+- With editing on, select **Record a deployment or refresh** for TRN-2 with today's date. The intake scenarios that passed there are marked for a re-run, and Claims Intake's delivery readiness drops until they are re-run. Their run history is kept.
+- **Add readiness steps** creates five linked, critical dependencies (deployment request through checked training cases), with due dates counted back from the date you choose.
+- Warnings appear when:
+  - learner practice points at an environment with personal data
+  - a scenario passed only in QA or UAT
+  - delivery is planned on a maintenance day
+
 ## Try it with editing on
 Sign in to a workspace, or use a copy of the demo with editing enabled. Then:
 1. Add a dependency.

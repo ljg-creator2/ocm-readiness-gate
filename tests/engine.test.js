@@ -167,4 +167,29 @@ test('Jira import suggests scenarios, UAT and environment dependencies, and revi
   assert.ok(rev&&/D-2 now shows UAT passed/.test(rev.label),'a review prompt, not an automatic change');
   assert.strictEqual(p.training.dependencies.find(d=>d.jiraKey==='D-2').status,'partial','record unchanged');
 });
+test('environment event marks earlier passing runs in that environment for a re-run',()=>{
+  const p=project();const q=project();
+  TE.recordScenarioRun(p,'sc1',{status:'pass',environment:'TRN-2',date:'2026-10-01',by:'T'},ctx);
+  TE.recordScenarioRun(q,'sc1',{status:'pass',environment:'TRN1',date:'2026-10-01',by:'T'},ctx);
+  const r=TE.recordEnvEvent([p,q],{envName:'TRN2',kind:'refresh',date:'2026-10-05',ref:'DIS-12'},ctx);
+  assert.strictEqual(r.scenarios,1,'names match regardless of punctuation; other environments untouched');
+  assert.ok(!TE.scenarioValidated(TE.byId(p.training.scenarios,'sc1')),'needs a re-run');
+  assert.ok(TE.scenarioValidated(TE.byId(q.training.scenarios,'sc1')));
+  assert.strictEqual(TE.byId(p.training.scenarios,'sc1').env.status,'pass','run history kept');
+  TE.recordScenarioRun(p,'sc1',{status:'pass',environment:'TRN-2',date:'2026-10-06',by:'T'},ctx);
+  assert.ok(TE.scenarioValidated(TE.byId(p.training.scenarios,'sc1')),'a new run clears it');
+  const later=TE.recordEnvEvent([p],{envName:'TRN2',kind:'deploy',date:'2026-10-04'},ctx);
+  assert.strictEqual(later.scenarios,0,'runs after the event are not flagged');
+});
+test('environment readiness chain and warnings',()=>{
+  const c=TE.envChain('TRN2','2026-11-20',['sc1']);
+  assert.strictEqual(c.length,5);assert.ok(c.every(d=>d.critical&&d.scenarioIds[0]==='sc1'&&d.status==='awaiting'));
+  assert.deepStrictEqual(c.map(d=>d.requiredBy),['2026-11-10','2026-11-13','2026-11-15','2026-11-17','2026-11-19']);
+  const p=project();const list=[TE.newEnvironment({name:'TRN2',type:'training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00'}),TE.newEnvironment({name:'UAT',type:'uat'}),TE.newEnvironment({name:'TRN4',type:'preprod',pii:true})];
+  TE.recordScenarioRun(p,'sc1',{status:'pass',environment:'UAT',date:'2026-10-01'},ctx);
+  assert.ok(TE.envWarnings(p,list).some(w=>w.kind==='not-training'));
+  TE.byId(p.training.scenarios,'sc1').env.environment='TRN4';assert.ok(TE.envWarnings(p,list).some(w=>w.kind==='pii'));
+  TE.byId(p.training.scenarios,'sc1').env.environment='TRN2';TE.byId(p.training.deliverables,'d1').planned.delivery='2026-11-16';
+  assert.ok(TE.envWarnings(p,list).some(w=>w.kind==='maintenance'&&/Mon/.test(w.text)),'2026-11-16 is a Monday');
+});
 console.log('\n'+(n-fail)+'/'+n+' passed');process.exit(fail?1:0);

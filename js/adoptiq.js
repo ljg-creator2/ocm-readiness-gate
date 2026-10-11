@@ -12134,7 +12134,7 @@ function aiFetch(url,opts){
 function applyAIMode(){document.body.classList.toggle('ai-off',!aiAllowed());}
 
 // ── Pilot view: live projects show only the pilot tabs unless "All tabs" is chosen ──
-const PILOT_TABS=['overview','deps','learndev','readiness','actions','milestones','trainplan','adoption','postlaunch','sustain','resources'];
+const PILOT_TABS=['overview','deps','learndev','readiness','actions','milestones','environments','trainplan','adoption','postlaunch','sustain','resources'];
 function pilotOn(){
   let pref=null;try{pref=localStorage.getItem('adoptiq_pilot_view');}catch(e){}
   return pref?pref==='on':!isDemoMode;

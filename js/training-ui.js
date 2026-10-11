@@ -15,7 +15,7 @@ function trSaved(msg){touch('proj');schedSave();if(msg)showSuccess(msg);trRefres
 function trRefresh(){
   const act=document.querySelector('#v-project .tab-sec.active');const id=act?act.id.replace('psec-',''):'';
   renderProjBrief();
-  const map={deps:trRenderDeps,learndev:trRenderLearnDev,readiness:trRenderReadiness,actions:trRenderActions,milestones:trRenderMilestones,postlaunch:trRenderOutcomes,heatmap:renderPDepHM};
+  const map={environments:trRenderEnvironments,deps:trRenderDeps,learndev:trRenderLearnDev,readiness:trRenderReadiness,actions:trRenderActions,milestones:trRenderMilestones,postlaunch:trRenderOutcomes,heatmap:renderPDepHM};
   if(map[id])map[id]();
 }
 const TR_TONE={ready:'st-g',conditional:'st-w',insufficient:'st-w',blocked:'st-c',not_assessed:'st-n',not_observed:'st-n',assessed:'st-n',
@@ -356,8 +356,8 @@ function trScenarioRun(id){
   const p=trProj();if(!p)return;const s=TE.byId(p.training.scenarios,id);if(!s)return;
   const rec={status:s.env.status==='not_run'?'pass':s.env.status,environment:s.env.environment,date:trToday(),by:(window._cc&&_cc.userName)||'',note:''};
   const fields=[{k:'status',label:'Result',type:'select',opts:[['pass','Runs in the training environment'],['fail','Does not run in the training environment'],['not_run','Not run']]},
-    {k:'environment',label:'Environment',req:true,half:true,ph:'e.g. TRN-2'},{k:'date',label:'Date',type:'date',half:true,req:true},{k:'by',label:'Run by',half:true},{k:'note',label:'What happened',type:'textarea',rows:2}];
-  trDialog('Run: '+s.title,'<p class="tr-help">A passing run in the learning environment is what validates a scenario for practice. QA or UAT results alone do not.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
+    {k:'environment',label:'Environment',req:true,half:true,ph:'e.g. TRN-2',list:'tr-envs'},{k:'date',label:'Date',type:'date',half:true,req:true},{k:'by',label:'Run by',half:true},{k:'note',label:'What happened',type:'textarea',rows:2}];
+  trDialog('Run: '+s.title,trEnvDatalist(p)+'<p class="tr-help">A passing run in the learning environment is what validates a scenario for practice. QA or UAT results alone do not.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;TE.recordScenarioRun(p,id,v,trCtx(p));trSaved('Run recorded.');},{saveLabel:'Record run'});
 }
 function trEditDeliverable(id){
@@ -542,7 +542,7 @@ const TR_GROUPS=[
   {key:'learn',label:'Learning Development',tabs:['learndev']},
   {key:'ready',label:'Readiness & Gates',tabs:['readiness','gates','adkar','adopthm']},
   {key:'actions',label:'Actions & Risks',tabs:['actions','flags','craid']},
-  {key:'delivery',label:'Delivery & Capacity',tabs:['milestones','trainplan','resources']},
+  {key:'delivery',label:'Delivery & Capacity',tabs:['milestones','environments','trainplan','resources']},
   {key:'adoption',label:'Adoption & Sustainment',tabs:['postlaunch','pulse','sustain']}
 ];
 function trGroupOf(tab){return TR_GROUPS.find(g=>g.tabs.includes(tab))||TR_GROUPS[0];}
@@ -564,5 +564,85 @@ function showPGroup(key){const g=TR_GROUPS.find(x=>x.key===key);if(!g)return;
 function trTabRendered(id){
   trSyncNav(id);
   if(id==='deps')trRenderDeps();if(id==='learndev')trRenderLearnDev();if(id==='readiness')trRenderReadiness();if(id==='actions')trRenderActions();
-  if(id==='milestones')trRenderMilestones();if(id==='postlaunch')trRenderOutcomes();if(id==='heatmap')renderPDepHM();
+  if(id==='milestones')trRenderMilestones();if(id==='environments')trRenderEnvironments();if(id==='postlaunch')trRenderOutcomes();if(id==='heatmap')renderPDepHM();
+}
+
+// ════════════ ENVIRONMENTS ════════════
+// The list belongs to the release and is shared by its projects. A new release starts from the
+// most recent list in the workspace, or from the generic defaults.
+function trEnvOf(r){
+  if(!r)return{list:[],events:[]};
+  if(!r.trEnv||typeof r.trEnv!=='object'){
+    const src=releases.find(x=>x!==r&&x.trEnv&&Array.isArray(x.trEnv.list)&&x.trEnv.list.length);
+    r.trEnv={list:src?src.trEnv.list.map(e=>TE.newEnvironment(Object.assign({},e,{id:TE.id()}))):TE.defaultEnvironments(),events:[]};
+  }
+  if(!Array.isArray(r.trEnv.list))r.trEnv.list=[];if(!Array.isArray(r.trEnv.events))r.trEnv.events=[];
+  return r.trEnv;
+}
+function trEnvList(p){return trEnvOf(relOfProj(p)).list;}
+function trEnvDatalist(p){return'<datalist id="tr-envs">'+trEnvList(p).filter(TE.isPracticeEnv).map(e=>'<option value="'+esc(e.name)+'">').join('')+'</datalist>';}
+function trMaint(e){return arr0(e.maintDays).length?arr0(e.maintDays).map(d=>TE.DAYS[d]).join(', ')+(e.maintStart?' '+e.maintStart+(e.maintEnd?'–'+e.maintEnd:''):''):'—';}
+function arr0(v){return Array.isArray(v)?v:[];}
+function trRenderEnvironments(){
+  const el=document.getElementById('tr-environments');const p=trProj();if(!el||!p)return;const r=relOfProj(p);const env=trEnvOf(r);
+  const warn=TE.envWarnings(p,env.list);
+  const rows=env.list.map(e=>'<tr><td><button type="button" class="tr-rowlink" onclick="trEditEnv('+trQ(e.id)+')">'+esc(e.name||'Untitled')+'</button><div class="tr-sub">'+esc(e.purpose||'')+'</div></td>'
+    +'<td>'+esc(TE.ENV_TYPES[e.type]||e.type)+(TE.isPracticeEnv(e)?'<div class="tr-sub">Learner practice</div>':'')+'</td>'
+    +'<td>'+(e.pii?trChip('assessed','Personal data'):'<span class="tr-sub">No personal data</span>')+'</td>'
+    +'<td>'+esc(trMaint(e))+(e.noticeDays?'<div class="tr-sub">'+esc(e.noticeDays)+' business day notice</div>':'')+'</td>'
+    +'<td class="mono">'+(e.logins?esc(e.logins):'—')+'</td></tr>').join('');
+  const ev=env.events.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,10);
+  el.innerHTML='<p class="tr-help tr-lead">Where each kind of testing happens, and what changed in each environment. A pass in QA or UAT does not show a scenario works where learners practise, and a refresh or deployment can break a scenario that worked before.</p>'
+    +(warn.length?'<div class="tr-flag" role="status"><strong>Check these</strong><ul class="tr-ul">'+warn.map(w=>'<li>'+esc(w.text)+'</li>').join('')+'</ul></div>':'')
+    +'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Environments</div><div class="ps-text">Shared by every project in '+esc(r?r.name:'this release')+'. Name them the way your teams do (for example TRN1 to TRN5).</div></div>'
+      +(trCanEdit()?'<span class="tr-suggest-a">'+trBtn('<i class="ph ph-plus"></i> Add environment','trEditEnv()','btn-outline btn-sm')+'</span>':'')+'</div><div class="pb">'
+      +(env.list.length?'<div class="dt-wrap"><table class="dt tr-table"><thead><tr><th scope="col">Environment</th><th scope="col">Type</th><th scope="col">Data</th><th scope="col">Maintenance</th><th scope="col">Training logins</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+        :trEmpty('No environments listed.','Add the environments your teams use, or start from the standard list.',trBtn('Use the standard list','trEnvDefaults()','btn-primary btn-sm')))+'</div></section>'
+    +'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Deployments and refreshes</div><div class="ps-text">Recording one marks scenarios that passed earlier in that environment, in every project, for a re-run.</div></div>'
+      +(trCanEdit()?trBtn('Record a deployment or refresh','trEnvEvent()','btn-primary btn-sm'):'')+'</div><div class="pb">'
+      +(ev.length?'<ul class="tr-hist">'+ev.map(x=>'<li><span class="mono">'+trD(x.date)+'</span><span><strong>'+esc(x.envName)+'</strong>: '+esc(TE.ENV_EVENTS[x.kind]||x.kind)+(x.ref?' ('+esc(x.ref)+')':'')+(x.note?' — '+esc(x.note):'')+'<span class="tr-sub">'+(x.flagged?x.flagged+' scenario'+(x.flagged===1?'':'s')+' marked for a re-run':'No passing scenarios affected')+(x.by?' · '+esc(x.by):'')+'</span></span></li>').join('')+'</ul>'
+        :'<p class="tr-help">No deployments or refreshes recorded for this release.</p>')+'</div></section>'
+    +'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Getting an environment ready</div><div class="ps-text">Adds five linked dependencies, from the deployment request to checked training cases, each with a suggested due date and owning team. Edit any of them afterwards.</div></div>'
+      +(trCanEdit()?trBtn('Add readiness steps','trEnvChainDialog()','btn-outline btn-sm'):'')+'</div><div class="pb"><ol class="tr-ul">'+TE.ENV_CHAIN.map(c=>'<li><strong>'+esc(c.step)+'</strong> · '+esc(c.ws)+' · '+c.lead+' day'+(c.lead===1?'':'s')+' before it is needed<div class="tr-sub">'+esc(c.detail)+'</div></li>').join('')+'</ol></div></section>';
+}
+function trEnvDefaults(){const p=trProj();if(!p||!trCanEdit())return;const env=trEnvOf(relOfProj(p));env.list=TE.defaultEnvironments();touch('rel');trSaved('Standard environments added. Rename them to match your own.');}
+function trEditEnv(id){
+  const p=trProj();if(!p)return;const env=trEnvOf(relOfProj(p));const rec=id?env.list.find(e=>String(e.id)===String(id)):TE.newEnvironment();if(!rec)return;
+  const view=Object.assign({},rec,{maintDays:arr0(rec.maintDays).map(String)});
+  const fields=[{k:'name',label:'Name',req:true,half:true,ph:'e.g. TRN2'},{k:'type',label:'Type',type:'select',half:true,opts:Object.keys(TE.ENV_TYPES).map(k=>[k,TE.ENV_TYPES[k]])},
+    {k:'purpose',label:'What it is used for',ph:'e.g. CWP training'},{k:'pii',label:'Holds personal data (not for learner practice)',type:'check'},
+    {type:'section',label:'Maintenance'},{k:'maintDays',label:'Maintenance days',type:'multi',opts:[1,2,3,4,5].map(d=>[String(d),TE.DAYS[d]])},
+    {k:'maintStart',label:'From',half:true,ph:'09:00'},{k:'maintEnd',label:'Until',half:true,ph:'12:00'},
+    {k:'noticeDays',label:'Notice needed (business days)',half:true},{k:'logins',label:'Training logins available',half:true}];
+  trDialog(id?'Environment':'New environment','<div class="tr-form">'+trForm(fields,view)+'</div>'+(id&&trCanEdit()?'<p><button type="button" class="btn-text tr-danger" onclick="trDeleteEnv('+trQ(id)+')">Remove this environment</button></p>':''),()=>{
+    const v=trCollect(fields,view);const m=trMissing(fields,v);if(m)return m;
+    if(env.list.some(e=>e!==rec&&TE.envKey(e.name)===TE.envKey(v.name)))return'Another environment already has this name.';
+    v.maintDays=arr0(v.maintDays).map(Number);Object.assign(rec,v);if(!id)env.list.push(rec);touch('rel');trSaved('Environment saved.');});
+}
+function trDeleteEnv(id){const p=trProj();if(!p||!trCanEdit())return;const env=trEnvOf(relOfProj(p));const i=env.list.findIndex(e=>String(e.id)===String(id));if(i<0)return;
+  if(!confirm('Remove “'+env.list[i].name+'” from this release’s list? Scenario runs that name it are kept.'))return;env.list.splice(i,1);trCloseDialog();touch('rel');trSaved('Environment removed.');}
+function trEnvEvent(){
+  const p=trProj();if(!p||!trCanEdit())return;const env=trEnvOf(relOfProj(p));if(!env.list.length)return trDialog('Record a deployment or refresh','<p class="tr-help">Add your environments first.</p>',null);
+  const rec={envName:(env.list.find(TE.isPracticeEnv)||env.list[0]).name,kind:'refresh',date:trToday(),ref:'',note:''};
+  const fields=[{k:'envName',label:'Environment',type:'select',half:true,opts:env.list.map(e=>[e.name,e.name])},{k:'kind',label:'What happened',type:'select',half:true,opts:Object.keys(TE.ENV_EVENTS).map(k=>[k,TE.ENV_EVENTS[k]])},
+    {k:'date',label:'Date',type:'date',req:true,half:true},{k:'ref',label:'Ticket or reference',half:true,ph:'e.g. the infrastructure request'},{k:'note',label:'Note',type:'textarea',rows:2}];
+  trDialog('Record a deployment or refresh','<p class="tr-help">Scenarios that passed in this environment on or before this date, in every project, will be marked for a re-run. Their run history is kept.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
+    const v=trCollect(fields,rec);const m=trMissing(fields,v);if(m)return m;
+    const projects=[].concat(...releases.map(r=>r.projects||[]));projects.forEach(q=>TE.migrate(q,trCtx(q)));
+    const res=TE.recordEnvEvent(projects,v,Object.assign(trCtx(p),{today:v.date}));
+    const entry=Object.assign({id:TE.id(),by:(window._cc&&_cc.userName)||'',flagged:res.scenarios},v);
+    releases.forEach(r=>{const e=trEnvOf(r);if(r===relOfProj(p)||TE.envOf(e.list,v.envName))e.events.push(Object.assign({},entry,{id:TE.id()}));r.modified=new Date().toISOString();});
+    touch('proj');trSaved(res.scenarios?res.scenarios+' scenario'+(res.scenarios===1?'':'s')+' in '+res.projects+' project'+(res.projects===1?'':'s')+' marked for a re-run.':'Recorded. No passing scenarios in '+v.envName+' were affected.');},{saveLabel:'Record'});
+}
+function trEnvChainDialog(){
+  const p=trProj();if(!p||!trCanEdit())return;const t=p.training;const list=trEnvList(p).filter(TE.isPracticeEnv);
+  if(!list.length)return trDialog('Add readiness steps','<p class="tr-help">Add a training environment to the list first.</p>',null);
+  const rec={envName:list[0].name,neededBy:projGoLive(p)||'',scenarioIds:[]};
+  const fields=[{k:'envName',label:'Environment',type:'select',half:true,opts:list.map(e=>[e.name,e.name])},{k:'neededBy',label:'Needed ready by',type:'date',req:true,half:true},
+    {k:'scenarioIds',label:'Scenarios that will run there',type:'multi',opts:trOpts(t.scenarios),none:'No scenarios yet. You can link them later.'}];
+  trDialog('Add readiness steps','<p class="tr-help">Creates five critical dependencies with due dates counted back from the date you choose. Change owners, dates or steps afterwards as your teams work.</p><div class="tr-form">'+trForm(fields,rec)+'</div>',()=>{
+    const v=trCollect(fields,rec);const m=trMissing(fields,v);if(m)return m;
+    const deps=TE.envChain(v.envName,v.neededBy,v.scenarioIds);deps.forEach(d=>{d.created=trToday();t.dependencies.push(d);});
+    TE.log(p,{type:'dependency',text:'Readiness steps added for '+v.envName+' (needed by '+v.neededBy+')'},trCtx(p));
+    trSaved('Five readiness steps added under Dependencies & Evidence.');},{saveLabel:'Add five steps'});
 }

@@ -110,6 +110,15 @@ function trSeedDemo(){
     consequence:'Quick reference screenshots may change.',permits:{provisional:true,scenarioDev:true,validation:true,facilitator:false,delivery:false},created:day(-8)}));
   TE.log(q,{type:'dependency',refId:'r-dep2',text:'Dependency recorded: Final notice template wording (Partial)'},qa(-8));
 
+  // Fictional environment list, and the deployment that fixed the intake scenario's environment.
+  r.trEnv={list:[TE.newEnvironment({name:'QA',type:'qa',purpose:'Quality assurance testing'}),TE.newEnvironment({name:'UAT',type:'uat',purpose:'End-to-end and subject-matter-expert testing'}),
+    TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation; sanitized data'}),
+    TE.newEnvironment({name:'TRN-1',type:'training',purpose:'Intake training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00',noticeDays:'1',logins:'400'}),
+    TE.newEnvironment({name:'TRN-2',type:'training',purpose:'Caseworker training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00',noticeDays:'1',logins:'350'}),
+    TE.newEnvironment({name:'Production',type:'prod',purpose:'Live operations',pii:true})],events:[]};
+  const evt={envName:'TRN-2',kind:'deploy',date:day(-52),ref:'ENV-77',note:'Release R1030 with the learner-role permission fix'};
+  const res=TE.recordEnvEvent([p,q],evt,{today:day(-52),by:'J. Okafor'});
+  r.trEnv.events.push(Object.assign({id:TE.id(),by:'J. Okafor',flagged:res.scenarios},evt));
   // Newest first, by date (records were written in story order).
   [p,q].forEach(x=>x.training.history.sort((a,b)=>String(b.date).localeCompare(String(a.date))));
   // A fictional Jira import, so the Jira suggestions can be seen in the demo.

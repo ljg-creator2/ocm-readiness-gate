@@ -558,6 +558,72 @@ TE.milestones=function(p,ctx){
   return{rows,risks};
 };
 
+// ── Environments ──
+// Each release keeps its environment list (r.trEnv.list) and the events recorded against it
+// (r.trEnv.events). Organization specifics (names such as TRN1-TRN5, maintenance windows,
+// team names) are settings, not code. Defaults are generic.
+TE.ENV_TYPES={qa:'QA',uat:'UAT',preprod:'Pre-production',training:'Training',lms:'LMS',prod:'Production',other:'Other'};
+TE.ENV_EVENTS={deploy:'Code deployed',refresh:'Refreshed',golden:'Golden copy updated',logins:'Training logins reset',other:'Other change'};
+TE.DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+TE.envKey=n=>String(n||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+TE.newEnvironment=function(o){return Object.assign({id:TE.id(),name:'',type:'training',purpose:'',pii:false,logins:'',maintDays:[],maintStart:'',maintEnd:'',noticeDays:''},o||{});};
+TE.defaultEnvironments=function(){return[
+  TE.newEnvironment({name:'QA',type:'qa',purpose:'Quality assurance testing'}),
+  TE.newEnvironment({name:'UAT',type:'uat',purpose:'End-to-end and subject-matter-expert testing'}),
+  TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation before release'}),
+  TE.newEnvironment({name:'Training',type:'training',purpose:'Learner practice and facilitator rehearsal'}),
+  TE.newEnvironment({name:'Production',type:'prod',purpose:'Live operations',pii:true})];};
+TE.envOf=(list,name)=>arr(list).find(e=>TE.envKey(e.name)===TE.envKey(name))||null;
+TE.isPracticeEnv=e=>!!e&&(e.type==='training'||e.type==='lms');
+// A deployment, refresh or data reset can break a scenario that ran before it. Scenarios that passed in
+// that environment on or before the event date are marked for a re-run (their run history is kept).
+TE.recordEnvEvent=function(projects,ev,ctx){
+  const k=TE.envKey(ev.envName);const date=ev.date||todayISO(ctx);const label=(TE.ENV_EVENTS[ev.kind]||'Changed').toLowerCase();
+  const res={scenarios:0,projects:0};
+  arr(projects).forEach(p=>{
+    if(!p||!p.training)return;let n=0;
+    p.training.scenarios.forEach(s=>{
+      if(!s.env||s.env.status!=='pass'||TE.envKey(s.env.environment)!==k)return;
+      if(s.env.date&&s.env.date>date)return;
+      s.needsRevalidation={reason:ev.envName+' '+label+' on '+date+(ev.ref?' ('+ev.ref+')':'')+'. Re-run before relying on this scenario.',date,sourceType:'environment'};n++;
+    });
+    TE.log(p,{type:'environment',text:ev.envName+': '+(TE.ENV_EVENTS[ev.kind]||'Changed')+(ev.ref?' ('+ev.ref+')':'')+(n?'. '+n+' scenario'+(n===1?'':'s')+' need'+(n===1?'s':'')+' a re-run':''),flagged:n},Object.assign({},ctx,{today:date}));
+    if(n){res.scenarios+=n;res.projects++;}
+  });
+  return res;
+};
+// Five linked dependencies that make a training environment ready, with suggested lead times.
+TE.ENV_CHAIN=[
+  {step:'Deployment requested',ws:'Environment team',lead:10,detail:'Request submitted to infrastructure (with the release and the environment named)'},
+  {step:'Code deployed and smoke-tested',ws:'Infrastructure',lead:7,detail:'Environment refreshed from the golden copy, code deployed, login and integrations checked'},
+  {step:'Environment validated and regression-tested',ws:'Environment team',lead:5,detail:'Defect fixes and new functionality confirmed in the environment'},
+  {step:'Training data staged',ws:'Environment and training teams',lead:3,detail:'Base cases tested, staging sheet prepared, cases created'},
+  {step:'Training cases checked',ws:'Environment team',lead:1,detail:'Quality check of the created cases'}];
+TE.envChain=function(envName,neededBy,scenarioIds){
+  const minus=(d,n)=>{if(!d)return'';const x=new Date(d+'T12:00:00');x.setDate(x.getDate()-n);return x.toISOString().slice(0,10);};
+  return TE.ENV_CHAIN.map((c,i)=>TE.newDependency({title:envName+': '+c.step+' ('+(i+1)+' of '+TE.ENV_CHAIN.length+')',workstream:c.ws,acceptance:c.detail,requiredBy:minus(neededBy,c.lead),
+    critical:true,scenarioIds:arr(scenarioIds).slice(),status:'awaiting',source:'env-chain',envName,phase:2,
+    consequence:'Scenarios that use '+envName+' cannot be validated until this step is done.',
+    permits:{provisional:true,scenarioDev:true,validation:false,facilitator:false,delivery:false}}));
+};
+// Plain warnings about environment use. Advisory only; nothing is blocked by them.
+TE.envWarnings=function(p,list){
+  const t=p.training;const out=[];
+  t.scenarios.forEach(s=>{
+    const e=s.env&&s.env.environment?TE.envOf(list,s.env.environment):null;
+    if(!e)return;
+    if(e.pii)out.push({kind:'pii',id:s.id,text:'"'+s.title+'" is set to '+e.name+', which holds personal data. Learner practice should use a training environment.'});
+    if(s.env.status==='pass'&&!TE.isPracticeEnv(e))out.push({kind:'not-training',id:s.id,text:'"'+s.title+'" was run in '+e.name+' ('+(TE.ENV_TYPES[e.type]||e.type)+'). A pass there does not show it works where learners practise.'});
+  });
+  t.deliverables.forEach(d=>{
+    const dt=d.planned&&d.planned.delivery;if(!dt||d.state==='released')return;
+    const day=new Date(dt+'T12:00:00').getDay();
+    const envs=[...new Set(arr(d.scenarioIds).map(id=>byId(t.scenarios,id)).filter(s=>s&&s.env&&s.env.environment).map(s=>s.env.environment))].map(n=>TE.envOf(list,n)).filter(Boolean);
+    envs.forEach(e=>{if(arr(e.maintDays).map(Number).includes(day))out.push({kind:'maintenance',id:d.id,text:'"'+d.title+'" is planned for '+TE.DAYS[day]+' '+dt+', a maintenance day for '+e.name+(e.maintStart?' ('+e.maintStart+(e.maintEnd?'–'+e.maintEnd:'')+')':'')+'. Confirm the session avoids the window.'});});
+  });
+  return out;
+};
+
 if(typeof module!=='undefined'&&module.exports)module.exports=TE;
 root.TE=TE;
 })(typeof window!=='undefined'?window:globalThis);

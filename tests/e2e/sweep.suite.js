@@ -2,7 +2,7 @@
 // Checks for script errors, sideways scroll and broken images. (Colour contrast is checked
 // separately by hand: four brand colour pairs are knowingly below AA, pending a brand decision.)
 'use strict';
-const PROJ_TABS=['overview','deps','learndev','readiness','actions','milestones','gates','adkar','lifecycle','flags','craid','impact','gaps','adopthm','trainplan','adoption','pulse','postlaunch','sustain','resources','heatmap'];
+const PROJ_TABS=['overview','deps','learndev','readiness','actions','milestones','environments','gates','adkar','lifecycle','flags','craid','impact','gaps','adopthm','trainplan','adoption','pulse','postlaunch','sustain','resources','heatmap'];
 const SECTIONS=['command','initiatives','people','risk','training','stakeholders','adoption','reports'];
 module.exports=async function(t){
   const {ok,wait,ev}=t;

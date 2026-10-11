@@ -127,7 +127,7 @@ module.exports=async function(t){
   const rid=await ev(pg,()=>releases[0].id);
   await ev(pg,id=>openRelease(id),rid);await wait(700);
   ok('Release','Release page opens with sidebar',await ev(pg,()=>document.getElementById('v-release').classList.contains('active')&&document.body.classList.contains('app-shell')));
-  const tabs=['overview','deps','learndev','readiness','actions','milestones','gates','adkar','lifecycle','flags','craid','impact','gaps','adopthm','trainplan','adoption','pulse','postlaunch','sustain','resources','heatmap'];
+  const tabs=['overview','deps','learndev','readiness','actions','milestones','environments','gates','adkar','lifecycle','flags','craid','impact','gaps','adopthm','trainplan','adoption','pulse','postlaunch','sustain','resources','heatmap'];
   for(const t of tabs){
     const before=pg._errs.length;
     await ev(pg,t=>{const r=releases.find(x=>x.projects&&x.projects.length);openProjectFromPortfolio(r.id,r.projects[0].id,t);},t);await wait(450);

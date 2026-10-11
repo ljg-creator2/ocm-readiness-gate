@@ -81,7 +81,7 @@ module.exports=async function(t){
   // ── Suggestions from data already entered (CRAID log, Impact Assessment, Resources) ──
   pg=await t.page({wait:1500});
   await ev(pg,()=>landingToDemo());await wait(2500);
-  await ev(pg,()=>{isReadOnly=false;document.body.classList.remove('readonly-mode');const r=releases.find(x=>x.projects.some(p=>p.name==='Clinical Workflow'));const p=r.projects.find(p=>p.name==='Clinical Workflow');openProjectFromPortfolio(r.id,p.id,'deps');});await wait(800);
+  await ev(pg,()=>{isReadOnly=false;document.body.classList.remove('readonly-mode');const r=releases.find(x=>x.projects.some(p=>p.name==='Clinical Workflow'));const p=r.projects.find(p=>p.name==='Clinical Workflow');openProjectFromPortfolio(r.id,p.id,'deps');});await wait(800);await pg.waitForSelector('#psec-deps.active',{timeout:10000});
   const okS=(n,c,d)=>ok('Suggestions',n,c,d);
   const before=await ev(pg,()=>({deps:getProj().training.dependencies.length,box:!!document.querySelector('#tr-deps .tr-suggest'),items:TE.suggestions(getProj()).dependencies.map(x=>x.label)}));
   okS('Open CRAID dependencies are suggested, not created',before.box&&before.items.length>=1,JSON.stringify(before));
@@ -121,7 +121,7 @@ module.exports=async function(t){
     const okJ2=(n,c,d)=>ok('Jira suggestions',n,c,d);
     await ev(pg,async csv=>{setDemoMode(false);isReadOnly=false;document.body.classList.remove('readonly-mode');const r=newRelease('FY2027R1030',[],'2027-01-15','Development');r.uatComplete='2026-11-15';r.projects=[];releases.push(r);openRelease(r.id);
       openJiraImport();await handleJiraFile(new File([csv],'sample.csv'));applyJiraPlan();closeJiraImport();
-      const p=r.projects.find(x=>x.name==='Hub Service Updates');openProjectFromPortfolio(r.id,p.id,'learndev');},csv);await wait(800);
+      const p=r.projects.find(x=>x.name==='Hub Service Updates');openProjectFromPortfolio(r.id,p.id,'learndev');},csv);await wait(800);await pg.waitForSelector('#psec-learndev.active',{timeout:10000});
     const s1=await ev(pg,()=>({sc:TE.suggestions(getProj(),trCtx(getProj())).scenarios.map(x=>x.label),box:!!document.querySelector('#tr-learndev .tr-suggest'),recs:getProj().training.scenarios.length}));
     okJ2('Items that passed QA are suggested as scenarios',s1.box&&s1.sc.join()==='Hub field mapping'&&s1.recs===0,JSON.stringify(s1));
     await pg.click('#tr-learndev .tr-suggest >> text=Review and add');await wait(300);
@@ -140,7 +140,7 @@ module.exports=async function(t){
     // Re-import with the defect closed: a review prompt, never an automatic change.
     const csv2=csv.replace('Training env defect,DEMO-52,Bug,Open','Training env defect,DEMO-52,Bug,Closed');
     await ev(pg,async csv=>{const r=releases.find(x=>x.name==='FY2027R1030');openRelease(r.id);openJiraImport();await handleJiraFile(new File([csv],'sample2.csv'));applyJiraPlan();closeJiraImport();
-      const p=r.projects.find(x=>x.name==='Hub Service Updates');openProjectFromPortfolio(r.id,p.id,'deps');},csv2);await wait(800);
+      const p=r.projects.find(x=>x.name==='Hub Service Updates');openProjectFromPortfolio(r.id,p.id,'deps');},csv2);await wait(800);await pg.waitForSelector('#psec-deps.active',{timeout:10000});
     const rv=await ev(pg,()=>{const p=getProj();const s=TE.suggestions(p,trCtx(p)).dependencies.find(x=>x.review);return{label:s&&s.label,st:p.training.dependencies.find(x=>x.jiraKey==='DEMO-52').status,btn:!!document.querySelector('#tr-deps .tr-suggest button')};});
     okJ2('Re-import with the defect closed prompts a review and changes nothing',rv.label==='DEMO-52 is closed in Jira'&&rv.st==='blocked'&&rv.btn,JSON.stringify(rv));
     await pg.click('#tr-deps .tr-suggest button >> text="Review"');await wait(300);
@@ -148,6 +148,41 @@ module.exports=async function(t){
     await ev(pg,()=>trCloseDialog());
     okJ2('The prompt does not return after review',await ev(pg,()=>{const p=getProj();return !TE.suggestions(p,trCtx(p)).dependencies.some(x=>x.review);}));
     okJ2('No JS errors',pg._errs.length===0,pg._errs.join(' | '));
+    await pg.context().close();
+  }
+
+  // ── Environments: list, deployments and refreshes, readiness steps, warnings ──
+  {
+    pg=await t.page({wait:1500});
+    const okE=(n,c,d)=>ok('Environments',n,c,d);
+    await ev(pg,()=>landingToDemo());await wait(2500);
+    await ev(pg,()=>{isReadOnly=false;document.body.classList.remove('readonly-mode');const r=releases.find(x=>x.name==='Benefits Modernization');openProjectFromPortfolio(r.id,r.projects[0].id,'environments');});await wait(900);await pg.waitForSelector('#psec-environments.active',{timeout:10000});
+    const e0=await ev(pg,()=>({rows:document.querySelectorAll('#tr-environments tbody tr').length,ev:document.querySelectorAll('#tr-environments .tr-hist li').length,txt:document.getElementById('tr-environments').innerText}));
+    okE('Release environment list and recorded deployment are shown',e0.rows===6&&e0.ev===1&&/ENV-77/.test(e0.txt),JSON.stringify({rows:e0.rows,ev:e0.ev}));
+    okE('Before a refresh, the intake scenarios are validated',await ev(pg,()=>getProj().training.scenarios.every(s=>TE.scenarioValidated(s))));
+    await pg.click('#tr-environments >> text=Record a deployment or refresh');await wait(300);
+    await pg.selectOption('#trf-envName','TRN-2');await pg.selectOption('#trf-kind','refresh');await pg.fill('#trf-ref','DIS-204');await pg.click('#tr-dlg-save');await wait(400);
+    const e1=await ev(pg,()=>{const p=getProj();return{flag:p.training.scenarios.filter(s=>s.needsRevalidation).length,pass:p.training.scenarios.every(s=>s.env.status==='pass'),del:TE.deliveryReadiness(p,trCtx(p)).state,ev:document.querySelectorAll('#tr-environments .tr-hist li').length};});
+    okE('Refresh marks the scenarios that passed in TRN-2 for a re-run',e1.flag===2&&e1.pass,JSON.stringify(e1));
+    okE('Delivery readiness drops until they are re-run',e1.del==='blocked',e1.del);
+    okE('The refresh is listed with its reference',e1.ev===2&&await ev(pg,()=>/DIS-204/.test(document.getElementById('tr-environments').innerText)));
+    await ev(pg,()=>{const p=getProj();p.training.scenarios.forEach(s=>TE.recordScenarioRun(p,s.id,{status:'pass',environment:'TRN-2',date:trToday(),by:'Tester'},trCtx(p)));});
+    okE('Re-running clears the flag',await ev(pg,()=>getProj().training.scenarios.every(s=>TE.scenarioValidated(s))));
+    await pg.click('#tr-environments >> text=Add environment');await wait(200);await pg.fill('#trf-name','trn 2');await pg.click('#tr-dlg-save');await wait(200);
+    okE('A duplicate environment name is refused',/already has this name/.test(await pg.textContent('#tr-dlg-err')));
+    await ev(pg,()=>trCloseDialog());
+    // Renewal project: readiness steps and a maintenance-day warning.
+    await ev(pg,()=>{const r=releases.find(x=>x.name==='Benefits Modernization');openProjectFromPortfolio(r.id,r.projects[1].id,'environments');});await wait(900);await pg.waitForSelector('#psec-environments.active',{timeout:10000});
+    const n0=await ev(pg,()=>getProj().training.dependencies.length);
+    await pg.click('#tr-environments >> text=Add readiness steps');await wait(300);
+    await pg.selectOption('#trf-envName','TRN-2');await pg.fill('#trf-neededBy','2026-12-01');await pg.locator('#trf-scenarioIds input').first().check();await pg.click('#tr-dlg-save');await wait(300);
+    const ch=await ev(pg,n0=>{const d=getProj().training.dependencies.slice(n0);return{n:d.length,crit:d.every(x=>x.critical&&x.scenarioIds.length===1),due:d.map(x=>x.requiredBy)};},n0);
+    okE('Readiness steps add five critical, linked dependencies with due dates',ch.n===5&&ch.crit&&ch.due[0]==='2026-11-21'&&ch.due[4]==='2026-11-30',JSON.stringify(ch));
+    await ev(pg,()=>{const p=getProj();const d=p.training.deliverables[0];const x=new Date();x.setDate(x.getDate()+((8-x.getDay())%7||7));d.planned.delivery=x.toISOString().slice(0,10);trRenderEnvironments();});
+    okE('Delivery planned on a maintenance day is flagged',await ev(pg,()=>/maintenance day for TRN-2/.test(document.getElementById('tr-environments').innerText)));
+    await ev(pg,()=>{isReadOnly=true;trRenderEnvironments();});
+    okE('View-only hides the record and add buttons',await ev(pg,()=>!/Record a deployment|Add readiness steps|Add environment/.test([...document.querySelectorAll('#tr-environments button')].map(b=>b.textContent).join('|'))));
+    okE('No JS errors',pg._errs.length===0,pg._errs.join(' | '));
     await pg.context().close();
   }
 
@@ -179,7 +214,7 @@ module.exports=async function(t){
   ok('Demo','KPI 2 is Delivery Readiness from the records',await ev(pg,()=>{const d=ccDeliveryReadiness(ccProjects().filter(x=>ccActive(x.p)));const v=document.querySelectorAll('.cc-kpi')[1];return /Delivery Readiness/.test(v.textContent)&&v.querySelector('.cc-kpi-v').textContent.replace(/\s+/g,' ').trim()===(d.assessed?d.ready+' of '+d.assessed:'—');}));
   ok('Demo','Training dependencies and deliveries appear as milestones',await ev(pg,()=>ccMilestones().some(m=>/Input needed|Planned delivery/.test(m.name))));
   ok('Demo','Training record changes appear in Recent Activity',await ev(pg,()=>ccActivity().some(a=>/Benefits/.test(a.sub)&&/Blocked|observed|Satisfied/.test(a.title))));
-  await ev(pg,()=>{const b=getBrand();b.orgTerm='department';saveBrand(b);const r=releases.find(x=>x.name==='Benefits Modernization');openProjectFromPortfolio(r.id,r.projects[0].id,'overview');});await wait(800);
+  await ev(pg,()=>{const b=getBrand();b.orgTerm='department';saveBrand(b);const r=releases.find(x=>x.name==='Benefits Modernization');openProjectFromPortfolio(r.id,r.projects[0].id,'overview');});await wait(800);await pg.waitForSelector('#psec-overview.active',{timeout:10000});
   const term=await ev(pg,()=>({lbl:[...document.querySelectorAll('#v-project .ib-label')].map(x=>x.textContent).join('|'),chip:document.getElementById('proj-agency-chips').textContent}));
   ok('Organization term','Labels switch to the chosen term',/Departments/.test(term.lbl),term.lbl);
   ok('Organization term','Entered names are not changed',/Riverside County Department of Social Services/.test(term.chip),term.chip);
@@ -190,7 +225,7 @@ module.exports=async function(t){
   // ── Phone layout: no sideways scroll on any of the eight project tabs ──
   pg=await t.page({vp:{width:390,height:844},wait:1500});
   await ev(pg,()=>landingToDemo());await wait(2500);
-  await ev(pg,()=>{const r=releases.find(x=>x.name==='Benefits Modernization');openProjectFromPortfolio(r.id,r.projects[1].id,'overview');});await wait(800);
+  await ev(pg,()=>{const r=releases.find(x=>x.name==='Benefits Modernization');openProjectFromPortfolio(r.id,r.projects[1].id,'overview');});await wait(800);await pg.waitForSelector('#psec-overview.active',{timeout:10000});
   for(const g of ['brief','people','deps','learn','ready','actions','delivery','adoption']){
     await ev(pg,g=>showPGroup(g),g);await wait(350);
     const ov=await ev(pg,()=>document.documentElement.scrollWidth-innerWidth);

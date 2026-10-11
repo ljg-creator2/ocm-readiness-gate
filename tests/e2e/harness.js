@@ -58,6 +58,10 @@ async function openPage(browser,base,opts={}){
     return route.abort();
   });
   if(opts.theme)await pg.addInitScript(th=>{try{localStorage.setItem('ocm_theme',th);}catch(e){}},opts.theme);
+  // Bring each click target to the middle of the screen first, so fixed elements at the
+  // screen edge (the floating help button, toasts) never sit on top of it.
+  const click=pg.click.bind(pg);
+  pg.click=async(sel,o)=>{await pg.locator(sel).first().evaluate(e=>e.scrollIntoView({block:'center',inline:'center'})).catch(()=>{});return click(sel,o);};
   await pg.goto(base+'/index.html');await pg.waitForTimeout(opts.wait||1200);
   return pg;
 }
@@ -68,7 +72,7 @@ async function runSuite(name,suite){
   const R=[];
   const ok=(area,label,pass,detail)=>{R.push({area,label,pass:!!pass});console.log((pass?'PASS ':'FAIL ')+name+' | '+area+' | '+label+(pass||detail===undefined?'':' -> '+String(detail).slice(0,300)));};
   const t={ok,base:srv.base,browser,page:o=>openPage(browser,srv.base,o),wait:ms=>new Promise(r=>setTimeout(r,ms)),ev:(pg,f,a)=>pg.evaluate(f,a)};
-  try{await suite(t);}catch(e){ok('Suite','completed without crashing',false,e.stack||e.message);}
+  try{await suite(t);}catch(e){const m=String(e.message||e).replace(/\x1b\[[0-9;]*m/g,'');ok('Suite','completed without crashing',false,'');console.log(m.slice(0,2500));}
   finally{await browser.close();srv.close();}
   const passed=R.filter(r=>r.pass).length;
   console.log(name+': '+passed+'/'+R.length+' passed\n');
