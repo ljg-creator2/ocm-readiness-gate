@@ -1948,6 +1948,12 @@ function sbNav(key){
   window.scrollTo(0,0);
   announceToSR&&announceToSR((key==='command'?'Command Center':key==='initiatives'?'Initiatives':SB_SECTIONS[key].title)+' loaded');
 }
+function sbMenu(force){
+  const t=document.getElementById('sb-tools'),b=document.getElementById('sb-user');if(!t||!b)return;
+  const open=force===undefined?!t.classList.contains('open'):force;
+  t.classList.toggle('open',open);b.setAttribute('aria-expanded',open?'true':'false');
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.sb-foot'))sbMenu(false);});
 function syncShell(){
   const on=['v-portfolio','v-release','v-project'].some(id=>document.getElementById(id)?.classList.contains('active'));
   document.body.classList.toggle('app-shell',on);
@@ -1957,7 +1963,8 @@ function initShell(){
   ['v-portfolio','v-release','v-project'].forEach(id=>{const el=document.getElementById(id);if(el)new MutationObserver(syncShell).observe(el,{attributes:true,attributeFilter:['class']});});
   // Existing controls move into the sidebar so they keep their ids and handlers.
   const tools=document.getElementById('sb-tools');
-  ['view-role-select','demo-banner-p'].forEach(id=>{const el=document.getElementById(id);if(el&&tools)tools.prepend(el);});
+  const rsel=document.getElementById('view-role-select');if(rsel&&tools){const w=document.createElement('label');w.className='sb-role';w.innerHTML='<span>View as</span>';w.appendChild(rsel);tools.prepend(w);}
+  const exitDemoBtn=document.getElementById('demo-banner-p');const foot=document.getElementById('sb-foot');if(exitDemoBtn&&foot)foot.prepend(exitDemoBtn);
   document.querySelectorAll('#v-release .top-bar-i,#v-project .top-bar-i').forEach(bar=>{const b=document.createElement('button');b.className='cc-icon sb-open';b.setAttribute('aria-label','Open navigation');b.innerHTML='<i class="ph ph-list"></i>';b.style.color='#fff';b.onclick=()=>document.body.classList.add('sb-drawer');bar.prepend(b);});
   const strip=document.querySelector('#v-portfolio .action-strip-i');if(strip){const b=document.createElement('button');b.className='cc-icon sb-open';b.setAttribute('aria-label','Open navigation');b.innerHTML='<i class="ph ph-list"></i>';b.onclick=()=>document.body.classList.add('sb-drawer');strip.prepend(b);}
   const rs=document.getElementById('view-role-select');const lbl=()=>{const u=document.getElementById('sb-urole');if(u&&rs)u.textContent=rs.options[rs.selectedIndex]?.text||'';};if(rs){rs.addEventListener('change',lbl);lbl();}
@@ -1987,7 +1994,7 @@ function ccDelta(d,unit,goodUp,period){
   if(d===null||d===undefined)return'';
   if(d===0)return'No change '+period;
   const good=goodUp?d>0:d<0;
-  return'<span class="'+(good?'up':'down')+'">'+(d>0?'▲ +':'▼ ')+Math.abs(d)+unit+'</span> '+period;
+  return'<span class="'+(good?'up':'down')+'"><i class="ph-bold '+(d>0?'ph-arrow-up':'ph-arrow-down')+'" aria-hidden="true"></i><span class="cc-sr">'+(d>0?'up ':'down ')+'</span>'+Math.abs(d)+unit+' '+period+'</span>';
 }
 function ccTrendSeries(){
   const end=ccSelMonth();const months=[];const d=new Date(end+'-01T12:00:00');d.setMonth(d.getMonth()-5);
@@ -2069,6 +2076,14 @@ function ccSearch(q){
   el.innerHTML=res.length?res.slice(0,12).map(x=>'<button role="option" onclick="'+x.go+'">'+esc(x.lbl)+' <small>'+esc(x.sub)+'</small></button>').join(''):'<div class="cc-none">No releases, initiatives, or stakeholder groups match “'+esc(q)+'”.</div>';
   el.classList.add('open');
 }
+function ccAgo(t){
+  const d=new Date(t);if(isNaN(d))return'';
+  const m=Math.round((Date.now()-d.getTime())/60000);
+  if(m<1)return'Just now';if(m<60)return m+' minute'+(m===1?'':'s')+' ago';
+  const h=Math.round(m/60);if(h<24)return h+' hour'+(h===1?'':'s')+' ago';
+  const dd=Math.round(h/24);if(dd<7)return dd+' day'+(dd===1?'':'s')+' ago';
+  return ccFmt(d);
+}
 function ccToggle(id){document.querySelectorAll('.cc-pop').forEach(p=>{if(p.id!==id)p.classList.remove('open');});const el=document.getElementById(id);if(el)el.classList.toggle('open');}
 async function ccLoadAudit(){
   if(_cc.audit!==null||isDemoMode||!currentUserId)return;
@@ -2094,44 +2109,46 @@ function renderCommandCenter(){
     +'<div class="cc-pop" id="cc-help" role="dialog" aria-label="Help"><div class="cc-pop-h">Help</div><div class="cc-pop-i"><button class="cc-link" onclick="ccToggle(\'cc-help\');landingBookWalkthrough()">Contact the AdoptIQ team</button></div><div class="cc-pop-i"><button class="cc-link" onclick="ccToggle(\'cc-help\');sbNav(\'reports\')">Reports and exports</button></div></div></div>'
     +'<button class="cc-av" id="cc-av" onclick="openProfile()" aria-label="'+(isDemoMode?'Demo workspace':'Your profile')+'">'+esc(isDemoMode?'D':(document.getElementById('sb-av')?.textContent||'·'))+'</button>'
     +'</div></header>';
-  html+='<div class="cc-greet"><div class="cc-eyebrow">'+greet+(first?', '+esc(first):'')+'.</div><h1 class="cc-h1" id="cc-h1">Here’s where your change initiatives stand today.</h1></div>';
+  html+='<div class="cc-top"><div class="cc-greet"><div class="cc-eyebrow">'+greet+(first?', '+esc(first):'')+'.</div><h1 class="cc-h1" id="cc-h1">Here’s where your change<br>initiatives stand today.</h1></div>'
+    +'<div class="cc-banner" aria-hidden="true"><img src="img/brand/adoptiq-greeting-banner.png" alt="" width="1920" height="600"></div></div>';
   if(!releases.length){
     el.innerHTML=html+'<div class="dz-empty"><div class="dz-empty-t">No initiatives yet.</div><div class="dz-empty-d">Add a release and its projects to see readiness, risk, training, and milestones here.</div><button class="btn-gold" onclick="sbNav(\'initiatives\');openAddRelease()">Add a release</button></div>';
     return;
   }
-  const kpi=(ic,cls,icon,val,vcls,label,sub)=>'<div class="cc-kpi"><div class="cc-kpi-ic '+cls+'" aria-hidden="true"><i class="ph '+icon+'"></i></div><div><div class="cc-kpi-v '+vcls+'">'+val+'</div><div class="cc-kpi-l">'+label+'</div><div class="cc-kpi-s">'+sub+'</div></div></div>';
+  const kpi=(cls,icon,val,vcls,label,sub)=>'<div class="cc-kpi"><div class="cc-kpi-ic '+cls+'" aria-hidden="true"><i class="ph-bold '+icon+'"></i></div><div class="cc-kpi-b"><div class="cc-kpi-v '+vcls+'">'+val+'</div><div class="cc-kpi-l">'+label+'</div><div class="cc-kpi-s">'+sub+'</div></div></div>';
   html+='<section class="cc-kpis" aria-label="Key measures">'
-    +kpi('','o','ph-folder-simple',k.active.v,'','Active Initiatives',ccDelta(k.active.d,'',true,'since last month')||'Across '+releases.length+' release'+(releases.length===1?'':'s'))
-    +kpi('','t','ph-users-three',k.ready.v!==null?k.ready.v+'%':'—','t','Overall Readiness',k.ready.v===null?'No gate reviews yet':(ccDelta(k.ready.d,' pts',true,'vs last week')||'Gate criteria verified'))
-    +kpi('','r','ph-warning',k.risk.v,'r','At-Risk',(ccDelta(k.risk.d,' pts',false,'vs last week')?ccDelta(k.risk.d,' pts',false,'vs last week')+' · ':'')+'of '+k.risk.of+' active')
-    +kpi('','p','ph-graduation-cap',k.train.v!==null?k.train.v+'%':'—','','Training Completion',k.train.v!==null?'Across '+k.train.n+' group'+(k.train.n===1?'':'s')+' with results':'No training results recorded yet')
+    +kpi('o','ph-folder-simple',k.active.v,'','Active Initiatives',ccDelta(k.active.d,'',true,'since last month')||'Across '+releases.length+' release'+(releases.length===1?'':'s'))
+    +kpi('t','ph-users-three',k.ready.v!==null?k.ready.v+'%':'—','t','Overall Readiness',k.ready.v===null?'No gate reviews yet':(ccDelta(k.ready.d,' pts',true,'vs last week')||'No change vs last week'))
+    +kpi('r','ph-warning',k.risk.v,'r','At-Risk',ccDelta(k.risk.d,' pts',false,'vs last week')||('of '+k.risk.of+' active'))
+    +kpi('p','ph-graduation-cap',k.train.v!==null?k.train.v+'%':'—','','Training Completion',k.train.v!==null?'Across '+k.train.n+' group'+(k.train.n===1?'':'s'):'No results recorded yet')
     +'</section>';
-  // Readiness trend + action items
+  // Row 3: Readiness Trend + My Action Items
   const ts=ccTrendSeries();const has=a=>a.some(v=>v!==null);
   const lastV=a=>{for(let i=a.length-1;i>=0;i--)if(a[i]!==null)return a[i];return null;};const firstV=a=>a.find(v=>v!==null);
   let cap=has(ts.ready)?'Readiness moved from '+firstV(ts.ready)+'% to '+lastV(ts.ready)+'% across the period'+(lastV(ts.ready)<80?', below the 80% go-live target.':'.'):'No weekly readiness snapshots in this period yet.';
   cap+=has(ts.risk)?' '+lastV(ts.risk)+'% of active initiatives are at risk.':' Risk history starts with the next weekly snapshot.';
   cap+=has(ts.adopt)?' Post-launch adoption averaged '+lastV(ts.adopt)+'% in the latest month with observations.':' No post-launch adoption recorded in this period.';
-  const ai=ccActionItems();const shown=_cc.showAllActions?ai.items:ai.items.slice(0,5);
+  const ai=ccActionItems();const shown=_cc.showAllActions?ai.items:ai.items.slice(0,4);
   const sevIc=s=>s==='red'?['r','ph-warning']:s==='amber'?['a','ph-clock']:['n','ph-circle-dashed'];
-  html+='<div class="cc-grid"><section class="cc-card" aria-labelledby="cc-trend-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-trend-h">Readiness Trend</h2><button class="cc-link" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\'trends-sec\')?.scrollIntoView(),300)">View details <i class="ph ph-arrow-right"></i></button></div>'
-    +'<div class="cc-legend"><span><i style="background:var(--deep-navy)"></i>Readiness</span><span><i style="background:var(--teal)"></i>Adoption</span><span><i style="background:var(--brick-red)"></i>Risk</span><span><i style="background:var(--burnt-orange);border-radius:0;height:2px;width:14px"></i>80% target</span></div>'
-    +'<div class="cc-chart"><canvas id="cc-trend" role="img" aria-label="Readiness, adoption and risk by month. '+esc(cap)+'"></canvas></div><p class="cc-cap">'+esc(cap)+'</p></section>'
-    +'<section class="cc-card" aria-labelledby="cc-act-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-act-h">My Action Items</h2>'+(ai.items.length>5?'<button class="cc-link" onclick="_cc.showAllActions=!_cc.showAllActions;renderCommandCenter()">'+(_cc.showAllActions?'Show fewer':'View all ('+ai.items.length+')')+' <i class="ph ph-arrow-right"></i></button>':'')+'</div>'
-    +'<div class="cc-li-s" style="margin:-6px 0 6px">'+(ai.mine?'Initiatives where you are a named lead':'All active initiatives')+'</div>'
-    +(shown.length?'<ul class="cc-list">'+shown.map(i=>{const[c,ic]=sevIc(i.sev);const late=i.due&&ccIso(i.due)<new Date().toISOString().slice(0,10);return'<li><span class="cc-li-ic '+c+'" aria-hidden="true"><i class="ph '+ic+'"></i></span><div class="cc-li-b"><button class="cc-li-t" onclick="openProjectFromPortfolio('+i.r.id+','+i.p.id+',\''+i.tab+'\')">'+esc(i.text)+'</button><div class="cc-li-s">'+esc(i.p.name)+' · '+esc(i.r.name)+'</div></div><span class="cc-li-d'+(late?' late':'')+'">'+(i.due?(late?'Overdue · ':'Due ')+ccFmt(i.due):'No date')+'</span><span class="cc-sr">'+(i.sev==='red'?'Urgent':'Attention')+'</span></li>';}).join('')+'</ul>':'<div class="cc-empty"><strong>No open actions.</strong>Actions appear when gates, training plans, or go-live dates need attention.</div>')
+  html+='<div class="cc-row3"><section class="cc-card cc-trend" aria-labelledby="cc-trend-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-trend-h">Readiness Trend</h2><button class="cc-link" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\'trends-sec\')?.scrollIntoView(),300)">View Details <i class="ph ph-arrow-right"></i></button></div>'
+    +'<div class="cc-legend"><span><i style="background:var(--deep-navy)"></i>Readiness</span><span><i style="background:var(--teal)"></i>Adoption</span><span><i style="background:var(--brick-red)"></i>Risk</span></div>'
+    +'<div class="cc-chart"><canvas id="cc-trend" role="img" aria-label="Readiness, adoption and risk by month. '+esc(cap)+'"></canvas></div><p class="cc-sr">'+esc(cap)+'</p></section>'
+    +'<section class="cc-card cc-actions" aria-labelledby="cc-act-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-act-h">My Action Items</h2>'+(ai.items.length>4?'<button class="cc-link" onclick="_cc.showAllActions=!_cc.showAllActions;renderCommandCenter()">'+(_cc.showAllActions?'Show fewer':'View All ('+ai.items.length+')')+' <i class="ph ph-arrow-right"></i></button>':'')+'</div>'
+    +(shown.length?'<ul class="cc-list">'+shown.map(i=>{const[c,ic]=sevIc(i.sev);const late=i.due&&ccIso(i.due)<new Date().toISOString().slice(0,10);return'<li><span class="cc-li-ic round '+c+'" aria-hidden="true"><i class="ph-bold '+ic+'"></i></span><div class="cc-li-b"><button class="cc-li-t" onclick="openProjectFromPortfolio('+i.r.id+','+i.p.id+',\''+i.tab+'\')">'+esc(i.text)+'</button><div class="cc-li-s">'+esc(i.p.name)+' · '+esc(i.r.name)+'</div></div><span class="cc-li-d'+(late?' late':'')+'">'+(i.due?(late?'Overdue · ':'Due ')+ccFmt(i.due):'No date')+'</span><span class="cc-sr">'+(i.sev==='red'?'Urgent':'Attention')+'</span></li>';}).join('')+'</ul>'+(ai.mine?'':'<p class="cc-foot">Showing all active initiatives.</p>'):'<div class="cc-empty"><strong>No open actions.</strong>Actions appear when gates, training plans, or go-live dates need attention.</div>')
     +'</section></div>';
-  // Recent activity + milestones
-  const act=ccActivity();const actShown=_cc.showAllActivity?act.slice(0,25):act.slice(0,5);
+  // Row 4: Recent Activity (full width)
+  const act=ccActivity();const actShown=_cc.showAllActivity?act.slice(0,25):act.slice(0,4);
+  html+='<section class="cc-card cc-activity" aria-labelledby="cc-ra-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-ra-h">Recent Activity</h2>'
+    +(currentUserId&&!isDemoMode?'<button class="cc-link" onclick="openAuditLog()">View All <i class="ph ph-arrow-right"></i></button>':act.length>4?'<button class="cc-link" onclick="_cc.showAllActivity=!_cc.showAllActivity;renderCommandCenter()">'+(_cc.showAllActivity?'Show fewer':'View All')+' <i class="ph ph-arrow-right"></i></button>':'')+'</div>'
+    +(actShown.length?'<ul class="cc-list">'+actShown.map(a=>'<li><span class="cc-li-ic '+a.ic+'" aria-hidden="true"><i class="ph-bold '+a.icon+'"></i></span><div class="cc-li-b"><div class="cc-li-t">'+esc(a.title.charAt(0).toUpperCase()+a.title.slice(1))+'</div><div class="cc-li-s">'+esc(a.sub)+'</div></div><span class="cc-li-d">'+esc(ccAgo(a.t))+'</span></li>').join('')+'</ul>':'<div class="cc-empty"><strong>No activity recorded yet.</strong>Updates, imports, feedback, and interventions appear here as the team works.</div>')
+    +'</section>';
+  // Row 5: Upcoming Milestones (full-width horizontal timeline)
   const ms=ccMilestones();
-  html+='<div class="cc-grid cc-grid-b"><section class="cc-card" aria-labelledby="cc-ra-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-ra-h">Recent Activity</h2>'
-    +(currentUserId&&!isDemoMode?'<button class="cc-link" onclick="openAuditLog()">View all <i class="ph ph-arrow-right"></i></button>':act.length>5?'<button class="cc-link" onclick="_cc.showAllActivity=!_cc.showAllActivity;renderCommandCenter()">'+(_cc.showAllActivity?'Show fewer':'View all')+' <i class="ph ph-arrow-right"></i></button>':'')+'</div>'
-    +(actShown.length?'<ul class="cc-list">'+actShown.map(a=>'<li><span class="cc-li-ic '+a.ic+'" aria-hidden="true"><i class="ph '+a.icon+'"></i></span><div class="cc-li-b"><div class="cc-li-t">'+esc(a.title.charAt(0).toUpperCase()+a.title.slice(1))+'</div><div class="cc-li-s">'+esc(a.sub)+'</div></div><span class="cc-li-d">'+esc(fmtMod(a.t))+'</span></li>').join('')+'</ul>':'<div class="cc-empty"><strong>No activity recorded yet.</strong>Updates, imports, feedback, and interventions appear here as the team works.</div>')
-    +'</section><section class="cc-card" aria-labelledby="cc-ms-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-ms-h">Upcoming Milestones</h2><button class="cc-link" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\'tl-sec\')?.scrollIntoView(),300)">View full timeline <i class="ph ph-arrow-right"></i></button></div>'
-    +(ms.length?'<div class="cc-ms" tabindex="0" aria-label="Upcoming milestones, scroll horizontally"><ol class="cc-ms-track" style="list-style:none;margin:0;padding:0">'+ms.slice(0,14).map(x=>'<li class="cc-ms-i"><div class="cc-ms-date">'+ccFmt(x.iso)+'</div><div class="cc-ms-dot '+x.kind+'" aria-hidden="true"></div><button class="cc-li-t cc-ms-n" onclick="'+x.go+'">'+esc(x.name)+'</button><div class="cc-ms-s">'+esc(x.sub)+'</div></li>').join('')+'</ol></div>'
-      +'<div class="cc-ms-key"><span><i style="background:var(--burnt-orange)"></i>Go-live</span><span><i style="background:var(--deep-navy)"></i>UAT</span><span><i style="background:#5A6B85"></i>Tech Transfer</span><span><i style="background:var(--soft-purple)"></i>Training</span><span><i style="background:var(--teal)"></i>Post-launch</span></div>'
+  html+='<section class="cc-card cc-milestones" aria-labelledby="cc-ms-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-ms-h">Upcoming Milestones</h2><button class="cc-btn-o" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\'tl-sec\')?.scrollIntoView(),300)">View Full Timeline <i class="ph ph-arrow-right"></i></button></div>'
+    +(ms.length?'<div class="cc-tl-wrap"><div class="cc-tl" id="cc-tl" tabindex="0" aria-label="Upcoming milestones timeline. Scroll for more."><ol class="cc-tl-track">'+ms.slice(0,14).map(x=>'<li class="cc-tl-i '+x.kind+'"><span class="cc-tl-pin" aria-hidden="true"></span><div class="cc-tl-date">'+ccFmt(x.iso)+'</div><button class="cc-tl-n" onclick="'+x.go+'">'+esc(x.name)+'</button><div class="cc-tl-s"><i class="ph ph-stack" aria-hidden="true"></i>'+esc(x.sub)+'</div></li>').join('')+'</ol></div>'
+      +(ms.length>5?'<button class="cc-tl-next" onclick="document.getElementById(\'cc-tl\').scrollBy({left:document.getElementById(\'cc-tl\').clientWidth*0.8,behavior:\'smooth\'})" aria-label="Show later milestones"><i class="ph-bold ph-caret-right"></i></button>':'')+'</div>'
       :'<div class="cc-empty"><strong>No milestones from '+ccFmt(sel===new Date().toISOString().slice(0,7)?new Date():sel+'-01')+' onward.</strong>Go-live, UAT, training, and post-launch dates appear here once they are set. Past-due go-lives are in Notifications.</div>')
-    +'</section></div>';
+    +'</section>';
   if(isDemoMode)html+='<p class="cc-demo-note">Demo workspace: fictional organizations and data.</p>';
   el.innerHTML=html;
   // Chart
@@ -2139,11 +2156,10 @@ function renderCommandCenter(){
   const cv=document.getElementById('cc-trend');
   if(cv&&window.Chart){
     _cc.chart=new Chart(cv,{type:'line',data:{labels:ts.labels,datasets:[
-      {label:'Readiness',data:ts.ready,borderColor:'#0B2545',backgroundColor:'#0B2545',tension:0.3,spanGaps:true,pointRadius:3},
-      {label:'Adoption',data:ts.adopt,borderColor:'#178B87',backgroundColor:'#178B87',tension:0.3,spanGaps:true,pointRadius:3},
-      {label:'Risk',data:ts.risk,borderColor:'#A63F32',backgroundColor:'#A63F32',tension:0.3,spanGaps:true,pointRadius:3},
-      {label:'80% target',data:ts.labels.map(()=>80),borderColor:'#C95628',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y===null?'no data':c.parsed.y+'%')}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',stepSize:25}},x:{grid:{display:false}}}}});
+      {label:'Readiness',data:ts.ready,borderColor:'#0B2545',backgroundColor:'#0B2545',tension:0.25,spanGaps:true,pointRadius:4,pointHoverRadius:5,borderWidth:2.5},
+      {label:'Adoption',data:ts.adopt,borderColor:'#178B87',backgroundColor:'#178B87',tension:0.25,spanGaps:true,pointRadius:4,pointHoverRadius:5,borderWidth:2.5},
+      {label:'Risk',data:ts.risk,borderColor:'#A63F32',backgroundColor:'#A63F32',tension:0.25,spanGaps:true,pointRadius:4,pointHoverRadius:5,borderWidth:2.5}
+    ]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:4,right:8}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y===null?'no data':c.parsed.y+'%')}}},scales:{y:{min:0,max:100,border:{display:false},grid:{color:'#ECEAE6'},ticks:{callback:v=>v+'%',stepSize:25,color:'#687280',font:{family:"'Inter',Arial,sans-serif",size:12}}},x:{border:{color:'#E7E5E1'},grid:{display:false},ticks:{color:'#687280',font:{family:"'Inter',Arial,sans-serif",size:12}}}}}});
   }
 }
 function renderSectionIndex(key){
@@ -2167,7 +2183,7 @@ function renderSectionIndex(key){
   el.innerHTML=h;
 }
 document.addEventListener('click',e=>{if(!e.target.closest('.cc-rel'))document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));if(!e.target.closest('.cc-search'))document.getElementById('cc-results')?.classList.remove('open');});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){landingCloseOverview();document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));document.body.classList.remove('sb-drawer');}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){landingCloseOverview();document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));document.body.classList.remove('sb-drawer');sbMenu(false);}});
 document.addEventListener('DOMContentLoaded',initShell);
 
 // ════════════════════════════════════════════════════════

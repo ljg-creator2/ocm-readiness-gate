@@ -2,8 +2,9 @@
 
 **AdoptIQ, Change Intelligence.** People. Readiness. Real progress.
 
-The visual source of truth is the approved mockup:
-`design-reference/adoptiq-approved-command-center.png`
+The visual sources of truth are the approved mockups:
+- `design-reference/adoptiq-approved-command-center-screen.png`: the full Command Center screen (authoritative layout, proportions and styling)
+- `design-reference/adoptiq-approved-command-center.png`: the landing page, sign-in and Command Center overview sheet
 
 Every new page, feature or component must follow this document and that image. If a design need is not covered here, propose the addition first. Do not invent new colours, fonts, gradients or layouts.
 
@@ -78,18 +79,18 @@ The approved brand look is the combination of editorial serif type, dark branded
 - Never rely on colour alone. Status labels always carry a word and a shape.
 - No new accent colours or gradients. The only exception is the uploaded brand wave artwork on the landing and sign-in pages.
 
-## Typography
+## Typography (mandatory)
 
-| Use | Font |
-|---|---|
-| Wordmark | Supplied SVG logo assets in `img/brand/` (`adoptiq-logo-dark.svg` on navy, `adoptiq-logo-light.svg` on light) |
-| Display headings, greeting, page titles, editorial lines | Playfair Display 600–700 (`--fw-display`, `--fw-display-strong`) |
-| UI, body, navigation, tables, forms, charts | Inter 400–700 |
-| KPI values | Inter 700, tabular numerals |
+| Token | Value | Use |
+|---|---|---|
+| `--font-display` | `'Playfair Display', Georgia, serif` | Landing headlines, the Command Center greeting, sign-in headings, major editorial statements. Weights 600–700. |
+| `--font-body` | `'Inter', Arial, sans-serif` | Navigation, buttons, forms, body text, KPI cards, tables, charts, action items, Recent Activity, Upcoming Milestones. Weights 400–700. |
 
-- Both fonts are self-hosted in `fonts/` (variable WOFF2, SIL Open Font License) and declared with `@font-face` at the top of `css/system.css`, so they load without Google Fonts. Do not add other font families.
-- Do not use Playfair in tables, navigation, form fields or charts.
-- Avoid all-caps except small section labels and table headers.
+- **Loading:** both fonts are self-hosted in `fonts/` (variable WOFF2, SIL Open Font License) and declared with `@font-face` at the top of `css/system.css`, with `<link rel="preload">` in `index.html`. They do not depend on Google Fonts being reachable.
+- **Fallbacks only:** Georgia and Arial appear only as fallbacks. Never make Georgia, Times New Roman, Arial or a system font the primary font.
+- **Wordmark:** use the supplied SVG logo assets in `img/brand/` (`adoptiq-logo-dark.svg` on navy, `adoptiq-logo-light.svg` on light). Never retype the logo in either font.
+- **Rules:** do not use Playfair in tables, navigation, form fields or charts. KPI values use Inter 700 with tabular numerals. Avoid all-caps except the greeting eyebrow, small section labels and table headers.
+- **Verify:** after any font change, check in the browser that `document.fonts` reports Playfair Display and Inter as loaded.
 
 ## Shape, spacing, elevation
 - **Radii:** cards and panels 12px; buttons and inputs 8px; chips and status labels 6px.
@@ -104,8 +105,9 @@ The approved brand look is the combination of editorial serif type, dark branded
 - Create account, reset password and email verification use the same panel and the same Supabase calls.
 
 ## App shell
-- **Sidebar:** midnight-navy, fixed, 232px wide. Wordmark at the top, eight sections, and profile, theme, role and sign-out at the bottom.
-  - The active item uses a burnt-orange fill with white text.
+- **Sidebar:** midnight navy (`--bg-sidebar`), fixed, 228px wide. The supplied logo at the top, eight sections, the wave artwork in the lower half, and the profile block (avatar, name, role) at the bottom.
+  - The active item uses a burnt-orange (#C95628) fill with white text.
+  - Clicking the profile block opens the account menu: view-as role, profile and password, theme, sign out. Exit demo sits above it in demo mode.
   - It collapses to 72px icons under 1100px and becomes a drawer (☰) under 760px.
 - **Section mapping** (nothing removed; every existing view and tab stays reachable):
 
@@ -121,20 +123,19 @@ The approved brand look is the combination of editorial serif type, dark branded
 | Reports | export index | Status report, Handoff PDF, Release PDF, Audit log |
 
 ## Command Center (approved layout; do not add sections)
+Match `design-reference/adoptiq-approved-command-center-screen.png`. Five rows:
 1. **Header:** search (releases, initiatives, stakeholder groups), month, notifications (from the alert rules), help, avatar.
-2. **Greeting:** "GOOD MORNING, {FIRST NAME}." and "Here's where your change initiatives stand today."
-3. **Four KPI cards:**
+2. **Row 1, greeting and banner:** left, "GOOD MORNING, {FIRST NAME}." (Inter, burnt orange) over "Here's where your change / initiatives stand today." (Playfair 700). Right, the supplied banner `img/brand/adoptiq-greeting-banner.png` on `--bg-greeting`. Same row.
+3. **Row 2, four KPI cards in one row:**
    - Active Initiatives (projects not Complete / On Hold)
    - Overall Readiness (average gate readiness)
    - At-Risk (initiatives not On Track)
    - Training Completion (average recorded completion)
-4. **Readiness Trend:**
-   - Readiness from weekly snapshots
-   - Adoption from post-launch observations (go-live + 30/60/90 days)
-   - Risk = % of initiatives at risk
-5. **My Action Items:** next actions and blocking gate items, with initiative and due date.
-6. **Recent Activity:** audit log plus record events (imports, interventions, proof points, touchpoints, updates).
-7. **Upcoming Milestones:** horizontal timeline of go-live, UAT, Tech Transfer, training and post-launch checkpoints.
+4. **Row 3:** Readiness Trend (left, about 46%) beside My Action Items (right, about 54%), as in the screenshot.
+   - Trend: readiness from weekly snapshots; adoption from post-launch observations (go-live + 30/60/90 days); risk = % of initiatives at risk.
+   - Action items: next actions and blocking gate items, with initiative and due date. Four shown, "View All (n)" for the rest.
+5. **Row 4, Recent Activity (full width, its own row):** audit log plus record events (imports, interventions, proof points, touchpoints, updates), newest first, relative time.
+6. **Row 5, Upcoming Milestones (full width):** a horizontal timeline with a coloured pin per milestone, its date, name and initiative; a next arrow scrolls to later items. Never a vertical list.
 
 Explicitly excluded: Change Ecosystem diagram, Top Initiatives by Readiness, Initiative Health, and any other widget.
 

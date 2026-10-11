@@ -94,6 +94,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>A</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
 <link rel="stylesheet" href="css/design-tokens.css">
 <link rel="stylesheet" href="css/adoptiq.css">
 <link rel="stylesheet" href="css/brand.css">
@@ -293,8 +294,7 @@
 ══════════════════════════════════════════ -->
 <aside class="sb" id="app-sidebar" aria-label="AdoptIQ navigation">
   <div class="sb-brand">
-    <div class="sb-word">Adopt<b>IQ</b></div>
-    <div class="sb-desc">Change Intelligence</div>
+    <img class="sb-logo" src="img/brand/adoptiq-logo-dark.svg" alt="AdoptIQ, Change Intelligence" width="170" height="64">
   </div>
   <nav class="sb-nav" aria-label="Sections">
     <button class="sb-item" data-sb="command" onclick="sbNav('command')" aria-current="page"><i class="ph ph-house"></i><span>Command Center</span></button>
@@ -306,14 +306,17 @@
     <button class="sb-item" data-sb="adoption" onclick="sbNav('adoption')"><i class="ph ph-chart-line-up"></i><span>Adoption &amp; Outcomes</span></button>
     <button class="sb-item" data-sb="reports" onclick="sbNav('reports')"><i class="ph ph-file-text"></i><span>Reports</span></button>
   </nav>
-  <div class="sb-foot">
-    <div class="sb-tools" id="sb-tools">
-      <button onclick="toggleTheme()" aria-label="Toggle light or dark theme"><i class="ph ph-moon"></i> Theme</button>
-      <button class="btn-signout" onclick="signOut()">Sign out</button>
+  <img class="sb-wave" src="img/brand/adoptiq-wave.svg" alt="" aria-hidden="true">
+  <div class="sb-foot" id="sb-foot">
+    <div class="sb-tools" id="sb-tools" role="menu" aria-label="Account">
+      <button role="menuitem" onclick="sbMenu(false);openProfile()"><i class="ph ph-user-circle" aria-hidden="true"></i> Profile and password</button>
+      <button role="menuitem" onclick="toggleTheme()"><i class="ph ph-moon" aria-hidden="true"></i> Theme</button>
+      <button role="menuitem" class="btn-signout" onclick="signOut()"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
     </div>
-    <button class="sb-user btn-profile" onclick="openProfile()" aria-label="Open your profile">
+    <button class="sb-user" id="sb-user" onclick="sbMenu()" aria-haspopup="menu" aria-expanded="false" aria-controls="sb-tools" aria-label="Account menu">
       <span class="sb-av" id="sb-av">·</span>
-      <span><span class="sb-uname" id="sb-uname" style="display:block">Profile</span><span class="sb-urole" id="sb-urole">Administrator</span></span>
+      <span class="sb-uwrap"><span class="sb-uname" id="sb-uname">Profile</span><span class="sb-urole" id="sb-urole">Administrator</span></span>
+      <i class="ph ph-caret-up sb-caret" aria-hidden="true"></i>
     </button>
   </div>
 </aside>
