@@ -102,7 +102,7 @@
   --r6:8px; --r8:8px; --r10:12px; --rs:6px;
 }
 [data-theme="light"]{
-  --bg:var(--bg-app); --bg-deep:#F3F1EC; --bg-dark:var(--light-border);
+  --bg:var(--bg-app); --bg-deep:var(--bg-app); --bg-dark:var(--light-border);
   --surface:var(--bg-card); --surface-2:#F8F6F2;
   --border:var(--light-border); --border-md:#D6D3CC;
   --ink:var(--charcoal-navy); --ink-60:var(--slate); --ink-35:#8A929D;
@@ -498,3 +498,15 @@ button.cc-li-t:hover{text-decoration:underline}
   .si-wave{left:30%;bottom:-30%;width:110%;transform:rotate(-14deg);opacity:.55}
   .si-main{padding:36px 20px 48px}
 }
+
+/* ── Brand standard: the main application background is Soft White #FCFBF9 ── */
+:root:not([data-theme="dark"]) body.app-shell,
+:root:not([data-theme="dark"]) body.app-shell #v-portfolio,
+:root:not([data-theme="dark"]) body.app-shell #v-release,
+:root:not([data-theme="dark"]) body.app-shell #v-project,
+:root:not([data-theme="dark"]) body.app-shell .port-body,
+:root:not([data-theme="dark"]) body.app-shell #cc,
+:root:not([data-theme="dark"]) body.app-shell #pf-initiatives,
+:root:not([data-theme="dark"]) body.app-shell #pf-section,
+:root:not([data-theme="dark"]) body.app-shell .proj-body,
+:root:not([data-theme="dark"]) body.app-shell .rel-body{background:var(--bg-app)}
