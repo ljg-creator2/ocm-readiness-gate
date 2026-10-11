@@ -313,6 +313,11 @@ async function openProfile(){
   if(brandSec)brandSec.style.display=(currentViewRole==='admin')?'block':'none';
 }
 
+function goToPasswordChange(){
+  const sec=document.getElementById('profile-pw-section');const inp=document.getElementById('profile-new-pw');
+  if(sec)sec.scrollIntoView({behavior:'smooth',block:'start'});
+  if(inp)setTimeout(()=>inp.focus({preventScroll:true}),350);
+}
 function checkProfilePwStrength(){
   const pw=document.getElementById('profile-new-pw').value;
   const el=document.getElementById('profile-pw-strength');
@@ -348,10 +353,10 @@ async function saveProfile(){
     if(pwError){msgEl.style.color='var(--red)';msgEl.textContent=pwError.message;return;}
   }
 
-  msgEl.style.color='var(--green)';msgEl.textContent='Profile saved.';
+  msgEl.style.color='var(--green)';msgEl.textContent=newPw?'Profile saved. Your password has been changed.':'Profile saved.';
   updateAvatars();
   await saveAlertPrefs();
-  setTimeout(()=>{closeModal('profile-modal');},1200);
+  setTimeout(()=>{closeModal('profile-modal');},newPw?2200:1200);
 }
 
 // ════════════════════════════════════════════════════════

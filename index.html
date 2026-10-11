@@ -1345,6 +1345,7 @@
   <div class="modal-box" style="max-width:440px">
     <div class="modal-ttl">My Profile</div>
     <div class="profile-email" id="profile-email"></div>
+    <a href="#" class="profile-pw-link" onclick="goToPasswordChange();return false">Change password</a>
     <div class="profile-field">
       <label for="profile-name">Full Name</label>
       <input id="profile-name" type="text" placeholder="Jane Doe" aria-label="Full name">
@@ -1436,7 +1437,7 @@
       <label class="alert-toggle"><input type="checkbox" id="alert-share" checked> Share Link Expiring</label>
       <div class="alert-desc">Alert 24 hours before a share link expires</div>
     </div>
-    <div class="profile-section-title">Change Password</div>
+    <div class="profile-section-title" id="profile-pw-section">Change Password</div>
     <div class="profile-field">
       <label for="profile-new-pw">New Password</label>
       <input id="profile-new-pw" type="password" placeholder="Leave blank to keep current" oninput="checkProfilePwStrength()" aria-label="New password">
@@ -1446,11 +1447,11 @@
       <label for="profile-confirm-pw">Confirm New Password</label>
       <input id="profile-confirm-pw" type="password" placeholder="Confirm new password" aria-label="Confirm new password">
     </div>
-    <div class="modal-acts">
+    <div class="modal-acts profile-acts">
+      <div class="profile-msg" id="profile-msg"></div>
       <button class="btn-ghost" onclick="closeModal('profile-modal')">Cancel</button>
       <button class="btn-gold" onclick="saveProfile()">Save Profile</button>
     </div>
-    <div class="profile-msg" id="profile-msg"></div>
   </div>
 </div>
 
