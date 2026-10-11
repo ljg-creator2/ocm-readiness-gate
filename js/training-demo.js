@@ -112,7 +112,7 @@ function trSeedDemo(){
 
   // Fictional environment list, and the deployment that fixed the intake scenario's environment.
   r.trEnv={list:[TE.newEnvironment({name:'QA',type:'qa',purpose:'Quality assurance testing'}),TE.newEnvironment({name:'UAT',type:'uat',purpose:'End-to-end and subject-matter-expert testing'}),
-    TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation; sanitized data'}),
+    TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation; real data copied from production, plus test data',pii:true}),
     TE.newEnvironment({name:'TRN-1',type:'training',purpose:'Intake training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00',noticeDays:'1',logins:'400'}),
     TE.newEnvironment({name:'TRN-2',type:'training',purpose:'Caseworker training',maintDays:[1,5],maintStart:'09:00',maintEnd:'12:00',noticeDays:'1',logins:'350'}),
     TE.newEnvironment({name:'Production',type:'prod',purpose:'Live operations',pii:true})],events:[]};

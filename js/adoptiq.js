@@ -5030,9 +5030,10 @@ function openJiraImport(){
     +'</details><div id="jira-preview"></div></div>';
   document.body.appendChild(m);
   m.addEventListener('click',function(e){if(e.target===this)closeJiraImport();});
-  requestAnimationFrame(()=>m.classList.add('open'));
+  // Opens on the next frame (for the fade-in); a close that happens first wins.
+  requestAnimationFrame(()=>{if(m.isConnected&&!m._closed)m.classList.add('open');});
 }
-function closeJiraImport(){const m=document.getElementById('jira-import-modal');if(m)m.classList.remove('open');const r=getRel();if(r&&document.getElementById('v-release').classList.contains('active'))openRelease(r.id);}
+function closeJiraImport(){const m=document.getElementById('jira-import-modal');if(m){m._closed=true;m.classList.remove('open');}const r=getRel();if(r&&document.getElementById('v-release').classList.contains('active'))openRelease(r.id);}
 async function handleJiraFile(file){
   const out=document.getElementById('jira-preview');if(!file||!out)return;
   if(!window.XLSX){out.innerHTML='<div class="import-status error">The spreadsheet reader is still loading. Try again in a moment.</div>';return;}

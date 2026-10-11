@@ -570,7 +570,7 @@ TE.newEnvironment=function(o){return Object.assign({id:TE.id(),name:'',type:'tra
 TE.defaultEnvironments=function(){return[
   TE.newEnvironment({name:'QA',type:'qa',purpose:'Quality assurance testing'}),
   TE.newEnvironment({name:'UAT',type:'uat',purpose:'End-to-end and subject-matter-expert testing'}),
-  TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation before release'}),
+  TE.newEnvironment({name:'Pre-production',type:'preprod',purpose:'Final validation before release. Holds real data copied from production; test data can also be created',pii:true}),
   TE.newEnvironment({name:'Training',type:'training',purpose:'Learner practice and facilitator rehearsal'}),
   TE.newEnvironment({name:'Production',type:'prod',purpose:'Live operations',pii:true})];};
 TE.envOf=(list,name)=>arr(list).find(e=>TE.envKey(e.name)===TE.envKey(name))||null;

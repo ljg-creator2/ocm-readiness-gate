@@ -192,4 +192,9 @@ test('environment readiness chain and warnings',()=>{
   TE.byId(p.training.scenarios,'sc1').env.environment='TRN2';TE.byId(p.training.deliverables,'d1').planned.delivery='2026-11-16';
   assert.ok(TE.envWarnings(p,list).some(w=>w.kind==='maintenance'&&/Mon/.test(w.text)),'2026-11-16 is a Monday');
 });
+test('default environments: pre-production and production hold personal data; training does not',()=>{
+  const d=TE.defaultEnvironments();const by=n=>d.find(e=>e.name===n);
+  assert.ok(by('Pre-production').pii&&by('Production').pii&&!by('Training').pii);
+  assert.ok(TE.isPracticeEnv(by('Training'))&&!TE.isPracticeEnv(by('Pre-production')));
+});
 console.log('\n'+(n-fail)+'/'+n+' passed');process.exit(fail?1:0);
