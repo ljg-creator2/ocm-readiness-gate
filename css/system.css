@@ -245,7 +245,7 @@ body.app-shell .top-bar-i{justify-content:flex-end}
 .cc-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,46%);gap:24px;align-items:center;margin-bottom:8px}
 .cc-greet{padding-top:4px}
 .cc-eyebrow{font:700 15px var(--font-ui);letter-spacing:0.06em;text-transform:uppercase;color:var(--brand-accent);margin-bottom:4px}
-.cc-h1{font-family:var(--font-display);font-size:clamp(30px,3.05vw,48px);font-weight:var(--fw-display-strong);line-height:1.0;letter-spacing:-0.015em;color:var(--midnight-navy);margin:0}
+.cc-h1{font-family:var(--font-display);font-size:clamp(24px,2.25vw,34px);font-weight:var(--fw-display-strong);line-height:1.0;letter-spacing:-0.015em;color:var(--midnight-navy);margin:0}
 .cc-banner{overflow:hidden;height:clamp(96px,8.6vw,132px)}
 .cc-banner img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%}
 /* Row 2: KPI cards */
@@ -604,3 +604,15 @@ button.cc-li-t:hover{text-decoration:underline}
 [data-theme="dark"] .btn-outline[style*="--red-bright"]{color:#E58374!important;border-color:#E58374!important}
 /* QA: on narrow screens the page top bar wraps; let it grow instead of spilling over the breadcrumb and tabs */
 @media (max-width:900px){.top-bar-i{height:auto;min-height:56px;flex-wrap:wrap;row-gap:8px;padding-top:8px;padding-bottom:8px}}
+
+.cc-kpi-of{font-size:.55em;font-weight:600;color:var(--slate)}
+
+/* ── Sign-in drawer over the landing page (same split-screen styling) ── */
+.si-close{display:none}
+#v-login.si-drawer.active{position:fixed;inset:0;z-index:3000;display:block;min-height:0;background:rgba(7,27,51,.55);overflow-y:auto}
+#v-login.si-drawer .si{position:relative;margin-left:auto;width:min(1080px,100%);min-height:100vh;background:var(--bg-signin-form);box-shadow:var(--shadow-pop);animation:si-in .22s ease-out}
+#v-login.si-drawer .si-close{display:flex;align-items:center;justify-content:center;position:absolute;top:16px;right:16px;z-index:2;width:44px;height:44px;border:1px solid #DAD6CF;border-radius:50%;background:var(--pure-white);color:var(--charcoal-navy);font-size:20px;cursor:pointer}
+#v-login.si-drawer .si-close:hover{border-color:var(--deep-navy)}
+body.si-open{overflow:hidden}
+@keyframes si-in{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@media (max-width:900px){#v-login.si-drawer .si{width:100%}}

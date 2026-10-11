@@ -146,6 +146,14 @@ Explicitly excluded: Change Ecosystem diagram, Top Initiatives by Readiness, Ini
 - **Styling:** no gradients, minimal gridlines, legend above the chart, a one-sentence caption below.
 - **Accessibility:** every chart has an `aria-label` and a text summary.
 
+## Project workspace (Training-led)
+- Eight primary tabs in the navy sub-nav (`.pg-btn`, burnt-orange underline when active), with a second row of views for the selected area. On screens narrower than 1700px the primary labels wrap to two lines rather than scroll.
+- Decision brief (`.trb`, built on `.erb`): Playfair headline for the recommendation only; everything else in Inter. Material development and training delivery are always shown separately. Every status chip opens its reason.
+- Records open in a right-hand edit drawer (`.tr-dlg`): `role="dialog"`, focus trap, Escape closes, focus returns to the control that opened it. In view-only mode the same drawer opens read-only.
+- Status chips reuse `.st` (teal circle, ochre diamond, brick triangle, critical square, neutral square) with the word always visible. Burnt orange is never a status.
+- Sign-in opens as a drawer over the landing page with the approved split-screen styling.
+- Styles for these screens are in `css/training.css` and use system tokens only.
+
 ## Accessibility
 - **Standard:** WCAG 2.2 AA.
 - **Focus:** a visible focus ring (burnt orange, 2px).

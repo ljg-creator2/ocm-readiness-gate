@@ -55,11 +55,36 @@ function dismissOnboarding(btn,key){
   localStorage.setItem('adoptiq-onboarding',JSON.stringify(s));
 }
 
-function showLanding(){document.getElementById('v-landing').classList.add('active');document.getElementById('v-login').classList.remove('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
+// Sign-in opens as a modal drawer over the landing page. Auth calls and form IDs are unchanged.
+let _siReturn=null;
+function _siRelease(){
+  const v=document.getElementById('v-login'),l=document.getElementById('v-landing');
+  v.classList.remove('active','si-drawer');v.removeAttribute('role');v.removeAttribute('aria-modal');v.removeAttribute('aria-label');
+  l.inert=false;l.removeAttribute('aria-hidden');document.body.classList.remove('si-open');
+}
+function showLanding(){_siRelease();document.getElementById('v-landing').classList.add('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');
+  if(_siReturn&&document.contains(_siReturn)){try{_siReturn.focus();}catch(e){}}_siReturn=null;}
 function hideLanding(){document.getElementById('v-landing').classList.remove('active');}
-function showLogin(){hideLanding();document.getElementById('v-login').classList.add('active');document.getElementById('v-portfolio').classList.remove('active');document.getElementById('v-release').classList.remove('active');document.getElementById('v-project').classList.remove('active');}
-function hideLogin(){document.getElementById('v-login').classList.remove('active');}
-function landingToLogin(){hideLanding();showLogin();showSignin();}
+function showLogin(){
+  const v=document.getElementById('v-login'),l=document.getElementById('v-landing');
+  if(!v.classList.contains('active'))_siReturn=document.activeElement;
+  ['v-portfolio','v-release','v-project'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  l.classList.add('active');l.inert=true;l.setAttribute('aria-hidden','true');
+  v.classList.add('active','si-drawer');v.setAttribute('role','dialog');v.setAttribute('aria-modal','true');v.setAttribute('aria-label','Sign in to AdoptIQ');
+  document.body.classList.add('si-open');
+  setTimeout(()=>{const f=[...v.querySelectorAll('input:not([type=hidden]),button')].find(x=>x.offsetParent!==null&&!x.classList.contains('si-close')&&!x.classList.contains('si-logo'));if(f)f.focus();},60);
+}
+function hideLogin(){const wasDrawer=document.getElementById('v-login').classList.contains('si-drawer');_siRelease();if(wasDrawer)hideLanding();_siReturn=null;}
+document.addEventListener('keydown',e=>{
+  const v=document.getElementById('v-login');if(!v||!v.classList.contains('si-drawer')||!v.classList.contains('active'))return;
+  if(e.key==='Escape'){e.preventDefault();showLanding();return;}
+  if(e.key!=='Tab')return;
+  const f=[...v.querySelectorAll('button,input:not([type=hidden]),a[href],select,textarea')].filter(x=>!x.disabled&&x.offsetParent!==null);if(!f.length)return;
+  const first=f[0],last=f[f.length-1];
+  if(!v.contains(document.activeElement)){e.preventDefault();first.focus();return;}
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+});
+function landingToLogin(){showLogin();showSignin();}
 async function landingToDemo(){hideLanding();hideLogin();await loadDemoData();document.getElementById('v-portfolio').classList.add('active');}
 function landingBookWalkthrough(){openBookingModal();}
 // Landing: search opens the demo workspace with its search field focused.
@@ -476,63 +501,40 @@ async function saveAlertPrefs(){
 // ════════════════════════════════════════════════════════
 const GATE_DEFS=[
   {id:'g1',label:'Gate 1',sub:'Post-Requirements / Pre-Design',items:[
-    {text:'Impacted user groups identified via Impact Analysis',owner:'ocm_impl'},
-    {text:'Preliminary stakeholder matrix drafted and shared with Training',owner:'ocm_impl'},
-    {text:'End-user journey map created by Implementation team',owner:'func'},
-    {text:'High-level scope of system changes documented',owner:'func'},
-    {text:'Training approach approved (ILT, vILT, eLearning, job aids)',owner:'train_env'},
-    {text:'Training resources confirmed',owner:'train_env'}
+    {text:'Impacted user groups identified via Impact Analysis',owner:'ocm_impl',consequence:'Training cannot determine who requires training or at what scale.'},
+    {text:'Preliminary stakeholder matrix drafted and shared with Training',owner:'ocm_impl',consequence:'Training cannot size effort, timeline, or resources. All downstream planning is speculative.'},
+    {text:'End-user journey map created by Implementation team',owner:'func',consequence:'Training cannot see how work changes for end users. Objectives and scenarios rest on assumptions.'},
+    {text:'High-level scope of system changes documented',owner:'func',consequence:'Training scope is undefined. Curriculum development cannot be initiated.'},
+    {text:'Training approach approved (ILT, vILT, eLearning, job aids)',owner:'train_env',consequence:'Delivery format unknown. Materials development and vendor sourcing are blocked.'},
+    {text:'Training resources confirmed',owner:'train_env',consequence:'Training resources are unconfirmed. Schedule risk is elevated.'}
   ]},
   {id:'g2',label:'Gate 2',sub:'Post-Design / Pre-Development',items:[
-    {text:'Finalized stakeholder matrix with role-level mapping',owner:'ocm_impl'},
-    {text:'Training environment plan confirmed (ownership, access, timeline)',owner:'func'},
-    {text:'SME assignments confirmed and communicated',owner:'smes'},
-    {text:'Curriculum outline approved',owner:'train_env'},
-    {text:'Training calendar windows identified and protected',owner:'pm'},
-    {text:'Communications plan aligned with Training delivery schedule',owner:'ocm_impl'}
+    {text:'Finalized stakeholder matrix with role-level mapping',owner:'ocm_impl',consequence:'Training cannot confirm who to train or sequence delivery by role.'},
+    {text:'Training environment plan confirmed (ownership, access, timeline)',owner:'func',consequence:'No environment plan means TTT and end user training have no operational foundation.'},
+    {text:'SME assignments confirmed and communicated',owner:'smes',consequence:'Content cannot be validated without confirmed SMEs. Accuracy and credibility are at risk.'},
+    {text:'Curriculum outline approved',owner:'train_env',consequence:'Curriculum development cannot begin without an approved outline.'},
+    {text:'Training calendar windows identified and protected',owner:'pm',consequence:'Training dates have no protected window. Schedule compression risk is high.'},
+    {text:'Communications plan aligned with Training delivery schedule',owner:'ocm_impl',consequence:'Communications will not align with Training delivery. End users arrive unprepared.'}
   ]},
   {id:'g3',label:'Gate 3',sub:'Post-Dev / Pre-UAT',items:[
-    {text:'Training environment accessible and stable',owner:'func'},
-    {text:'SMEs available and confirmed for content validation',owner:'smes'},
-    {text:'Tech transfer date locked or within confirmed window',owner:'func'},
-    {text:'TTT schedule drafted and distributed',owner:'train_env'},
-    {text:'System changes from Development documented and communicated to Training',owner:'func'},
-    {text:'End user training materials in active development',owner:'train_env'}
+    {text:'Training environment accessible and stable',owner:'func',consequence:'Training scenarios cannot be built or validated in the learning environment. Practice-based delivery is at risk.'},
+    {text:'SMEs available and confirmed for content validation',owner:'smes',consequence:'Unvalidated content will be delivered to end users. Accuracy risk is critical.'},
+    {text:'Tech transfer date locked or within confirmed window',owner:'func',consequence:'Tech transfer date unknown. TTT and end user training cannot be sequenced.'},
+    {text:'TTT schedule drafted and distributed',owner:'train_env',consequence:'TTT scheduling is blocked. Compression to go-live is likely.'},
+    {text:'System changes from Development documented and communicated to Training',owner:'func',consequence:'Training may not reflect current system state. End users trained on incorrect workflows.'},
+    {text:'End user training materials in active development',owner:'train_env',consequence:'Materials cannot be finalized without active development underway.'}
   ]},
   {id:'g4',label:'Gate 4',sub:'Post-UAT / Pre-Go-Live',items:[
-    {text:'TTT complete with documented sign-off',owner:'train_env'},
-    {text:'Training environment mirrors production as closely as possible',owner:'func'},
-    {text:'Final user list confirmed by role and population',owner:'pm'},
-    {text:'Go-live date locked with change freeze window communicated',owner:'pm'},
-    {text:'Post-release monitoring plan confirmed between Implementation and Training',owner:'ocm_impl'},
-    {text:'Floor support and help desk coverage plan in place',owner:'train_env'}
+    {text:'TTT complete with documented sign-off',owner:'train_env',consequence:'Facilitators have not shown they can deliver the validated content. End users may receive inconsistent instruction.'},
+    {text:'Training environment mirrors production as closely as possible',owner:'func',consequence:'Environment instability means end users are trained on an inaccurate system.'},
+    {text:'Final user list confirmed by role and population',owner:'pm',consequence:'User list gaps create coverage failures at go-live.'},
+    {text:'Go-live date locked with change freeze window communicated',owner:'pm',consequence:'Date uncertainty prevents end user training scheduling.'},
+    {text:'Post-release monitoring plan confirmed between Implementation and Training',owner:'ocm_impl',consequence:'No shared post-release monitoring plan between Implementation and Training.'},
+    {text:'Floor support and help desk coverage plan in place',owner:'train_env',consequence:'End users will have no structured support at go-live.'}
   ]}
 ];
-const RC={
-  g1:['Training cannot size effort, timeline, or resources. All downstream planning is speculative.',
-      'Training cannot determine who requires training or at what scale.',
-      'Training scope is undefined. Curriculum development cannot be initiated.',
-      'Delivery format unknown. Materials development and vendor sourcing are blocked.',
-      'Training resources are unconfirmed. Schedule risk is elevated.'],
-  g2:['Training cannot confirm who to train or sequence delivery by role.',
-      'No environment plan means TTT and end user training have no operational foundation.',
-      'Content cannot be validated without confirmed SMEs. Accuracy and credibility are at risk.',
-      'Curriculum development cannot begin without an approved outline.',
-      'Training dates have no protected window. Schedule compression risk is high.',
-      'Communications will not align with Training delivery. End users arrive unprepared.'],
-  g3:['TTT cannot be scheduled. End user training timeline is at risk.',
-      'Unvalidated content will be delivered to end users. Accuracy risk is critical.',
-      'Tech transfer date unknown. TTT and end user training cannot be sequenced.',
-      'TTT scheduling is blocked. Compression to go-live is likely.',
-      'Training may not reflect current system state. End users trained on incorrect workflows.',
-      'Materials cannot be finalized without active development underway.'],
-  g4:['End users receive training without a validated instruction baseline. Adoption risk is critical.',
-      'Environment instability means end users are trained on an inaccurate system.',
-      'User list gaps create coverage failures at go-live.',
-      'Date uncertainty prevents end user training scheduling.',
-      'No shared post-release monitoring plan between Implementation and Training.',
-      'End users will have no structured support at go-live.']
-};
+// Consequences live on each GATE_DEFS item (paired by item, not by position in a separate list).
+const RC={};GATE_DEFS.forEach(g=>{RC[g.id]=g.items.map(x=>x.consequence);});
 const WS=['OCM Training','OCM Implementation','Project Manager','Functional','QA','UAT','SMEs','App Dev'];
 const GL=['Post-Requirements','Post-Design','Post-Dev / Pre-UAT','Post-UAT / Pre-Go-Live'];
 const AF=[
@@ -735,11 +737,42 @@ function applyBrand(){
   document.querySelectorAll('.login-footer-brand').forEach(el=>el.textContent=b.firmName);
   b.gateLabels.forEach((lbl,i)=>{if(GATE_DEFS[i])GATE_DEFS[i].label=lbl;});
   Object.entries(b.adkarLabels).forEach(([key,lbl])=>{const dim=ADKAR_DIMS.find(d=>d.key===key);if(dim)dim.word=lbl;});
+  applyOrgTerm();
 }
+// ── Organization term (agency, department, business unit, client) ──
+// Interface labels say "agency" in many places. This pass swaps the word in short UI text,
+// placeholders and labels. It skips form values, chips (entered names) and long free text, so user data is unchanged.
+const ORG_TERMS={agency:['agency','agencies'],department:['department','departments'],'business unit':['business unit','business units'],client:['client','clients']};
+let _orgObs=null;
+function orgTerm(plural){const t=ORG_TERMS[getBrand().orgTerm]||ORG_TERMS.agency;return plural?t[1]:t[0];}
+function _orgSwap(str){
+  const t=ORG_TERMS[getBrand().orgTerm];if(!t||t===ORG_TERMS.agency)return str;
+  const cap=w=>w.replace(/(^|\s)\w/g,m=>m.toUpperCase());
+  return str.replace(/\b(AGENCIES|AGENCY|Agencies|Agency|agencies|agency)\b/g,m=>{const pl=/IES$/i.test(m);const w=pl?t[1]:t[0];return m===m.toUpperCase()?w.toUpperCase():m[0]===m[0].toUpperCase()?cap(w):w;});
+}
+function _orgApply(root){
+  if(!root||(root.nodeType!==1&&root.nodeType!==3))return;
+  const skip=el=>el&&el.closest&&el.closest('input,textarea,select option,.chip,.chip-row,[contenteditable],script,style,[data-user]');
+  if(root.nodeType===3){const p=root.parentElement;if(root.nodeValue.length<=90&&!skip(p)){const v=_orgSwap(root.nodeValue);if(v!==root.nodeValue)root.nodeValue=v;}return;}
+  if(skip(root))return;
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];while(w.nextNode())nodes.push(w.currentNode);
+  nodes.forEach(n=>{if(n.nodeValue.length<=90&&/agenc/i.test(n.nodeValue)&&!skip(n.parentElement)){const v=_orgSwap(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v;}});
+  root.querySelectorAll&&root.querySelectorAll('[placeholder],[aria-label],[title]').forEach(el=>['placeholder','aria-label','title'].forEach(a=>{const v=el.getAttribute(a);if(v&&/agenc/i.test(v))el.setAttribute(a,_orgSwap(v));}));
+}
+function applyOrgTerm(){
+  const on=getBrand().orgTerm&&getBrand().orgTerm!=='agency';
+  if(!on){if(_orgObs){_orgObs.disconnect();_orgObs=null;}return;}
+  if(!document.body)return;
+  _orgApply(document.body);
+  if(!_orgObs){_orgObs=new MutationObserver(ms=>{if(!(ORG_TERMS[getBrand().orgTerm]&&getBrand().orgTerm!=='agency'))return;ms.forEach(m=>{if(m.type==='characterData')_orgApply(m.target);else m.addedNodes.forEach(n=>_orgApply(n));});});
+    _orgObs.observe(document.body,{childList:true,subtree:true,characterData:true});}
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applyOrgTerm);else applyOrgTerm();
 function loadBrandInputs(){
   const b=getBrand();
   const f=document.getElementById('brand-firm');if(f)f.value=b.firmName;
   const s=document.getElementById('brand-subtitle');if(s)s.value=b.subtitle;
+  const ot=document.getElementById('brand-orgterm');if(ot)ot.value=b.orgTerm||'agency';
   b.gateLabels.forEach((lbl,i)=>{const el=document.getElementById('brand-g'+(i+1));if(el)el.value=lbl;});
   renderFrameworkDimInputs();
 }
@@ -749,7 +782,8 @@ function saveBrandFromInputs(){
     ...b,
     firmName:document.getElementById('brand-firm')?.value||DEFAULT_BRAND.firmName,
     subtitle:document.getElementById('brand-subtitle')?.value||DEFAULT_BRAND.subtitle,
-    gateLabels:[1,2,3,4].map(i=>document.getElementById('brand-g'+i)?.value||'Gate '+i)
+    gateLabels:[1,2,3,4].map(i=>document.getElementById('brand-g'+i)?.value||'Gate '+i),
+    orgTerm:document.getElementById('brand-orgterm')?.value||'agency'
   };
   saveBrand(brand);
 }
@@ -912,6 +946,8 @@ function migrateResources(p){
     if(!v)p.resources[role.key]=[];
     else if(!Array.isArray(v))p.resources[role.key]=[v];
   });
+  // Training-led records (js/training-engine.js): additive and idempotent.
+  if(typeof TE!=='undefined')TE.migrate(p,{WS,GL,PL_INTERVALS,golive:p.golive||''});
 }
 function getEffectiveRes(proj,key,field){
   if(!proj?.resources?.[key])return'';
@@ -1464,21 +1500,15 @@ function showProjTab(id,btn){
   if(id==='adopthm')renderPAHM();
   if(id==='impact')renderPImpact();
   if(id==='gaps')renderPGaps();
-  if(id==='postlaunch'){
-    // Post-launch tracking is hidden until go-live; links from the Command Center and section pages can still land here.
-    const sec=document.getElementById('psec-postlaunch'),p=getProj(),gl=p&&projGoLive(p);
-    if(sec&&sec.style.display==='none'){
-      sec.style.display='';
-      const el=document.getElementById('ptab-postlaunch');
-      if(el)el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Post-launch tracking starts after go-live'+(gl?' on '+esc(ccFmt(gl))+', '+esc(String(gl).slice(0,4)):'')+'. Set or confirm the go-live date on the Overview tab.</p></div>';
-    }else renderPPostLaunch();
-  }
+  // Outcome measures are defined before launch, so this tab is always available.
+  if(id==='postlaunch')renderPPostLaunch();
   if(id==='sustain')renderPSustain();
   if(id==='trainplan')renderPTrainPlan();
   if(id==='pulse')renderPPulse();
   if(id==='lifecycle')renderPLifecycle();
   if(id==='craid')renderPCraid();
   if(id==='gates')showOnboardingCallout('gate-tracker','#psec-gates','Gates are your checkpoints.','Each gate represents a critical transition in your SDLC. Work through the items, mark your status, and attach evidence. When a gate is complete, request sign-off to move forward with confidence.','Start Assessment');
+  if(typeof trTabRendered==='function')trTabRendered(id);
   if(id==='adkar')showOnboardingCallout('adkar','#psec-adkar','ADKAR tells you where readiness is real.','Score each dimension from 1\u20135 based on what you\u2019re observing \u2014 not what you hope is true. Low scores aren\u2019t failures; they\u2019re where your attention needs to go.','Record Scores');
 }
 
@@ -1668,7 +1698,7 @@ function renderPortfolio(){
       </div>
       <div class="r-card-bd">
         <div class="rc-metrics">
-          <div class="rcm"><div class="rcm-l">Readiness</div><div class="rcm-v">${rl.gateScore!==null?rl.gateScore+'%':'—'}</div></div>
+          <div class="rcm"><div class="rcm-l">Gate completion</div><div class="rcm-v">${rl.gateScore!==null?rl.gateScore+'%':'—'}</div></div>
           <div class="rcm"><div class="rcm-l">Open Issues</div><div class="rcm-v">${rl.flags}</div></div>
           <div class="rcm"><div class="rcm-l">${fwShort()} Avg</div><div class="rcm-v">${rl.adkar!==null?rl.adkar+'/5':'—'}</div></div>
           <div class="rcm"><div class="rcm-l">Projects</div><div class="rcm-v">${(r.projects||[]).length} / ${tp} tr.</div></div>
@@ -1712,7 +1742,7 @@ function stClass(label,rag){const l=String(label||'').toLowerCase();
   if(/critical|block|no.?go|escalat/.test(l))return'st-c';
   return rag==='red'?'st-c':rag==='amber'?'st-r':rag==='green'?'st-g':'st-n';}
 const DEF={
-  readiness:'Share of gate criteria verified (marked met), excluding items marked N/A. The portfolio figure averages active initiatives. 80% is the go-live target.',
+  readiness:'Gate completion (legacy): share of gate criteria marked met, excluding N/A. It is not a readiness rating; delivery readiness and the other measures are under Readiness & Gates. The portfolio figure averages active initiatives.',
   status:'Combines readiness, the ADKAR average, blocking gate items, and days to go-live. On Track, At Risk, or Critical.',
   trend:'Change in readiness since the previous weekly snapshot. Shown once two snapshots exist.',
   adoption:'Average of the group’s adoption-risk factor ratings, as a percentage. Higher is better; below 60% means elevated adoption risk.',
@@ -1801,7 +1831,7 @@ function renderPortfolioBrief(){
     +'<h2 class="erb-pos" id="erb-h">Portfolio position <span class="st '+m.pos.st+'">'+m.pos.label+'</span></h2>'
     +'<p class="erb-narr">'+esc(narr)+'</p>'
     +'<p class="ev-line"><strong>Evidence:</strong> '+blocking+' blocking gate item'+(blocking===1?'':'s')+' ('+openItems+' open including partial) · '+weakGroups+' release'+(weakGroups===1?'':'s')+' with a group below the adoption threshold · '+m.decide.length+' release'+(m.decide.length===1?'':'s')+' needing a decision</p></div>'
-    +'<div class="erb-metrics"><div class="erb-metric" title="'+esc(DEF.readiness)+'"><div class="erb-metric-l">Readiness</div><div class="erb-metric-v">'+(avg!==null?avg+'%':'—')+'</div><div class="erb-metric-s">'+trendHtml(avgTrend)+' vs prior week</div><div class="erb-metric-d">Gate criteria verified · target 80%</div></div>'
+    +'<div class="erb-metrics"><div class="erb-metric" title="'+esc(DEF.readiness)+'"><div class="erb-metric-l">Gate completion (legacy)</div><div class="erb-metric-v">'+(avg!==null?avg+'%':'—')+'</div><div class="erb-metric-s">'+trendHtml(avgTrend)+' vs prior week</div><div class="erb-metric-d">Gate criteria verified · target 80%</div></div>'
     +'<div class="erb-metric"><div class="erb-metric-l">Go-live ≤ 30 days</div><div class="erb-metric-v">'+m.soon.length+'</div><div class="erb-metric-s">of '+m.rows.length+' active</div><div class="erb-metric-d">'+(m.rows.filter(x=>x.d!==null&&x.d<0).length)+' past planned go-live</div></div></div></div>'
     +'<div class="erb-grid"><div><div class="erb-h">Top contributors to risk</div>'+(contributors.length?'<ul class="erb-list">'+contributors.join('')+'</ul>':'<p class="ev-line">No release is currently at risk.</p>')+'</div>'
     +'<div class="erb-decision"><div class="erb-decision-gold"></div><div class="erb-h">Recommended executive action</div><div class="erb-decision-t">'+esc(decision)+'</div>'
@@ -1809,7 +1839,7 @@ function renderPortfolioBrief(){
     +'</section>';
   // Release Radar
   let h='<section class="dz-sec" aria-labelledby="rr-h"><div class="dz-sec-hd"><div><div class="dz-eye">Principal operating view</div><h2 class="dz-ttl" id="rr-h">Release Radar</h2><div class="dz-sub">Sorted by status, then nearest go-live. Readiness bar marks the 80% go-live target.</div></div></div>'
-    +'<div class="dt-wrap"><table class="dt"><thead><tr><th scope="col">Release</th><th scope="col" title="'+esc(DEF.status)+'">Status</th><th scope="col">Go-live</th><th scope="col" title="'+esc(DEF.readiness)+'">Readiness</th><th scope="col" title="'+esc(DEF.trend)+'">Trend</th><th scope="col">Top evidence driver</th><th scope="col" title="'+esc(DEF.adoption)+'">Highest-risk group</th><th scope="col">Accountable lead</th><th scope="col" title="'+esc(DEF.action)+'">Required next action</th></tr></thead><tbody>';
+    +'<div class="dt-wrap"><table class="dt"><thead><tr><th scope="col">Release</th><th scope="col" title="'+esc(DEF.status)+'">Status</th><th scope="col">Go-live</th><th scope="col" title="'+esc(DEF.readiness)+'">Gate completion</th><th scope="col" title="'+esc(DEF.trend)+'">Trend</th><th scope="col">Top evidence driver</th><th scope="col" title="'+esc(DEF.adoption)+'">Highest-risk group</th><th scope="col">Accountable lead</th><th scope="col" title="'+esc(DEF.action)+'">Required next action</th></tr></thead><tbody>';
   m.rows.forEach(x=>{
     const g=x.rl.gateScore;const drv=x.ev.items[0];
     h+='<tr><td data-l="Release"><button class="rr-name dz-keep" onclick="openRelease('+x.r.id+')">'+esc(x.r.name)+'</button><div class="rr-sub">'+(x.r.projects||[]).length+' project'+((x.r.projects||[]).length===1?'':'s')+'</div></td>'
@@ -1824,7 +1854,7 @@ function renderPortfolioBrief(){
   });
   h+='</tbody></table></div>'
     +'<details class="dz-key"><summary>How to read this table</summary><dl>'
-    +'<dt>Status</dt><dd>'+esc(DEF.status)+'</dd><dt>Readiness</dt><dd>'+esc(DEF.readiness)+' The tick on each bar marks 80%.</dd>'
+    +'<dt>Status</dt><dd>'+esc(DEF.status)+'</dd><dt>Gate completion</dt><dd>'+esc(DEF.readiness)+' The tick on each bar marks 80%.</dd>'
     +'<dt>Trend</dt><dd>'+esc(DEF.trend)+'</dd><dt>Adoption score</dt><dd>'+esc(DEF.adoption)+'</dd>'
     +'<dt>Top evidence driver</dt><dd>The most severe open gate item in the release: blocking (not met) before partial.</dd><dt>Required next action</dt><dd>'+esc(DEF.action)+'</dd></dl></details></section>';
   // Evidence requiring attention + recently updated
@@ -1884,7 +1914,7 @@ function renderRelBrief(){
   el.innerHTML='<section class="erb '+pos+'" aria-labelledby="rb-h"><div class="erb-top"><div><div class="erb-eye">Release position and decision</div>'
     +'<h2 class="erb-pos" id="rb-h">'+esc(r.name)+' '+stBadge(rg.rag,rg.label)+'</h2><p class="erb-narr">'+esc(narr)+'</p>'
     +'<p class="ev-line"><strong>Evidence:</strong> '+ev.blocking+' blocking · '+ev.watch+' partial gate items · '+(r.phase?'SDLC phase: '+esc(r.phase)+' · ':'')+(r.projects||[]).length+' project'+((r.projects||[]).length===1?'':'s')+(leads.length?' · Leads: '+esc(leads.slice(0,3).join(', ')):' · No accountable lead named')+'</p></div>'
-    +'<div class="erb-metrics"><div class="erb-metric" title="'+esc(DEF.readiness)+'"><div class="erb-metric-l">Readiness</div><div class="erb-metric-v">'+(rl.gateScore!==null?rl.gateScore+'%':'—')+'</div><div class="erb-metric-s">'+trendHtml(tr)+' vs prior week</div><div class="erb-metric-d">Gate criteria verified · target 80%</div></div>'
+    +'<div class="erb-metrics"><div class="erb-metric" title="'+esc(DEF.readiness)+'"><div class="erb-metric-l">Gate completion (legacy)</div><div class="erb-metric-v">'+(rl.gateScore!==null?rl.gateScore+'%':'—')+'</div><div class="erb-metric-s">'+trendHtml(tr)+' vs prior week</div><div class="erb-metric-d">Gate criteria verified · target 80%</div></div>'
     +'<div class="erb-metric"><div class="erb-metric-l">Go-live</div><div class="erb-metric-v">'+fmtDate(r.golive)+'</div><div class="erb-metric-s mono">'+esc(fmtDays(d))+'</div></div></div></div>'
     +'<div class="erb-grid"><div><div class="erb-h">Evidence requiring attention</div>'+(ev.items.length?'<ul class="erb-list">'+ev.items.slice(0,4).map(i=>'<li>'+(i.sev===0?'<span class="st st-c">Blocking</span>':'<span class="st st-w">Partial</span>')+'<span>'+esc(i.text)+' <span class="rr-sub">'+esc(i.proj.name)+' · '+esc(i.gate)+'</span></span></li>').join('')+'</ul>':'<p class="ev-line">No open gate items.</p>')+'</div>'
     +'<div class="erb-decision"><div class="erb-decision-gold"></div><div class="erb-h">Most urgent action</div><div class="erb-decision-t">'+esc(next)+'</div>'
@@ -1995,8 +2025,16 @@ function ccKpis(){
     active:{v:act.length,d:monthAgo?act.length-snapActive(monthAgo):null},
     ready:{v:ready,d:last&&prev&&snapReadiness(last)!=null&&snapReadiness(prev)!=null?snapReadiness(last)-snapReadiness(prev):null},
     risk:{v:atRisk.length,of:act.length,d:riskNow!=null&&riskPrev!=null?riskNow-riskPrev:null},
-    train:{v:tr.length?Math.round(tr.reduce((a,b)=>a+b,0)/tr.length):null,n:tr.length}
+    train:{v:tr.length?Math.round(tr.reduce((a,b)=>a+b,0)/tr.length):null,n:tr.length},
+    delivery:ccDeliveryReadiness(act)
   };
+}
+// Delivery readiness across active projects, from Training records (js/training-engine.js). No blended score.
+function ccDeliveryReadiness(act){
+  const out={ready:0,conditional:0,blocked:0,insufficient:0,not_assessed:0,assessed:0,total:act.length};
+  if(typeof TE==='undefined')return out;
+  act.forEach(x=>{TE.migrate(x.p,{WS,GL,PL_INTERVALS,golive:x.p.golive||''});const st=TE.deliveryReadiness(x.p,{golive:projGoLive(x.p)}).state;out[st]=(out[st]||0)+1;if(st!=='not_assessed')out.assessed++;});
+  return out;
 }
 function ccDelta(d,unit,goodUp,period){
   if(d===null||d===undefined)return'';
@@ -2042,6 +2080,9 @@ function ccActivity(){
       (p.stakeholders||[]).forEach(sh=>{(sh.touchpoints||[]).forEach(tp=>{if(tp.date)ev.push({t:tp.date,ic:'b',icon:'ph-chat-centered',title:'Stakeholder feedback received',sub:sh.name+' · '+p.name});});
         (((p.sustainment||{})[sh.id]||{}).interventions||[]).forEach(iv=>{if(iv.date)ev.push({t:iv.date,ic:'r',icon:'ph-warning',title:'Intervention '+String(iv.status||'logged').toLowerCase(),sub:sh.name+' · '+p.name});});});
       if(p.modified)ev.push({t:p.modified,ic:'t',icon:'ph-chart-bar',title:'Initiative status updated',sub:p.name+' · '+(p.status||'')});
+      // Training records: dependency, scenario, deliverable, checkpoint and outcome changes (most recent 8 per project).
+      ((p.training&&p.training.history)||[]).filter(h=>h.date&&/dependency|scenario|deliverable|checkpoint|observation|diagnosis/.test(h.type||'')).slice(0,8).forEach(h=>{
+        const blocked=/Blocked|Does not run/.test(h.text||'');ev.push({t:h.date+'T12:00:00',ic:blocked?'r':'t',icon:blocked?'ph-warning':'ph-graduation-cap',title:String(h.text||'Training record updated'),sub:p.name});});
     });
   });
   const now=Date.now()+60000;
@@ -2058,6 +2099,9 @@ function ccMilestones(){
     (r.projects||[]).forEach(p=>{
       const go='openProjectFromPortfolio('+r.id+','+p.id+',\'trainplan\')';
       if(p.golive&&p.golive!==r.golive)add(p.golive,'golive','Go-live',p.name,go);
+      if(p.training){const tg='openProjectFromPortfolio('+r.id+','+p.id+',\'deps\')',mg='openProjectFromPortfolio('+r.id+','+p.id+',\'milestones\')';
+        p.training.dependencies.filter(d=>d.requiredBy&&d.status!=='satisfied'&&d.status!=='exception').forEach(d=>add(d.requiredBy,'tt','Input needed: '+d.title,p.name,tg));
+        p.training.deliverables.filter(d=>d.planned&&d.planned.delivery&&d.state!=='released').forEach(d=>add(d.planned.delivery,'training','Planned delivery: '+d.title,p.name,mg));}
       let t=null;try{t=calcTrainingTimeline(p);}catch(e){}
       if(t&&!t.error){
         if(t.deliveryStart)add(t.deliveryStart,'training','Training delivery starts',p.name,go);
@@ -2126,21 +2170,21 @@ function renderCommandCenter(){
   const kpi=(cls,icon,val,vcls,label,sub)=>'<div class="cc-kpi"><div class="cc-kpi-ic '+cls+'" aria-hidden="true"><i class="ph-bold '+icon+'"></i></div><div class="cc-kpi-b"><div class="cc-kpi-v '+vcls+'">'+val+'</div><div class="cc-kpi-l">'+label+'</div><div class="cc-kpi-s">'+sub+'</div></div></div>';
   html+='<section class="cc-kpis" aria-label="Key measures">'
     +kpi('o','ph-folder-simple',k.active.v,'','Active Initiatives',ccDelta(k.active.d,'',true,'since last month')||'Across '+releases.length+' release'+(releases.length===1?'':'s'))
-    +kpi('t','ph-users-three',k.ready.v!==null?k.ready.v+'%':'—','t','Overall Readiness',k.ready.v===null?'No gate reviews yet':(ccDelta(k.ready.d,' pts',true,'vs last week')||'No change vs last week'))
+    +kpi('t','ph-users-three',k.delivery.assessed?k.delivery.ready+'<span class="cc-kpi-of"> of '+k.delivery.assessed+'</span>':'—','t','Delivery Readiness',k.delivery.assessed?k.delivery.ready+' ready · '+k.delivery.conditional+' with conditions · '+k.delivery.blocked+' blocked'+(k.delivery.not_assessed?' · '+k.delivery.not_assessed+' not assessed':''):'No Training records yet across '+k.delivery.total+' active initiative'+(k.delivery.total===1?'':'s'))
     +kpi('r','ph-warning',k.risk.v,'r','At-Risk',ccDelta(k.risk.d,' pts',false,'vs last week')||('of '+k.risk.of+' active'))
     +kpi('p','ph-graduation-cap',k.train.v!==null?k.train.v+'%':'—','','Training Completion',k.train.v!==null?'Across '+k.train.n+' group'+(k.train.n===1?'':'s'):'No results recorded yet')
     +'</section>';
   // Row 3: Readiness Trend + My Action Items
   const ts=ccTrendSeries();const has=a=>a.some(v=>v!==null);
   const lastV=a=>{for(let i=a.length-1;i>=0;i--)if(a[i]!==null)return a[i];return null;};const firstV=a=>a.find(v=>v!==null);
-  let cap=has(ts.ready)?'Readiness moved from '+firstV(ts.ready)+'% to '+lastV(ts.ready)+'% across the period'+(lastV(ts.ready)<80?', below the 80% go-live target.':'.'):'No weekly readiness snapshots in this period yet.';
+  let cap=has(ts.ready)?'Gate completion (a legacy measure, not delivery readiness) moved from '+firstV(ts.ready)+'% to '+lastV(ts.ready)+'% across the period'+(lastV(ts.ready)<80?', below the 80% go-live target.':'.'):'No weekly readiness snapshots in this period yet.';
   cap+=has(ts.risk)?' '+lastV(ts.risk)+'% of active initiatives are at risk.':' Risk history starts with the next weekly snapshot.';
   cap+=has(ts.adopt)?' Post-launch adoption averaged '+lastV(ts.adopt)+'% in the latest month with observations.':' No post-launch adoption recorded in this period.';
   const ai=ccActionItems();const shown=_cc.showAllActions?ai.items:ai.items.slice(0,4);
   const sevIc=s=>s==='red'?['r','ph-warning']:s==='amber'?['a','ph-clock']:['n','ph-circle-dashed'];
   html+='<div class="cc-row3"><section class="cc-card cc-trend" aria-labelledby="cc-trend-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-trend-h">Readiness Trend</h2><button class="cc-link" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\'trends-sec\')?.scrollIntoView(),300)">View Details <i class="ph ph-arrow-right"></i></button></div>'
-    +'<div class="cc-legend"><span><i style="background:var(--deep-navy)"></i>Readiness</span><span><i style="background:var(--teal)"></i>Adoption</span><span><i style="background:var(--brick-red)"></i>Risk</span></div>'
-    +'<div class="cc-chart"><canvas id="cc-trend" role="img" aria-label="Readiness, adoption and risk by month. '+esc(cap)+'"></canvas></div><p class="cc-sr">'+esc(cap)+'</p></section>'
+    +'<div class="cc-legend"><span><i style="background:var(--deep-navy)"></i>Gate completion (legacy)</span><span><i style="background:var(--teal)"></i>Adoption</span><span><i style="background:var(--brick-red)"></i>Risk</span></div>'
+    +'<div class="cc-chart"><canvas id="cc-trend" role="img" aria-label="Gate completion, adoption and risk by month. '+esc(cap)+'"></canvas></div><p class="cc-sr">'+esc(cap)+'</p></section>'
     +'<section class="cc-card cc-actions" aria-labelledby="cc-act-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-act-h">My Action Items</h2>'+(ai.items.length>4?'<button class="cc-link" onclick="_cc.showAllActions=!_cc.showAllActions;renderCommandCenter()">'+(_cc.showAllActions?'Show fewer':'View All ('+ai.items.length+')')+' <i class="ph ph-arrow-right"></i></button>':'')+'</div>'
     +(shown.length?'<ul class="cc-list">'+shown.map(i=>{const[c,ic]=sevIc(i.sev);const late=i.due&&ccIso(i.due)<new Date().toISOString().slice(0,10);return'<li><span class="cc-li-ic round '+c+'" aria-hidden="true"><i class="ph-bold '+ic+'"></i></span><div class="cc-li-b"><button class="cc-li-t" onclick="openProjectFromPortfolio('+i.r.id+','+i.p.id+',\''+i.tab+'\')">'+esc(i.text)+'</button><div class="cc-li-s">'+esc(i.p.name)+' · '+esc(i.r.name)+'</div></div><span class="cc-li-d'+(late?' late':'')+'">'+(i.due?(late?'Overdue · ':'Due ')+ccFmt(i.due):'No date')+'</span><span class="cc-sr">'+(i.sev==='red'?'Urgent':'Attention')+'</span></li>';}).join('')+'</ul>'+(ai.mine?'':'<p class="cc-foot">Showing all active initiatives.</p>'):'<div class="cc-empty"><strong>No open actions.</strong>Actions appear when gates, training plans, or go-live dates need attention.</div>')
     +'</section></div>';
@@ -2164,7 +2208,7 @@ function renderCommandCenter(){
   const cv=document.getElementById('cc-trend');
   if(cv&&window.Chart){
     _cc.chart=new Chart(cv,{type:'line',data:{labels:ts.labels,datasets:[
-      {label:'Readiness',data:ts.ready,borderColor:'#0B2545',backgroundColor:'#0B2545',tension:0.25,spanGaps:true,pointRadius:4,pointHoverRadius:5,borderWidth:2.5},
+      {label:'Gate completion (legacy)',data:ts.ready,borderColor:'#0B2545',backgroundColor:'#0B2545',tension:0.25,spanGaps:true,pointRadius:4,pointHoverRadius:5,borderWidth:2.5},
       {label:'Adoption',data:ts.adopt,borderColor:'#178B87',backgroundColor:'#178B87',tension:0.25,spanGaps:true,pointRadius:4,pointHoverRadius:5,borderWidth:2.5},
       {label:'Risk',data:ts.risk,borderColor:'#A63F32',backgroundColor:'#A63F32',tension:0.25,spanGaps:true,pointRadius:4,pointHoverRadius:5,borderWidth:2.5}
     ]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:4,right:8}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y===null?'no data':c.parsed.y+'%')}}},scales:{y:{min:0,max:100,border:{display:false},grid:{color:'#ECEAE6'},ticks:{callback:v=>v+'%',stepSize:25,color:'#687280',font:{family:"'Inter',Arial,sans-serif",size:12}}},x:{border:{color:'#E7E5E1'},grid:{display:false},ticks:{color:'#687280',font:{family:"'Inter',Arial,sans-serif",size:12}}}}}});
@@ -2633,7 +2677,7 @@ function renderRelProjCards(){
       </div>
       <div class="pc-bd">
         <div class="pc-metrics">
-          <div class="pcm"><div class="pcm-l">Readiness</div><div class="pcm-v">${gs!==null?gs+'%':'—'}</div></div>
+          <div class="pcm"><div class="pcm-l">Gate completion</div><div class="pcm-v">${gs!==null?gs+'%':'—'}</div></div>
           <div class="pcm"><div class="pcm-l">Open Issues</div><div class="pcm-v">${fl}</div></div>
           <div class="pcm"><div class="pcm-l">${fwShort()}</div><div class="pcm-v">${adk}/5</div></div>
         </div>
@@ -2713,10 +2757,7 @@ function renderProjAll(){
   const fw=getFramework();const navAk=document.getElementById('nav-adkar-btn');if(navAk)navAk.textContent=fw.name.split(' ')[0];
   const catTitle=document.getElementById('chart-proj-adkar-title');if(catTitle)catTitle.textContent=fwName()+' Assessment';
   renderPGates();renderPDepHM();renderPAdkar();renderPSH();renderPKPIs();renderPOverview();renderPResources();
-  // Show Post-Launch tab if go-live is in the past
-  const p=getProj();const plBtn=document.getElementById('nav-postlaunch');const plSec=document.getElementById('psec-postlaunch');
-  if(p&&projGoLive(p)&&new Date(projGoLive(p))<=new Date()){if(plBtn)plBtn.style.display='';if(plSec)plSec.style.display='';}
-  else{if(plBtn)plBtn.style.display='none';if(plSec)plSec.style.display='none';}
+  const p=getProj();
   if(p&&!isReadOnly&&applyTTDerived(p))renderPKPIs();
   if(isReadOnly)applyReadOnlyRestrictions();
   applyPilotView();
@@ -2758,6 +2799,7 @@ function renderPGates(){
 function setPGate(gid,idx,color){
   const p=getProj();if(!p)return;
   const k=gid+'_'+idx;p.gateState[k]=p.gateState[k]===color?null:color;
+  if(typeof trGateChanged==='function')trGateChanged(k,p.gateState[k]);
   renderPGates();renderPKPIs();touch('proj');schedSave();
   const gate=GATE_DEFS.find(g=>g.id===gid);
   if(gate&&gate.items.every((_,i)=>p.gateState[gid+'_'+i]))showSuccess('Gate assessment recorded. Ready for the next one.');
@@ -2850,11 +2892,14 @@ function renderPAdkar(){
   updatePAdkarSummary();
 }
 function updatePAdkar(k,v){
-  const p=getProj();if(!p)return;p.adkarScores[k]=parseInt(v);
+  const p=getProj();if(!p)return;p.adkarScores[k]=parseInt(v);markAdkarRated(p,k);
   const ve=document.getElementById('pav-'+k);const be=document.getElementById('pab-'+k);
   if(ve)ve.textContent=v;if(be){be.style.width=(parseInt(v)/5*100)+'%';be.style.background=adkarColor(parseInt(v));}
-  updatePAdkarSummary();renderPKPIs();touch('proj');schedSave();showSuccess('ADKAR score saved.');
+  updatePAdkarSummary();renderPKPIs();touch('proj');schedSave();
+  showSuccess(getActiveDims().every(d=>(p.adkarRated||[]).includes(d.key))?'All five dimensions scored. Readiness picture is complete.':'ADKAR score saved.');
 }
+// Records which dimensions were actually rated, so an unrated dimension is never read as a 3.
+function markAdkarRated(p,k){if(!Array.isArray(p.adkarRated))p.adkarRated=[];if(!p.adkarRated.includes(k))p.adkarRated.push(k);}
 function updatePAdkarNote(k,v){const p=getProj();if(!p)return;p.adkarNotes[k]=v;touch('proj');schedSave();}
 function updatePAdkarSummary(){
   const p=getProj();if(!p)return;
@@ -2869,7 +2914,6 @@ function updatePAdkarSummary(){
     :'Critical readiness deficit. Recommend formal escalation to executive sponsor before proceeding.';
   const kpi=document.getElementById('p-kpi-adkar');if(kpi)kpi.textContent=avg+'/5';
   const kpiL=document.getElementById('p-kpi-adkar-label');if(kpiL)kpiL.textContent=fwShort()+' Score';
-  if(dims.every(d=>p.adkarScores[d.key]&&p.adkarScores[d.key]>0))showSuccess('All five dimensions scored. Readiness picture is complete.');
 }
 
 // ═══ ADKAR Guided Assessment Mode ═══
@@ -3021,7 +3065,7 @@ function renderGuidedStep(){
 
 function setGuidedScore(dimKey,score){
   const p=getProj();if(!p)return;
-  p.adkarScores[dimKey]=score;
+  p.adkarScores[dimKey]=score;markAdkarRated(p,dimKey);
   touch('proj');schedSave();
   renderGuidedStep();
 }
@@ -9436,7 +9480,21 @@ function exportStatusReport(){
   let b='<h1>'+e(p.name)+' <span class="rag rag-'+s.rag+'">'+ragLbl+'</span></h1>';
   b+='<div class="meta">'+e(r?r.name:'')+' · Status as of '+today+(p.size?' · Size '+e(p.size):'')+'</div>';
   b+='<table class="kv">'+row('OCM Training lead',e(s.trainers.join(', ')||'Not assigned'))+row('OCM Implementation lead',e(s.impl.join(', ')||'Not assigned'))+row('Go-live',projGoLive(p)?fmtDate(projGoLive(p)):'—')+'</table>';
-  b+='<h2>Training timeline</h2>';
+  // Same decision brief as the Overview screen (js/training-engine.js), so the report and screen agree.
+  if(typeof TE!=='undefined'){
+    TE.migrate(p,{WS,GL,PL_INTERVALS,golive:p.golive||''});const tb=TE.brief(p,{golive:projGoLive(p)}),tt=p.training;
+    const nm=(list,ids)=>(ids||[]).map(id=>{const x=(list||[]).find(y=>String(y.id)===String(id));return x?(x.name||x.title||x.task):'';}).filter(Boolean).join(', ')||'None';
+    const li=(arr,fn,empty)=>arr.length?'<ul>'+arr.map(x=>'<li>'+fn(x)+'</li>').join('')+'</ul>':'<p class="muted">'+empty+'</p>';
+    b+='<h2>Training readiness recommendation</h2><p><strong>'+e(tb.rec.label)+'</strong> · input to release governance. Material development: '+e(tb.dev.label)+'. Training delivery: '+e(TE.READY_STATES[tb.del.state].label)+'.</p>';
+    b+='<table class="kv">'+row('Decision needed',e(tb.decision))+row('Decision authority',e(tb.authority))+row('Evidence last updated',tb.lastEvidence?fmtDate(tb.lastEvidence):'—')+row('Last review',tb.lastReview?fmtDate(tb.lastReview):'—')
+      +row('Affected audiences',e(nm(p.stakeholders,tb.affected.audiences)))+row('Affected scenarios',e(nm(tt.scenarios,tb.affected.scenarios)))+row('Affected deliverables',e(nm(tt.deliverables,tb.affected.deliverables)))+'</table>';
+    b+='<h3>What is blocked and why</h3>'+li(tb.blocked,x=>e(x.text),'No critical condition is blocking delivery.');
+    if(tb.conditions.length)b+='<h3>Conditions</h3>'+li(tb.conditions,x=>e(x.text),'');
+    b+='<h3>What can proceed</h3>'+li(tb.canProceed,x=>e(x.d.title)+(x.mode==='provisional'?' (provisional development only)':''),'No deliverables can proceed yet.');
+    b+='<h3>Required actions</h3>'+li(tb.actions,a=>e(a.title)+' · '+e(a.owner||'No owner')+(a.due?' · due '+fmtDate(a.due):''),'No open actions.');
+    b+='<h3>Changes since '+(tb.since?'the last review':'records began')+'</h3>'+li(tb.changes.slice(0,10),h=>e(h.text)+' ('+(h.date?fmtDate(h.date):'')+')','No changes recorded.');
+  }
+  b+='<h2>Standard-duration estimate</h2>';
   if(t.error)b+='<p class="muted">'+(t.error==='nosize'?'Project size not set.':'Audiences not selected.')+'</p>';
   else{
     b+='<table class="kv">'+row('Course',e(t.course.label)+(t.binding?' · binding audience '+e(t.binding.a.name)+' ('+t.binding.cohorts+' cohorts)':''))
@@ -11796,7 +11854,7 @@ function genReadinessRec(aiNarrative,audience){
   y=pdfCheckPage(doc,y,w,h,pg,50);
   y=pdfSection(doc,y,'3. Evidence Dashboard',w);
   const metrics=[
-    ['Readiness',(gate||0)+'%',gate>=80?'Pass':gate>=50?'Marginal':'Fail'],
+    ['Gate completion (legacy)',(gate||0)+'%',gate>=80?'Pass':gate>=50?'Marginal':'Fail'],
     [fwShort()+' Average',adkar+'/5',adkar>=3.5?'Pass':adkar>=2.5?'Marginal':'Fail'],
     ['Active Risk Flags',flags.length+'',flags.length===0?'Pass':flags.length<=2?'Marginal':'Fail'],
     ['Open Gaps',gaps.length+' ('+critGaps.length+' critical)',critGaps.length===0?'Pass':'Fail'],
@@ -12075,7 +12133,7 @@ function aiFetch(url,opts){
 function applyAIMode(){document.body.classList.toggle('ai-off',!aiAllowed());}
 
 // ── Pilot view: live projects show only the pilot tabs unless "All tabs" is chosen ──
-const PILOT_TABS=['overview','trainplan','adoption','postlaunch','sustain','resources'];
+const PILOT_TABS=['overview','deps','learndev','readiness','actions','milestones','trainplan','adoption','postlaunch','sustain','resources'];
 function pilotOn(){
   let pref=null;try{pref=localStorage.getItem('adoptiq_pilot_view');}catch(e){}
   return pref?pref==='on':!isDemoMode;
@@ -12092,6 +12150,7 @@ function applyPilotView(){
   const t=document.getElementById('pilot-toggle');
   if(t){t.textContent=on?'All tabs':'Pilot view';t.title=on?'Show every project tab':'Show only the pilot tabs';}
   if(activeHidden){const first=document.querySelector('#proj-nav-tabs .nav-btn');if(first)showProjTab('overview',first);}
+  if(typeof trSyncNav==='function'){const a=document.querySelector('#proj-nav-tabs .nav-btn.active');const m=a&&(a.getAttribute('onclick')||'').match(/showProjTab\('(\w+)'/);trSyncNav(m?m[1]:'overview');}
   checkNavOverflow();
 }
 function togglePilotView(){
@@ -12609,6 +12668,8 @@ async function loadDemoData(){
   // The demo was written as of DEMO_AUTHORED. Shift every date by the same number of
   // days so the fictional timeline stays current (spacing between dates is unchanged).
   shiftDemoDates(releases,DEMO_AUTHORED);
+  // Training-led demo projects are dated relative to today, so they are added after the shift.
+  if(typeof trSeedDemo==='function')trSeedDemo();
 
   await saveData();setDemoMode(true);renderPortfolio();renderAlerts();showSuccess('You\u2019re in demo mode. Explore freely \u2014 nothing here is real data.');
   initTopBrand();
@@ -12766,6 +12827,8 @@ function applyReadOnlyRestrictions(){
     const isCard=el.closest('.r-card')||el.closest('.pc');
     // Navigation and evidence links stay usable for viewers.
     if(el.classList.contains('dz-keep'))return;
+    // Training views and primary tabs guard edits in code (trCanEdit); their buttons open records read-only.
+    if(el.classList.contains('pg-btn')||el.closest('.tr-view'))return;
     if(!isNav&&!isExport&&!isBack&&!isOpen&&!isCard){
       el.disabled=true;el.style.opacity='0.5';el.style.cursor='not-allowed';
     }
@@ -12974,7 +13037,7 @@ async function renderTrendCharts(){
   };
   const kpiEl=document.getElementById('trend-kpis');
   if(kpiEl)kpiEl.innerHTML=`
-    <div class="trend-kpi"><div class="trend-kpi-label">Readiness</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,' pts',false)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">Gate completion (legacy)</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,' pts',false)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">Open gate items</div><div class="trend-kpi-val">${curFlags!=null?curFlags:'—'}</div>${deltaHtml(flagDelta,'',true)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">${fwShort()} Score</div><div class="trend-kpi-val">${curAdkar!=null?curAdkar+'/5':'—'}</div>${deltaHtml(adkarDelta,'',false)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">Weeks Tracked</div><div class="trend-kpi-val">${recent.length}</div><span class="trend-delta trend-neutral">${labels[0]} — ${labels[labels.length-1]}</span></div>
