@@ -83,7 +83,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://unpkg.com">
 
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
@@ -97,6 +97,8 @@
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
 <link rel="stylesheet" href="css/design-tokens.css">
 <link rel="stylesheet" href="css/adoptiq.css">
+<link rel="stylesheet" href="css/brand.css">
+<link rel="stylesheet" href="css/system.css">
 </head>
 <body data-density="comfortable">
 <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -106,142 +108,171 @@
      LANDING PAGE
 ══════════════════════════════════════════ -->
 <div id="v-landing" class="active">
-  <nav class="lp-nav">
+  <nav class="lp-nav" aria-label="Site">
     <div class="lp-nav-i">
-      <div class="lp-nav-brand"><span class="lp-nav-logo">A</span><span class="lp-nav-name">AdoptIQ</span></div>
+      <div class="lp-nav-brand"><span class="lp-nav-name">AdoptIQ</span><span class="lp-nav-by">Providence Consulting Firm</span></div>
       <div class="lp-nav-right">
-        <a href="#lp-features" class="lp-nav-link">Features</a>
-        <a href="#lp-how" class="lp-nav-link">How It Works</a>
+        <a href="#lp-chain" class="lp-nav-link">Evidence chain</a>
+        <a href="#lp-methods" class="lp-nav-link">Methodology</a>
+        <a href="#lp-features" class="lp-nav-link">Capabilities</a>
         <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle light/dark theme"><span id="theme-icon-lp"><i class="ph ph-moon"></i></span></button>
-        <button class="lp-nav-signin" onclick="landingToLogin()">Sign In</button>
+        <button class="lp-nav-signin" onclick="landingToLogin()">Sign in</button>
       </div>
     </div>
   </nav>
 
-  <section class="lp-hero">
-    <div class="lp-hero-i">
-      <div class="lp-hero-text">
-        <p class="lp-eyebrow">For OCM Practitioners Who Need Evidence, Not Opinions</p>
-        <h1 class="lp-h1">Leadership asks if people are ready.<span class="lp-h1-line2">Now you have the answer.</span></h1>
-        <p class="lp-hero-sub">You already know who's struggling. You've seen the anxiety in the room, heard the questions no one's asking out loud, watched training completion rates mask real gaps. AdoptIQ turns what you already know into evidence. Structured, scored, and ready for the table when it matters.</p>
-        <div class="lp-hero-ctas">
-          <button class="lp-btn-primary" onclick="landingToDemo()">See It With Real Data</button>
-          <button class="lp-btn-secondary" onclick="landingBookWalkthrough()">Talk to the Team</button>
+  <main id="main-landing">
+  <section class="lx-hero" aria-labelledby="lx-h1">
+    <div class="lx-wrap lx-hero-i">
+      <div class="lx-hero-text">
+        <p class="lx-eyebrow">Adoption intelligence for high-stakes change</p>
+        <h1 class="lx-h1" id="lx-h1">Turn change-readiness judgment into decision-ready evidence.</h1>
+        <p class="lx-lead">AdoptIQ gives change, implementation, training, and enablement leaders a structured way to connect frontline signals, readiness gates, learning outcomes, risks, and executive decisions.</p>
+        <div class="lx-ctas">
+          <button class="btn-gold lx-btn-lg" onclick="landingToDemo()">Explore the readiness workspace</button>
+          <button class="btn-outline lx-btn-lg" onclick="landingOpenBrief()">View an executive decision brief</button>
         </div>
       </div>
-      <div class="lp-hero-img">
-        <div class="lp-screenshot"><img src="img/hero-dashboard.png" alt="AdoptIQ portfolio dashboard showing readiness KPIs, executive summary, and risk distribution" style="width:100%;height:100%;object-fit:cover;border-radius:var(--r10)"></div>
+      <figure class="lx-proof" aria-label="Sample AdoptIQ portfolio view">
+        <div class="lx-proof-bar"><span>Portfolio</span><span class="lx-proof-tag">Sample workspace · fictional data</span></div>
+        <div class="lx-proof-body">
+          <div class="erb erb-a lx-proof-erb">
+            <div class="erb-eye">Executive readiness brief</div>
+            <div class="erb-pos">Portfolio position <span class="st st-a">Watch</span></div>
+            <p class="erb-narr">Two releases go live within 30 days. Delivery readiness is stable, but UAT closure and stakeholder confidence are below threshold for Core Banking Modernization.</p>
+            <p class="ev-line"><strong>Evidence:</strong> 3 open blocking issues · 2 groups below readiness threshold · gate review in 5 days</p>
+            <div class="erb-decision lx-proof-dec"><div class="erb-decision-gold"></div><div class="erb-decision-t">Decision needed: confirm remediation ownership before the next gate review.</div></div>
+          </div>
+          <table class="dt lx-proof-dt">
+            <thead><tr><th>Release</th><th>Status</th><th>Go-live</th><th>Readiness</th></tr></thead>
+            <tbody>
+              <tr><td>Q3 EHR Migration</td><td><span class="st st-g">On track</span></td><td class="mono">41 days</td><td class="mono">84%</td></tr>
+              <tr><td>Core Banking Modernization</td><td><span class="st st-a">Watch</span></td><td class="mono">22 days</td><td class="mono">68%</td></tr>
+              <tr><td>ERP Manufacturing Cutover</td><td><span class="st st-c">Critical</span></td><td class="mono">9 days</td><td class="mono">51%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </figure>
+    </div>
+    <div class="lx-wrap"><p class="lx-proofline">Not another methodology. The operating system that makes the methods you already use measurable, traceable, and defensible.</p></div>
+  </section>
+
+  <section class="lx-sec lx-problem" aria-labelledby="lx-problem-h">
+    <div class="lx-wrap">
+      <h2 class="sr-only" id="lx-problem-h">The problem AdoptIQ solves</h2>
+      <div class="lx-split">
+        <div><p class="lx-split-k">The practitioner's view</p><p class="lx-split-t">You know the change is at risk.</p><p class="lx-split-d">You were in the sessions. You heard the questions nobody asked out loud and saw completion rates hide real gaps.</p></div>
+        <div><p class="lx-split-k">The leadership question</p><p class="lx-split-t">The challenge is proving it early enough for leaders to act.</p><p class="lx-split-d">Steering committees act on evidence they can trace. Instinct, however well calibrated, rarely survives the room on its own.</p></div>
       </div>
     </div>
   </section>
 
-  <section class="lp-problem">
-    <div class="lp-section-i">
-      <h2 class="lp-h2">You know the change is at risk. The problem is proving it.</h2>
-      <p class="lp-problem-text">Most OCM practitioners are carrying the same thing: a well-calibrated instinct built from years of fieldwork, and almost nothing to back it up in a stakeholder meeting. The training numbers look fine. The survey scores are acceptable. But you were in those sessions. You know what the data isn't capturing. AdoptIQ gives that knowledge a structure so what you know becomes something you can show.</p>
+  <section class="lx-sec lx-chain-sec" id="lp-chain" aria-labelledby="lx-chain-h">
+    <div class="lx-wrap">
+      <p class="lx-eyebrow">From practitioner observation to executive action</p>
+      <h2 class="lx-h2" id="lx-chain-h">The Readiness Evidence Chain</h2>
+      <ol class="lx-chain">
+        <li><span class="lx-chain-n">01</span><div><h3>Signal</h3><p>What practitioners observe in meetings, surveys, training, testing, and stakeholder conversations.</p></div></li>
+        <li><span class="lx-chain-n">02</span><div><h3>Assessment</h3><p>Structured readiness, ADKAR, gate, and learning evaluation.</p></div></li>
+        <li><span class="lx-chain-n">03</span><div><h3>Risk</h3><p>Traceable impacts, dependencies, blockers, and adoption exposure.</p></div></li>
+        <li><span class="lx-chain-n">04</span><div><h3>Action</h3><p>Targeted intervention, owner, and timing.</p></div></li>
+        <li><span class="lx-chain-n">05</span><div><h3>Decision</h3><p>Go/no-go recommendation, resource decision, or executive escalation.</p></div></li>
+        <li><span class="lx-chain-n">06</span><div><h3>Outcome</h3><p>Measured post-launch adoption, reinforcement, and value realization.</p></div></li>
+      </ol>
+      <p class="lx-chain-note">Each link keeps its source. When someone asks “how do you know?”, the answer is one click back along the chain.</p>
     </div>
   </section>
 
-  <section class="lp-features" id="lp-features">
-    <div class="lp-section-i" style="max-width:1100px">
-      <p class="lp-eyebrow">What AdoptIQ Does</p>
-      <h2 class="lp-h2">Built around the work OCM actually does, not how software thinks it works</h2>
-      <div class="lp-feat-grid">
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-          <h3 class="lp-feat-title">Gate Reviews That Mean Something</h3>
-          <p class="lp-feat-desc">Not a checklist. A structured record of what was verified, what was deferred, and what the evidence actually says so your go/no-go recommendation holds up in the room.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
-          <h3 class="lp-feat-title">The Signals No One Else Is Tracking</h3>
-          <p class="lp-feat-desc">Trust levels. Anxiety signals. Engagement outliers. The things you learn in hallway conversations and working sessions. Logged, scored, and tied to readiness instead of lost in your notes.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
-          <h3 class="lp-feat-title">Training Completions Don't Tell You Enough</h3>
-          <p class="lp-feat-desc">Track whether behavior actually changed, not just whether someone clicked through a module. Kirkpatrick levels 1 through 4, tied directly to your readiness picture.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <h3 class="lp-feat-title">Early Warning, Not Postmortem</h3>
-          <p class="lp-feat-desc">Requirements disputes. Testing gaps. Key SMEs going quiet. AdoptIQ tracks the lifecycle signals that show up weeks before adoption fails, when there's still time to act.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
-          <h3 class="lp-feat-title">An Answer to "How Do You Know?"</h3>
-          <p class="lp-feat-desc">Every score traces back to a source. Every recommendation has a proof point. When that question comes across the table, you open AdoptIQ, not a spreadsheet you built at midnight.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-          <h3 class="lp-feat-title">Across Every Release, Not Just the Loudest One</h3>
-          <p class="lp-feat-desc">When three releases are landing in the same quarter, someone's going to absorb too much change at once. AdoptIQ shows you where saturation is building before it becomes a crisis.</p>
-        </div>
+  <section class="lx-sec lx-methods" id="lp-methods" aria-labelledby="lx-methods-h">
+    <div class="lx-wrap lx-methods-i">
+      <div>
+        <p class="lx-eyebrow">Methodology architecture</p>
+        <h2 class="lx-h2" id="lx-methods-h">Built on the methods practitioners already use.</h2>
+        <p class="lx-body">AdoptIQ does not replace your methodology. It gives it a durable evidence layer.</p>
+      </div>
+      <div class="dt-wrap">
+        <table class="dt">
+          <thead><tr><th scope="col">Discipline</th><th scope="col">Methods</th><th scope="col">What AdoptIQ records</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Readiness and stakeholder transition</th><td>ADKAR · Bridges</td><td>Dimension scores by affected group, with the observations behind them</td></tr>
+            <tr><th scope="row">Delivery governance and readiness gates</th><td>PMI · lifecycle / SDLC governance</td><td>Gate criteria verified, deferred, or failed, and who signed off</td></tr>
+            <tr><th scope="row">Learning and behavior change</th><td>Kirkpatrick</td><td>Completion, assessment results, observed behavior, and outcomes (L1–L4)</td></tr>
+            <tr><th scope="row">Enterprise alignment and reinforcement</th><td>Kotter · McKinsey 7S</td><td>Sponsorship, structure, and capacity signals that shape readiness</td></tr>
+            <tr class="lx-role"><th scope="row">AdoptIQ's role</th><td colspan="2">Captures evidence, connects signals across releases, and supports the go/no-go decision.</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </section>
 
-  <section class="lp-how" id="lp-how">
-    <div class="lp-section-i" style="max-width:1000px">
-      <p class="lp-eyebrow">How It Works</p>
-      <h2 class="lp-h2">Structured around the way practitioners actually work</h2>
-      <div class="lp-steps">
-        <div class="lp-step">
-          <div class="lp-step-num">1</div>
-          <h3 class="lp-step-title">Map Your Portfolio</h3>
-          <p class="lp-step-desc">Build out your releases and the projects inside them. Map the workstreams, identify the affected groups, and set your gate checkpoints before the work starts, not after something goes wrong.</p>
-        </div>
-        <div class="lp-step-arrow"><i class="ph ph-arrow-right"></i></div>
-        <div class="lp-step">
-          <div class="lp-step-num">2</div>
-          <h3 class="lp-step-title">Log What You're Seeing</h3>
-          <p class="lp-step-desc">ADKAR scores, trust signals, training outcomes, lifecycle flags. Enter what you're observing as you observe it. AdoptIQ builds the readiness picture as you go, not in a scramble before the steering committee.</p>
-        </div>
-        <div class="lp-step-arrow"><i class="ph ph-arrow-right"></i></div>
-        <div class="lp-step">
-          <div class="lp-step-num">3</div>
-          <h3 class="lp-step-title">Walk Into the Room Prepared</h3>
-          <p class="lp-step-desc">Pull an executive dashboard, a go/no-go brief, or a full handoff report in minutes. Every recommendation is backed by the evidence you logged, not a judgment call you'll have to defend on the fly.</p>
-        </div>
+  <section class="lx-sec lx-features" id="lp-features" aria-labelledby="lx-feat-h">
+    <div class="lx-wrap">
+      <p class="lx-eyebrow">Capabilities</p>
+      <h2 class="lx-h2" id="lx-feat-h">What changes when readiness has evidence behind it</h2>
+      <div class="lx-feat">
+        <article>
+          <h3>Gate reviews that hold up in the room.</h3>
+          <p>A structured record of what was verified, what was deferred, and what the evidence says, attached to every readiness gate.</p>
+          <div class="lx-crop"><div class="lx-gate"><span>Gate 3 · Post-Dev / Pre-UAT</span><span class="st st-a">2 of 6 deferred</span></div><div class="lx-gate"><span>Gate 4 · Post-UAT / Pre-Go-Live</span><span class="st st-n">Not started</span></div></div>
+          <p class="lx-outcome">Outcome: a go/no-go recommendation you can trace to its criteria.</p>
+        </article>
+        <article>
+          <h3>Stakeholder signals that don't get lost in meeting notes.</h3>
+          <p>Trust, anxiety, and engagement observations are logged against the affected group and feed its readiness score.</p>
+          <div class="lx-crop"><div class="lx-sig"><span>Regional Operations</span><span class="mono">ADKAR 2.6 / 5</span><span class="trend trend-down">▼ 0.4</span></div><div class="lx-sig"><span>Finance Operations</span><span class="mono">ADKAR 3.8 / 5</span><span class="trend trend-flat">— 0.0</span></div></div>
+          <p class="lx-outcome">Outcome: concerns surface as evidence, not anecdotes.</p>
+        </article>
+        <article>
+          <h3>Training completion is not adoption.</h3>
+          <p>Track learning, behavior change, reinforcement, and outcomes, not merely whether a learner completed a module.</p>
+          <div class="lx-crop"><div class="lx-kirk"><span>L1 Reaction</span><span>L2 Learning</span><span>L3 Behavior</span><span>L4 Results</span></div></div>
+          <p class="lx-outcome">Outcome: readiness scored on what people can do, not what they attended.</p>
+        </article>
+        <article>
+          <h3>Early lifecycle warnings before adoption fails.</h3>
+          <p>Requirements disputes, testing gaps, and quiet SMEs show up weeks before go-live, while there is still time to act.</p>
+          <div class="lx-crop"><div class="lx-sig"><span>UAT defects affecting trained workflows</span><span class="st st-r">3 open</span></div></div>
+          <p class="lx-outcome">Outcome: interventions start before the post-mortem would have.</p>
+        </article>
+        <article>
+          <h3>Cross-release change load and capacity.</h3>
+          <p>When several releases land on the same groups in one quarter, AdoptIQ shows where saturation is building and who is carrying the work.</p>
+          <div class="lx-crop"><div class="lx-load"><span style="width:38%"></span><span style="width:27%"></span><span class="lx-load-hot" style="width:22%"></span></div><div class="lx-load-l"><span>Q3 change load · Regional Operations</span><span class="mono">87% of capacity</span></div></div>
+          <p class="lx-outcome">Outcome: sequencing decisions based on load, not on who escalated loudest.</p>
+        </article>
+        <article>
+          <h3>Executive-ready go/no-go and handoff briefs.</h3>
+          <p>Export a decision brief or full handoff report built from the evidence already logged.</p>
+          <div class="lx-crop"><div class="lx-brief"><span class="lx-brief-t">Go/no-go brief · Core Banking Modernization</span><span>Position · Evidence · Risks · Decision required</span></div></div>
+          <p class="lx-outcome">Outcome: the brief is ready before the meeting, not built the night before.</p>
+        </article>
       </div>
     </div>
   </section>
 
-  <section class="lp-video">
-    <div class="lp-section-i">
-      <p class="lp-eyebrow">See It In Action</p>
-      <h2 class="lp-h2">Two minutes. Real data. No sales pitch.</h2>
-      <div class="lp-video-wrap">
-        <img src="img/walkthrough.gif" alt="AdoptIQ platform walkthrough showing portfolio dashboard, lifecycle signals, stakeholder trust tracking, and complexity planning" style="width:100%;border-radius:var(--r10);border:1px solid rgba(255,255,255,0.1);box-shadow:0 20px 60px rgba(0,0,0,0.4)" loading="lazy">
-      </div>
+  <section class="lx-sec lx-walk" aria-labelledby="lx-walk-h">
+    <div class="lx-wrap">
+      <p class="lx-eyebrow">Product walkthrough</p>
+      <h2 class="lx-h2" id="lx-walk-h">Two minutes in the workspace</h2>
+      <p class="lx-body">Recorded on an earlier version of the interface; the workflow is the same.</p>
+      <div class="lx-walk-media"><img src="img/walkthrough.gif" alt="AdoptIQ walkthrough: portfolio dashboard, lifecycle signals, stakeholder tracking and complexity planning" loading="lazy"></div>
     </div>
   </section>
 
-  <section class="lp-credibility">
-    <div class="lp-section-i">
-      <h2 class="lp-h2">The methodologies you already use.<br>The structure you've been missing.</h2>
-      <p class="lp-cred-text">AdoptIQ was built by consultants who got tired of translating their fieldwork into slide decks the night before a steering committee. It's not a new methodology. It's the infrastructure that makes the methodologies you already know measurable, shareable, and defensible. ADKAR for readiness dimensions. PMI for project governance. Kirkpatrick for training outcomes. Kotter, Bridges, and McKinsey 7S woven into the assessment framework.</p>
-      <div class="lp-method-logos">
-        <span class="lp-method-badge">ADKAR</span>
-        <span class="lp-method-badge">Bridges</span>
-        <span class="lp-method-badge">Kirkpatrick</span>
-        <span class="lp-method-badge">Kotter</span>
-        <span class="lp-method-badge">McKinsey 7S</span>
-        <span class="lp-method-badge">PMI</span>
-      </div>
-    </div>
+  <section class="lx-sec lx-cred" aria-label="Who built AdoptIQ">
+    <div class="lx-wrap"><p class="lx-cred-t">Built by practitioners who have had to defend readiness recommendations in the room.</p></div>
   </section>
 
-  <section class="lp-final-cta">
-    <div class="lp-section-i">
-      <h2 class="lp-h2">The next time someone asks if the organization is ready, have the answer.</h2>
-      <p class="lp-final-sub">Explore a live portfolio with real data, or spend 30 minutes with our team walking through your specific program.</p>
-      <div class="lp-hero-ctas">
-        <button class="lp-btn-primary" onclick="landingToDemo()">See It With Real Data</button>
-        <button class="lp-btn-secondary" onclick="landingBookWalkthrough()">Talk to the Team</button>
+  <section class="lx-final" aria-labelledby="lx-final-h">
+    <div class="lx-wrap">
+      <h2 class="lx-final-h" id="lx-final-h">The next time leadership asks whether the organization is ready, bring evidence, not a spreadsheet built the night before.</h2>
+      <div class="lx-ctas">
+        <button class="btn-gold lx-btn-lg" onclick="landingToDemo()">Explore the readiness workspace</button>
+        <button class="btn-outline lx-btn-lg lx-on-dark" onclick="landingBookWalkthrough()">Schedule a working session</button>
       </div>
     </div>
   </section>
+  </main>
 
   <footer class="lp-footer">
     <div class="lp-footer-i">
@@ -288,7 +319,7 @@
       <div style="margin-top:20px;padding:14px;border-top:1px solid var(--border);text-align:center">
         <div style="font-size:11px;color:var(--ink-60);margin-bottom:10px">Want to explore first?</div>
         <button class="btn-outline" style="width:100%" onclick="(async()=>{await loadDemoData();hideLogin();document.getElementById('v-portfolio').classList.add('active');setDemoMode(true);})()">Try Demo</button>
-        <div style="font-size:10px;color:var(--ink-35);margin-top:8px">Sample data for exploration only</div>
+        <div style="font-size:11px;color:var(--ink-35);margin-top:8px">Sample data for exploration only</div>
       </div>
       <div class="login-err" id="login-err"></div>
     </div>
@@ -350,7 +381,38 @@
 <!-- ══════════════════════════════════════════
      PORTFOLIO VIEW
 ══════════════════════════════════════════ -->
-<div id="v-portfolio" role="main">
+<!-- ══════════════════════════════════════════
+     APP SHELL: sidebar (see docs/ADOPTIQ_DESIGN_SYSTEM.md)
+══════════════════════════════════════════ -->
+<aside class="sb" id="app-sidebar" aria-label="AdoptIQ navigation">
+  <div class="sb-brand">
+    <div class="sb-word">Adopt<b>IQ</b></div>
+    <div class="sb-desc">Change Intelligence</div>
+  </div>
+  <nav class="sb-nav" aria-label="Sections">
+    <button class="sb-item" data-sb="command" onclick="sbNav('command')" aria-current="page"><i class="ph ph-house"></i><span>Command Center</span></button>
+    <button class="sb-item" data-sb="initiatives" onclick="sbNav('initiatives')"><i class="ph ph-stack"></i><span>Initiatives</span></button>
+    <button class="sb-item" data-sb="people" onclick="sbNav('people')"><i class="ph ph-users-three"></i><span>People &amp; Impacts</span></button>
+    <button class="sb-item" data-sb="risk" onclick="sbNav('risk')"><i class="ph ph-warning"></i><span>Readiness &amp; Risk</span></button>
+    <button class="sb-item" data-sb="training" onclick="sbNav('training')"><i class="ph ph-graduation-cap"></i><span>Training &amp; Enablement</span></button>
+    <button class="sb-item" data-sb="stakeholders" onclick="sbNav('stakeholders')"><i class="ph ph-user-circle-gear"></i><span>Stakeholders</span></button>
+    <button class="sb-item" data-sb="adoption" onclick="sbNav('adoption')"><i class="ph ph-chart-line-up"></i><span>Adoption &amp; Outcomes</span></button>
+    <button class="sb-item" data-sb="reports" onclick="sbNav('reports')"><i class="ph ph-file-text"></i><span>Reports</span></button>
+  </nav>
+  <div class="sb-foot">
+    <div class="sb-tools" id="sb-tools">
+      <button onclick="toggleTheme()" aria-label="Toggle light or dark theme"><i class="ph ph-moon"></i> Theme</button>
+      <button class="btn-signout" onclick="signOut()">Sign out</button>
+    </div>
+    <button class="sb-user btn-profile" onclick="openProfile()" aria-label="Open your profile">
+      <span class="sb-av" id="sb-av">·</span>
+      <span><span class="sb-uname" id="sb-uname" style="display:block">Profile</span><span class="sb-urole" id="sb-urole">Administrator</span></span>
+    </button>
+  </div>
+</aside>
+<div class="sb-scrim" onclick="document.body.classList.remove('sb-drawer')"></div>
+
+<div id="v-portfolio" role="main" data-page="command">
   <div id="viewer-banner-p" class="viewer-banner" style="display:none" role="alert"><span>View-Only Mode</span> — You are viewing a shared, read-only version of this dashboard.</div>
   <header class="top-bar">
     <div class="top-bar-i">
@@ -366,7 +428,7 @@
           <span id="theme-icon"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl">Dark</span>
         </button>
-        <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
+        <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <select id="view-role-select" class="role-select" aria-label="View role" onchange="applyViewRole(this.value);renderPortfolio()">
           <option value="admin">Administrator</option>
           <option value="staff">Staff / Team</option>
@@ -378,6 +440,9 @@
       </div>
     </div>
   </header>
+  <div id="cc" class="cc" aria-labelledby="cc-h1"></div>
+  <div id="pf-section"></div>
+  <div id="pf-initiatives">
 
   <div class="action-strip">
     <div class="action-strip-i">
@@ -386,9 +451,9 @@
         <span class="save-ind" id="save-ind">Saved</span>
       </div>
       <div class="action-strip-sec">
-        <button class="btn-outline btn-share" onclick="openShareModal()" style="font-size:10px;padding:6px 14px" title="Share this dashboard publicly">Share</button>
-        <button class="btn-outline btn-export" onclick="exportHandoffPDF()" style="font-size:10px;padding:6px 14px" title="Export complete portfolio as branded PDF">Handoff PDF</button>
-        <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
+        <button class="btn-outline btn-share" onclick="openShareModal()" style="font-size:11px;padding:6px 14px" title="Share this dashboard publicly">Share</button>
+        <button class="btn-outline btn-export" onclick="exportHandoffPDF()" style="font-size:11px;padding:6px 14px" title="Export complete portfolio as branded PDF">Handoff PDF</button>
+        <button class="btn-outline" onclick="openAuditLog()" style="font-size:11px;padding:6px 14px">Audit Log</button>
       </div>
     </div>
   </div>
@@ -400,20 +465,23 @@
   <div class="aiq-panel" id="aiq-bar">
     <div class="aiq-panel-inner">
       <div class="aiq-search-wrap">
-        <span class="aiq-icon"><i class="ph ph-sparkle"></i></span>
-        <input type="text" id="aiq-input" class="aiq-input" aria-label="Ask AdoptIQ" placeholder="Ask AdoptIQ anything about your portfolio…" autocomplete="off" onkeydown="if(event.key==='Enter')askAdoptIQ()">
-        <button class="aiq-go" id="aiq-go-btn" onclick="askAdoptIQ()">Ask AIQ</button>
+        <span class="aiq-icon"><i class="ph ph-magnifying-glass"></i></span>
+        <input type="text" id="aiq-input" class="aiq-input" aria-label="Ask AdoptIQ" placeholder="Ask a question about this portfolio, e.g. which release has the lowest readiness?" autocomplete="off" onkeydown="if(event.key==='Enter')askAdoptIQ()">
+        <button class="aiq-go" id="aiq-go-btn" onclick="askAdoptIQ()">Ask</button>
       </div>
       <div class="aiq-chips" id="aiq-chips"></div>
     </div>
   </div>
   <div class="aiq-messages" id="aiq-answer-area" style="display:none"></div>
   <!-- Mobile NLQ FAB -->
-  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ" aria-label="Open AIQ Analyst"><i class="ph ph-sparkle"></i></button>
+  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ" aria-label="Ask a question about this portfolio"><i class="ph ph-magnifying-glass"></i></button>
 
   <div class="port-body" id="main-content">
+    <div id="port-brief"></div>
+    <div id="rel-radar"></div>
     <div id="what-data-tells"></div>
-    <div class="prog-strip">
+    <!-- Superseded by the Executive Readiness Brief and Release Radar; kept so existing renderers still run -->
+    <div class="prog-strip" style="display:none">
       <div class="ps-card cn"><div class="ps-lbl">Active Releases</div><div class="ps-val" id="ps-total">0</div><div class="ps-sub">Across all agencies</div></div>
       <div class="ps-card cr"><div class="ps-lbl">Total Open Issues</div><div class="ps-val" id="ps-flags">0</div><div class="ps-sub">Across all releases</div></div>
       <div class="ps-card ca"><div class="ps-lbl">Releases At Risk</div><div class="ps-val" id="ps-atrisk">0</div><div class="ps-sub" id="ps-crit-sub">Including critical</div></div>
@@ -421,23 +489,25 @@
       <div class="ps-card cb"><div class="ps-lbl">Nearest Go-Live</div><div class="ps-val" id="ps-near-d" style="font-size:20px;padding-top:6px;letter-spacing:0">—</div><div class="ps-sub" id="ps-near-r">No go-live dates set</div></div>
     </div>
     <div style="margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye overline">Active Releases</div><div class="sec-ttl">Release Portfolio</div></div></div>
-      <div id="rel-grid-wrap" class="stagger-children"></div>
+      <details class="dz-details" id="rel-cards-sec"><summary><span class="dz-details-t">Release cards</span><span class="dz-details-s">Reorder, open, or remove releases</span></summary>
+      <div id="rel-grid-wrap" class="stagger-children"></div></details>
     </div>
     <!-- EXECUTIVE DASHBOARD -->
     <div id="exec-dash" style="display:none;margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye overline">Executive Summary</div><div class="sec-ttl">Portfolio Health Dashboard</div></div></div>
-      <div id="exec-rag-summary" style="margin-bottom:16px"></div>
+      <div class="sec-head"><div><div class="sec-eye overline">Supporting analysis</div><div class="sec-ttl">Readiness and risk detail</div></div></div>
+      <div id="exec-rag-summary" style="display:none"></div>
       <div class="exec-dash-grid stagger-children">
         <div class="exec-card">
           <div class="exec-card-title">Overall Readiness</div>
           <div class="exec-chart-wrap"><canvas id="chart-port-readiness" role="img" aria-label="Portfolio readiness donut chart"></canvas></div>
+          <p class="chart-cap" id="cap-port-readiness"></p>
         </div>
         <div class="exec-card">
           <div class="exec-card-title">Risk by Group</div>
           <div class="exec-chart-wrap"><canvas id="chart-port-risk" role="img" aria-label="Risk distribution donut chart"></canvas></div>
+          <p class="chart-cap" id="cap-port-risk"></p>
         </div>
-        <div class="exec-card exec-card-wide">
+        <div class="exec-card exec-card-wide" style="display:none">
           <div class="exec-card-title">Attention Required</div>
           <div id="exec-attention" class="exec-attention-list"></div>
         </div>
@@ -495,10 +565,12 @@
             <div class="exec-card-title">Readiness Trend</div>
             <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-gate" role="img" aria-label="Gate readiness trend line chart"></canvas></div>
             <div class="trend-chart-note">Dashed line = 80% go-live ready target</div>
+            <p class="chart-cap" id="cap-trend-gate"></p>
           </div>
           <div class="exec-card">
             <div class="exec-card-title">Open Issues Trend</div>
             <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-flags" role="img" aria-label="Risk flags trend line chart"></canvas></div>
+            <p class="chart-cap" id="cap-trend-flags"></p>
           </div>
           <div class="exec-card">
             <div class="exec-card-title" id="trend-adkar-title">ADKAR Score Trend</div>
@@ -588,7 +660,7 @@
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
                     <div>
                       <div class="sf-title">Saturation Forecast</div>
-                      <div class="sf-subtitle">AI-powered change load prediction &amp; sequencing</div>
+                      <div class="sf-subtitle">Readiness forecast: change-load prediction and sequencing</div>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                       <button class="sf-mode-btn sf-mode-active" id="sf-btn-forecast" onclick="switchSFMode('forecast')">Forecast</button>
@@ -599,9 +671,9 @@
                   <div id="sf-forecast-panel">
                     <div id="sf-forecast-content" class="sf-content-area">
                       <div class="sf-empty-state">
-                        <div style="font-size:28px;margin-bottom:8px">📊</div>
+                        
                         <div class="sf-title" style="font-size:13px;margin-bottom:4px">Forecast Change Load</div>
-                        <div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">AI analyzes your portfolio timeline to predict stakeholder saturation peaks</div>
+                        <div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">Pattern-based observation: reads your portfolio timeline to predict stakeholder saturation peaks</div>
                         <button class="sf-analyze-btn" onclick="runSaturationForecast()">Generate Forecast</button>
                       </div>
                     </div>
@@ -612,7 +684,7 @@
                   <div id="sf-sequencing-panel" style="display:none">
                     <div id="sf-sequencing-content" class="sf-content-area"></div>
                   </div>
-                  <div class="sf-disclaimer">AI-generated analysis — verify recommendations with project stakeholders before making scheduling decisions.</div>
+                  <div class="sf-disclaimer">Assisted insight. Use professional judgment and validate recommendations with project stakeholders.</div>
                 </div>
               </div>
             </div>
@@ -621,6 +693,7 @@
       </details>
     </div>
   </div>
+  </div><!-- /#pf-initiatives -->
   <footer class="page-footer">© 2026 Providence Consulting Firm, LLC &nbsp;|&nbsp; AdoptIQ &nbsp;|&nbsp; Proprietary Methodology</footer>
 </div>
 
@@ -629,7 +702,7 @@
   <div class="modal-box" style="max-width:640px">
     <div class="modal-ttl">Audit Log</div>
     <div class="modal-sub">Last 50 actions across your portfolio</div>
-    <div id="audit-log-body" style="max-height:400px;overflow-y:auto;margin:16px 0"><div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet.</p></div></div>
+    <div id="audit-log-body" style="max-height:400px;overflow-y:auto;margin:16px 0"><div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet. Changes made in AdoptIQ appear here as an audit trail.</p></div></div>
     <div class="modal-acts">
       <button class="btn-ghost" onclick="renderAuditLog()">Refresh</button>
       <button class="btn-outline" onclick="exportAuditLog()">Export CSV</button>
@@ -658,7 +731,7 @@
         <input id="share-link-url" class="modal-inp" aria-label="Share link URL" readonly style="flex:1;font-size:11px;font-family:monospace">
         <button class="btn-gold" onclick="copyShareLink()" style="white-space:nowrap;padding:8px 16px">Copy</button>
       </div>
-      <div id="share-link-expires" style="font-size:10px;color:var(--ink-60);margin-top:6px"></div>
+      <div id="share-link-expires" style="font-size:11px;color:var(--ink-60);margin-top:6px"></div>
     </div>
     <div id="share-err" style="color:var(--red);font-size:12px;margin-bottom:8px"></div>
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:8px">
@@ -691,15 +764,15 @@
           <span id="theme-icon-r"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl-r">Dark</span>
         </button>
-        <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
-        <button id="demo-banner-r" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
+        <button class="btn-outline" onclick="openAuditLog()" style="font-size:11px;padding:6px 14px">Audit Log</button>
+        <button id="demo-banner-r" onclick="exitDemo()" style="display:none;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-r"></span><span id="avatar-name-r">Profile</span></button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </header>
   <div class="breadcrumb" role="navigation" aria-label="Breadcrumb">
-    <span class="bc-link" onclick="goPortfolio()" tabindex="0" onkeydown="if(event.key==='Enter')goPortfolio()">Portfolio</span>
+    <span class="bc-link" onclick="sbNav('initiatives')" tabindex="0" onkeydown="if(event.key==='Enter')sbNav('initiatives')">Initiatives</span>
     <span class="bc-sep">›</span>
     <span class="bc-cur" id="bc-rel">Release</span>
   </div>
@@ -766,7 +839,9 @@
   <main class="pw">
     <!-- RELEASE OVERVIEW -->
     <div class="tab-sec active" id="rsec-overview">
-      <div class="rel-sum" id="rel-sum-bar">
+      <div id="rel-brief"></div>
+      <!-- Superseded by the release decision brief; kept so renderRelSumBar still runs -->
+      <div class="rel-sum" id="rel-sum-bar" style="display:none">
         <div>
           <div class="rsb-lbl">Release</div>
           <div class="rsb-val lg" id="rsb-name">—</div>
@@ -812,17 +887,17 @@
       <!-- Project overview cards -->
       <div class="tab-eye" style="margin-bottom:10px">Projects</div>
       <div class="proj-card-grid" id="rel-proj-cards">
-        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects added yet. Click Add Project to begin.</p></div>
+        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects in this release. Add the projects in this deployment wave to start a readiness record.</p></div>
       </div>
       <!-- Active flags preview -->
       <div class="two-col" style="margin-top:20px">
         <div class="panel">
           <div class="panel-hd"><div><div class="pt">Readiness by Project</div><div class="ps-text">Completion percentage per project</div></div></div>
-          <div class="pb" id="rel-ov-gates"><div class="es"><div class="es-rule"></div><p class="es-txt">Mark gate items within each project to see scores here.</p></div></div>
+          <div class="pb" id="rel-ov-gates"><div class="es"><div class="es-rule"></div><p class="es-txt">No gates have been assessed yet. Start a gate review in a project to create a traceable readiness record.</p></div></div>
         </div>
         <div class="panel">
           <div class="panel-hd"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent across all projects</div></div></div>
-          <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
+          <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues. Gate items marked not met appear here, each traceable to its gate review.</p></div></div>
         </div>
         <div id="rel-craid-summary"></div>
       </div>
@@ -833,7 +908,7 @@
       <div class="tab-eye">Release Scope</div>
       <div class="tab-head">Projects Within This Release</div>
       <div class="proj-card-grid" id="rel-proj-list">
-        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects added yet.</p></div>
+        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects in this release. Add the projects in this deployment wave to start a readiness record.</p></div>
       </div>
       <!-- Add project form -->
       <div class="add-proj-form" style="margin-top:20px">
@@ -886,15 +961,15 @@
           <span id="theme-icon-p"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl-p">Dark</span>
         </button>
-        <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
-        <button id="demo-banner-proj" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
+        <button class="btn-outline" onclick="openAuditLog()" style="font-size:11px;padding:6px 14px">Audit Log</button>
+        <button id="demo-banner-proj" onclick="exitDemo()" style="display:none;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-proj"></span><span id="avatar-name-proj">Profile</span></button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </header>
   <div class="breadcrumb" role="navigation" aria-label="Breadcrumb">
-    <span class="bc-link" onclick="goPortfolio()" tabindex="0" onkeydown="if(event.key==='Enter')goPortfolio()">Portfolio</span>
+    <span class="bc-link" onclick="sbNav('initiatives')" tabindex="0" onkeydown="if(event.key==='Enter')sbNav('initiatives')">Initiatives</span>
     <span class="bc-sep">›</span>
     <span class="bc-link" onclick="goRelease()" tabindex="0" onkeydown="if(event.key==='Enter')goRelease()" id="bc-rel-p">Release</span>
     <span class="bc-sep">›</span>
@@ -953,8 +1028,8 @@
       <div class="ib-field" style="max-width:160px">
         <div class="ib-label">Training Required</div>
         <div style="display:flex;border:1px solid rgba(255,255,255,0.20);border-radius:var(--rs);overflow:hidden;margin-top:8px">
-          <button id="tr-yes" style="font-family:var(--font-b);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;transition:all .14s" onclick="setProjTR(true)">Yes</button>
-          <button id="tr-no"  style="font-family:var(--font-b);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;border-left:1px solid rgba(255,255,255,0.20);transition:all .14s" onclick="setProjTR(false)">No</button>
+          <button id="tr-yes" style="font-family:var(--font-b);font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;transition:all .14s" onclick="setProjTR(true)">Yes</button>
+          <button id="tr-no"  style="font-family:var(--font-b);font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;border-left:1px solid rgba(255,255,255,0.20);transition:all .14s" onclick="setProjTR(false)">No</button>
         </div>
       </div>
       <div class="ib-field" id="ib-train-start" style="max-width:150px">
@@ -1001,7 +1076,9 @@
   <main class="pw">
     <!-- PROJECT OVERVIEW -->
     <div class="tab-sec active" id="psec-overview">
-      <div class="kpi-strip">
+      <div id="proj-brief"></div>
+      <!-- Superseded by the project decision brief; kept so renderPKPIs still runs -->
+      <div class="kpi-strip" style="display:none">
         <div class="kc cn"><div class="kc-l">Overall Readiness</div><div class="kc-v" id="p-kpi-gate">—</div><div class="kc-s">Across all review checkpoints</div></div>
         <div class="kc cr"><div class="kc-l">Open Issues</div><div class="kc-v" id="p-kpi-flags">0</div><div class="kc-s">Needing attention</div></div>
         <div class="kc ca"><div class="kc-l">Highest Risk Group</div><div class="kc-v sm" id="p-kpi-rg">—</div><div class="kc-s" id="p-kpi-rg-s">Affected group</div></div>
@@ -1013,7 +1090,7 @@
         <div class="trajectory-hdr">
           <div>
             <div class="trajectory-title">Predicted Trajectory</div>
-            <div class="trajectory-sub">AI-powered readiness forecast based on current project data</div>
+            <div class="trajectory-sub">Readiness forecast based on current project data</div>
           </div>
           <div class="trajectory-actions">
             <div class="trajectory-confidence" id="traj-confidence" style="display:none">
@@ -1051,8 +1128,8 @@
       <div id="smart-recs-panel" class="smart-recs-panel" style="display:none">
         <div class="smart-recs-hdr">
           <div>
-            <div class="smart-recs-title">Smart Recommendations</div>
-            <div class="smart-recs-sub">AI-powered actions based on your project data</div>
+            <div class="smart-recs-title">Evidence-informed recommendations</div>
+            <div class="smart-recs-sub">Assisted insight: suggested interventions, each with the inputs it used</div>
           </div>
           <div class="smart-recs-actions">
             <span class="smart-recs-ts" id="smart-recs-ts"></span>
@@ -1060,7 +1137,7 @@
           </div>
         </div>
         <div id="smart-recs-list" class="smart-recs-list"></div>
-        <div class="smart-recs-disclaimer">Recommendations generated by AI based on current project data. Use professional judgment when prioritizing actions.</div>
+        <div class="smart-recs-disclaimer">Use professional judgment and validate recommendations with project stakeholders.</div>
       </div>
       <!-- DATA CONFIDENCE + SO WHAT -->
       <div id="p-data-confidence-bar"></div>
@@ -1070,7 +1147,7 @@
       <div id="p-proof-points-wrap"></div>
       <div class="panel">
         <div class="panel-hd"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent items requiring action</div></div></div>
-        <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
+        <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues. Gate items marked not met appear here, each traceable to its gate review.</p></div></div>
       </div>
       <div class="panel">
         <div class="panel-hd"><div><div class="pt">Assigned Resources</div><div class="ps-text">Edit full resource details in the Resources tab</div></div></div>
@@ -1137,7 +1214,7 @@
             <button class="btn-outline" onclick="bulkClear('stakeholders')" title="Clear all stakeholder groups" style="color:var(--red-bright);border-color:var(--red-bright)"><i class="ph ph-trash"></i> Clear All</button>
           </div>
         </div>
-        <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">Add the groups of people affected by this change to begin tracking their readiness.</p></div></div></div>
+        <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">No stakeholder groups are being monitored. Add affected groups to assess readiness, adoption risk, and change impact.</p></div></div></div>
       </div>
     </div>
     <!-- ADOPTION MAP -->
@@ -1172,9 +1249,9 @@
           <div class="hm-leg">
             <span class="hm-leg-l">Legend</span>
             <span class="leg-i"><span class="leg-sw" style="background:var(--bg-deep);border:1px dashed var(--border-md)"></span>Not Started</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--green-bg);border:1px solid #A8D5B8"></span>Complete</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--amber-bg);border:1px solid #E0C97A"></span>Partial</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--red-bg);border:1px solid #DCA8A8"></span>Blocking</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--green-bg);border:1px solid var(--color-success)"></span>Complete</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--amber-bg);border:1px solid var(--color-warning)"></span>Partial</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--red-bg);border:1px solid var(--color-critical)"></span>Blocking</span>
           </div>
         </div>
       </div>
@@ -1248,7 +1325,7 @@
       <div class="panel">
         <div class="panel-hd"><div><div class="pt">Where Adoption Is Slipping, and Why</div><div class="ps-text">Each group is diagnosed from post-launch observations, pulse surveys, and reinforcement planning as a Knowledge, Ability, or Reinforcement gap, with a targeted intervention instead of blanket retraining.</div></div></div>
         <div class="pb" id="ptab-sustain">
-          <div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups and log adoption observations to diagnose gaps.</p></div>
+          <div class="es"><div class="es-rule"></div><p class="es-txt">No adoption observations have been recorded. Post-launch signals will show whether gaps relate to knowledge, ability, or reinforcement.</p></div>
         </div>
       </div>
     </div>
@@ -1381,7 +1458,7 @@
       <div class="alert-desc">Controls your default landing view and available actions.</div>
     </div>
     <div id="brand-section" style="display:none">
-    <div class="profile-section-title">Methodology Branding <span style="font-size:9px;font-weight:400;color:var(--ink-60);letter-spacing:0">(Administrator only)</span></div>
+    <div class="profile-section-title">Methodology Branding <span style="font-size:10.5px;font-weight:400;color:var(--ink-60);letter-spacing:0">(Administrator only)</span></div>
     <div class="profile-field">
       <label for="brand-firm">Firm / Company Name</label>
       <input id="brand-firm" type="text" class="modal-inp" placeholder="Your firm name" aria-label="Firm name">
@@ -1411,7 +1488,7 @@
       </select>
     </div>
     <div class="profile-field">
-      <label for="brand-dims-grid">Dimension Labels <span style="font-size:9px;font-weight:400;color:var(--ink-60)">(set by framework or customize)</span></label>
+      <label for="brand-dims-grid">Dimension Labels <span style="font-size:10.5px;font-weight:400;color:var(--ink-60)">(set by framework or customize)</span></label>
       <div id="brand-dims-grid" style="display:flex;flex-direction:column;gap:6px"></div>
       <button class="btn-sm" onclick="addFrameworkDim()" style="margin-top:8px">+ Add Dimension</button>
     </div>

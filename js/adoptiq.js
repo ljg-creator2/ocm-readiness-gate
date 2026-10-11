@@ -9,14 +9,14 @@ const _supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 // ════════════════════════════════════════════════════════
 // CHART.JS PCF SKIN — branded defaults, not Chart.js stock
 // ════════════════════════════════════════════════════════
-const PCF_COLORS=['#0b1c3f','#c75c1f','#2f7b2e','#e5cc94','#a59d5f','#2a4a80'];
+const PCF_COLORS=['#0B2545','#071B33','#5A6B85','#C9D6E6','#8A929D','#178B87'];
 if(typeof Chart!=='undefined'){
-  Chart.defaults.font.family='DM Sans, sans-serif';
+  Chart.defaults.font.family="'Inter', Arial, sans-serif";
   Chart.defaults.font.size=11;
-  Chart.defaults.color='#8a96a3';
-  Chart.defaults.scale.grid.color='rgba(11,28,63,0.06)';
+  Chart.defaults.color='#687280';
+  Chart.defaults.scale.grid.color='rgba(22,33,58,0.06)';
   Chart.defaults.scale.border={display:false};
-  Chart.defaults.plugins.tooltip.backgroundColor='#021d2e';
+  Chart.defaults.plugins.tooltip.backgroundColor='#16213A';
   Chart.defaults.plugins.tooltip.titleColor='#f3f1ed';
   Chart.defaults.plugins.tooltip.bodyColor='#c8c4bc';
   Chart.defaults.plugins.tooltip.borderWidth=0;
@@ -62,6 +62,17 @@ function hideLogin(){document.getElementById('v-login').classList.remove('active
 function landingToLogin(){hideLanding();showLogin();showSignin();}
 async function landingToDemo(){hideLanding();hideLogin();await loadDemoData();document.getElementById('v-portfolio').classList.add('active');}
 function landingBookWalkthrough(){openBookingModal();}
+// Opens the demo on the project that most needs a decision, at its readiness brief.
+async function landingOpenBrief(){
+  await landingToDemo();
+  const worst=(list,f)=>list.slice().sort((a,b)=>f(a)-f(b))[0];
+  const rank=g=>g.rag==='red'?0:g.rag==='amber'?1:2;
+  const r=worst(releases.filter(x=>(x.projects||[]).length),x=>rank(relRAG(x)));if(!r)return;
+  openRelease(r.id);
+  const p=worst(r.projects,x=>rank(projRAG(x,r.golive)));if(!p)return;
+  openProject(p.id);
+  requestAnimationFrame(()=>{const el=document.getElementById('proj-brief');if(el)el.scrollIntoView({block:'start'});});
+}
 function openBookingModal(){
   let existing=document.getElementById('booking-modal');if(existing)existing.remove();
   const modal=document.createElement('div');modal.id='booking-modal';modal.className='lp-booking-modal';
@@ -288,9 +299,12 @@ function updateAvatars(){
     ['avatar-p','avatar-r','avatar-proj'].forEach(id=>{
       const el=document.getElementById(id);if(el)el.textContent=initials;
     });
-    ['avatar-name-p','avatar-name-r','avatar-name-proj'].forEach(id=>{
+    ['avatar-name-p','avatar-name-r','avatar-name-proj','sb-uname'].forEach(id=>{
       const el=document.getElementById(id);if(el)el.textContent=display;
     });
+    ['sb-av','cc-av'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=initials||'·';});
+    _cc.userName=name;
+    if(document.getElementById('v-portfolio')?.dataset.page==='command')renderCommandCenter();
   });
 }
 
@@ -1315,7 +1329,7 @@ function daysTo(d){if(!d)return null;const t=new Date();t.setHours(0,0,0,0);cons
 function fmtDays(d){if(d===null)return'—';if(d<0)return Math.abs(d)+' days overdue';if(d===0)return'Today';return d+' days';}
 function fmtDate(d){if(!d)return'—';const[y,m,dy]=d.split('-');return`${m}/${dy}/${y}`;}
 function fmtMod(iso){try{const d=new Date(iso);const now=new Date();const diff=Math.floor((now-d)/60000);if(diff<1)return'Just now';if(diff<60)return`${diff}m ago`;const h=Math.floor(diff/60);if(h<24)return`${h}h ago`;const dy=Math.floor(h/24);if(dy<7)return`${dy}d ago`;return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}catch(e){return'—';}}
-function adkarColor(v){return v>=4?'var(--green)':v===3?'var(--gold)':v===2?'#C28E00':'var(--red)';}
+function adkarColor(v){return v>=4?'var(--green)':v===3?'var(--gold)':v===2?'#D5A33D':'var(--red)';}
 function hmCellCls(val,thr){if(val===null)return'n';if(val>=thr[0])return'g';if(val>=thr[1])return'a';return'r';}
 
 // ════════════════════════════════════════════════════════
@@ -1574,19 +1588,9 @@ function renderPortfolio(){
   else{document.getElementById('ps-near-d').textContent='—';document.getElementById('ps-near-r').textContent='No go-live dates set';}
   const wrap=document.getElementById('rel-grid-wrap');
   if(!releases.length){
-    wrap.innerHTML=`<div class="hero-empty">
-      <div class="hero-badge">ADOPTION INTELLIGENCE PLATFORM</div>
-      <div class="hero-h">Your portfolio is ready<br>when you are.</div>
-      <div class="hero-sub">Add your first release to start tracking change readiness across your organization. AdoptIQ integrates ADKAR, Kirkpatrick, and SDLC gate methodology into a single command center.</div>
-      <div class="hero-features">
-        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-squares-four"></i></div><div><div class="hero-feat-t">4-Readiness Tracker</div><div class="hero-feat-d">Map training dependencies across the full SDLC lifecycle</div></div></div>
-        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-chart-line-up"></i></div><div><div class="hero-feat-t">${fwName()} Assessment Engine</div><div class="hero-feat-d">Score readiness dimensions across your chosen change framework</div></div></div>
-        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-shield-warning"></i></div><div><div class="hero-feat-t">Adoption Risk Scoring</div><div class="hero-feat-d">Quantify stakeholder readiness with 6-factor analysis</div></div></div>
-        <div class="hero-feat"><div class="hero-feat-icon"><i class="ph ph-star"></i></div><div><div class="hero-feat-t">Kirkpatrick Measurement</div><div class="hero-feat-d">L1–L4 evaluation framework built into every stakeholder group</div></div></div>
-      </div>
-      <button class="btn-gold" onclick="openAddRelease()" style="padding:14px 32px;font-size:13px">Add Your First Release</button>
-      <div class="hero-cred">Providence Consulting Firm &middot; CPTM &middot; ATD Master Trainer &middot; ADKAR-Aligned</div>
-    </div>`;
+    {const d=document.getElementById('rel-cards-sec');if(d)d.open=true;}
+    wrap.innerHTML='<div class="dz-empty"><div class="dz-empty-t">No releases have been added.</div><div class="dz-empty-d">Add your first deployment wave to begin building a portfolio readiness view. Each release collects its projects, gate reviews, affected groups, and go-live path.</div><button class="btn-gold" onclick="openAddRelease()">Add a release</button></div>';
+    renderPortfolioBrief();
     document.getElementById('tl-sec').style.display='none';document.getElementById('size-sec').style.display='none';document.getElementById('exec-dash').style.display='none';return;
   }
   wrap.innerHTML=`<div class="card-grid stagger-children">${releases.map(r=>{
@@ -1621,10 +1625,496 @@ function renderPortfolio(){
   document.getElementById('people-cap-sec').style.display=releases.length>=1?'block':'none';
   document.getElementById('size-sec').style.display=releases.length>=1?'block':'none';renderSizePortfolio();
   requestAnimationFrame(()=>{
-    renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();renderPortfolioCharts();renderTrendCharts();renderAiqChips();renderWhatDataTells();
+    renderPortfolioBrief();
+    renderSaturationMap();renderOcmWorkloadBalance();renderPortCraidDashboard();renderTimeline();renderAlerts();renderAuditLog();initReleaseDrag();{const pg=document.getElementById('v-portfolio').dataset.page;if(pg==='command')renderCommandCenter();else if(pg==='section'){const cur=document.querySelector('.sb-item[aria-current]');if(cur)renderSectionIndex(cur.dataset.sb);}}renderPortfolioCharts();renderTrendCharts().then(()=>{renderPortfolioBrief();if(document.getElementById('v-portfolio').dataset.page==='command')renderCommandCenter();if(document.getElementById('v-release').classList.contains('active'))renderRelBrief();if(document.getElementById('v-project').classList.contains('active'))renderProjBrief();});renderAiqChips();renderWhatDataTells();
     if(isReadOnly)applyReadOnlyRestrictions();
   });
 }
+
+// ════════════════════════════════════════════════════════
+// DECISION-FIRST PORTFOLIO: Executive Readiness Brief + Release Radar
+// Every number shown here comes from the existing rollups (relRollup,
+// relRAG, projRAG, getProjFlags, projHighestRisk). Nothing is estimated.
+// ════════════════════════════════════════════════════════
+const POS={
+  g:{label:'On Track',st:'st-g',erb:'erb-g'},
+  w:{label:'Watch',st:'st-w',erb:'erb-a'},
+  a:{label:'At Risk',st:'st-r',erb:'erb-r'},
+  r:{label:'Critical',st:'st-c',erb:'erb-c'}
+};
+// Status class by meaning: On track green, Watch/Partial amber, At risk/Overdue red, Critical/Blocking burgundy.
+function stClass(label,rag){const l=String(label||'').toLowerCase();
+  if(/on.?track|complete|met|cleared/.test(l))return'st-g';
+  if(/watch|partial/.test(l))return'st-w';
+  if(/at.?risk|overdue|declin/.test(l))return'st-r';
+  if(/critical|block|no.?go|escalat/.test(l))return'st-c';
+  return rag==='red'?'st-c':rag==='amber'?'st-r':rag==='green'?'st-g':'st-n';}
+const DEF={
+  readiness:'Share of gate criteria verified (marked met), excluding items marked N/A. The portfolio figure averages active initiatives. 80% is the go-live target.',
+  status:'Combines readiness, the ADKAR average, blocking gate items, and days to go-live. On Track, At Risk, or Critical.',
+  trend:'Change in readiness since the previous weekly snapshot. Shown once two snapshots exist.',
+  adoption:'Average of the group’s adoption-risk factor ratings, as a percentage. Higher is better; below 60% means elevated adoption risk.',
+  action:'Rule-based: the most urgent of an overdue go-live, blocking gate items, readiness below target, or a group below the adoption threshold.'
+};
+function stBadge(rag,label){const c=stClass(label,rag);return'<span class="st '+c+'" title="'+esc(DEF.status)+'">'+esc(label)+'</span>';}
+function relTrend(r){
+  const snaps=_trendSnapshots||[];if(snaps.length<2)return null;
+  const avg=sn=>{const x=(sn.releases||[]).find(q=>q.id===r.id||q.name===r.name);if(!x)return null;const v=(x.projects||[]).map(p=>p.gateScore).filter(v=>v!=null);return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;};
+  const cur=avg(snaps[snaps.length-1]),prev=avg(snaps[snaps.length-2]);
+  return cur==null||prev==null?null:Math.round(cur-prev);
+}
+function trendHtml(d){
+  if(d===null||d===undefined)return'<span class="trend trend-flat" title="Needs two weekly snapshots">—</span>';
+  if(d===0)return'<span class="trend trend-flat">0 pts</span>';
+  return'<span class="trend '+(d>0?'trend-up':'trend-down')+'">'+(d>0?'▲ +':'▼ ')+Math.abs(d)+' pts</span>';
+}
+function relLeads(r){
+  const names=new Set();
+  (r.projects||[]).forEach(p=>{['ocm_train','ocm_impl','pm'].forEach(k=>(p.resources?.[k]||[]).forEach(v=>{const n=typeof v==='string'?v:(v&&v.name);if(n)names.add(n);}));});
+  return[...names];
+}
+function relEvidence(r){
+  // Ranked evidence for one release: blocking gate items, then weakest group.
+  const items=[];let worstGroup=null;
+  (r.projects||[]).forEach(p=>{
+    getProjFlags(p).forEach(f=>{const red=p.gateState[f.key]==='red';items.push({sev:red?0:1,proj:p,text:f.item,gate:f.gate});});
+    if((p.stakeholders||[]).length){const h=projHighestRisk(p);if(h.score!=null&&(!worstGroup||h.score<worstGroup.score))worstGroup={...h,proj:p};}
+  });
+  items.sort((a,b)=>a.sev-b.sev);
+  return{items,blocking:items.filter(i=>i.sev===0).length,watch:items.filter(i=>i.sev===1).length,worstGroup};
+}
+function relNextAction(r,rl,ev,d){
+  if(!(r.projects||[]).length)return'Add the projects in this release to start a readiness record.';
+  if(d!==null&&d<0)return'Go-live date has passed: confirm the actual go-live or set a new date.';
+  if(ev.blocking)return'Assign owners to '+ev.blocking+' blocking gate item'+(ev.blocking===1?'':'s')+(d!==null&&d<=30?' before go-live':'')+'.';
+  if(rl.gateScore!==null&&rl.gateScore<80)return'Schedule a gate review: readiness is '+rl.gateScore+'%, below the 80% go-live target.';
+  if(ev.worstGroup&&ev.worstGroup.score<60)return'Plan an intervention for '+ev.worstGroup.name+' (adoption risk score '+ev.worstGroup.score+'%).';
+  if(ev.watch)return'Close '+ev.watch+' gate item'+(ev.watch===1?'':'s')+' still marked partial.';
+  return'Maintain cadence; confirm readiness at the next checkpoint.';
+}
+function portfolioModel(){
+  const rows=releases.map(r=>{
+    const rl=relRollup(r),rg=relRAG(r),d=daysTo(r.golive),ev=relEvidence(r);
+    return{r,rl,rg,d,ev,trend:relTrend(r),leads:relLeads(r),next:relNextAction(r,rl,ev,d)};
+  });
+  const soon=x=>x.d!==null&&x.d>=0&&x.d<=30;
+  const reds=rows.filter(x=>x.rg.rag==='red'),ambers=rows.filter(x=>x.rg.rag==='amber');
+  const pos=reds.some(soon)||rows.some(x=>x.d!==null&&x.d<0&&x.rg.rag!=='green')?POS.r:reds.length||ambers.some(soon)?POS.a:ambers.length?POS.w:POS.g;
+  const rank=x=>(x.rg.rag==='red'?0:x.rg.rag==='amber'?1:2)*1000+(x.d===null?999:Math.max(-50,x.d));
+  rows.sort((a,b)=>rank(a)-rank(b));
+  return{rows,pos,soon:rows.filter(soon),decide:rows.filter(x=>x.rg.rag!=='green'&&(soon(x)||(x.d!==null&&x.d<0)))};
+}
+function renderPortfolioBrief(){
+  const el=document.getElementById('port-brief');const rad=document.getElementById('rel-radar');
+  if(!el||!rad)return;
+  if(!releases.length){el.innerHTML='';rad.innerHTML='';return;}
+  const m=portfolioModel();const top=m.rows[0];
+  const avg=portfolioReadiness();
+  // Portfolio change uses the same formula as the weekly trend row.
+  const snapAvg=snapReadiness;
+  const _sn=_trendSnapshots||[];
+  const avgTrend=_sn.length>=2&&snapAvg(_sn[_sn.length-1])!=null&&snapAvg(_sn[_sn.length-2])!=null?snapAvg(_sn[_sn.length-1])-snapAvg(_sn[_sn.length-2]):null;
+  const openItems=m.rows.reduce((a,x)=>a+x.ev.items.length,0);
+  const blocking=m.rows.reduce((a,x)=>a+x.ev.blocking,0);
+  const weakGroups=m.rows.filter(x=>x.ev.worstGroup&&x.ev.worstGroup.score<60).length;
+  // Narrative built only from facts in the model
+  let narr='';
+  const overdue=m.rows.filter(x=>x.d!==null&&x.d<0).length;
+  if(m.soon.length)narr+=m.soon.length+' release'+(m.soon.length===1?' goes':'s go')+' live within 30 days. ';
+  if(overdue)narr+=overdue+' release'+(overdue===1?' is':'s are')+' past the planned go-live date. ';
+  if(!m.soon.length&&!overdue)narr+='No release goes live in the next 30 days. ';
+  if(top&&top.rg.rag!=='green'){
+    narr+=top.r.name+' is the weakest position: '+(top.rl.gateScore!==null?'readiness '+top.rl.gateScore+'%':'readiness not yet assessed')+(top.ev.blocking?', '+top.ev.blocking+' blocking gate item'+(top.ev.blocking===1?'':'s'):'')+(top.ev.worstGroup&&top.ev.worstGroup.score<60?', and '+top.ev.worstGroup.name+' below the adoption threshold':'')+'.';
+  }else narr+='All releases are tracking on plan against their gates.';
+  const contributors=m.rows.filter(x=>x.rg.rag!=='green').slice(0,3).map(x=>{
+    const why=[];if(x.d!==null&&x.d<0)why.push('go-live passed '+Math.abs(x.d)+' days ago');
+    if(x.ev.blocking)why.push(x.ev.blocking+' blocking item'+(x.ev.blocking===1?'':'s'));
+    if(x.rl.gateScore!==null&&x.rl.gateScore<80)why.push('readiness '+x.rl.gateScore+'%');
+    if(x.ev.worstGroup&&x.ev.worstGroup.score<60)why.push(x.ev.worstGroup.name+' at '+x.ev.worstGroup.score+'%');
+    return'<li>'+stBadge(x.rg.rag,x.rg.label)+'<span><strong>'+esc(x.r.name)+'</strong>, '+esc(why.join(' · ')||'mixed signals across gates and groups')+'</span></li>';
+  });
+  const decision=top&&top.rg.rag!=='green'?top.next.replace(/\.$/,'')+' ('+top.r.name+').':'No executive decision required this period.';
+  el.innerHTML='<section class="erb '+m.pos.erb+'" aria-labelledby="erb-h">'
+    +'<div class="erb-top"><div><div class="erb-eye">Executive readiness brief</div>'
+    +'<h2 class="erb-pos" id="erb-h">Portfolio position <span class="st '+m.pos.st+'">'+m.pos.label+'</span></h2>'
+    +'<p class="erb-narr">'+esc(narr)+'</p>'
+    +'<p class="ev-line"><strong>Evidence:</strong> '+blocking+' blocking gate item'+(blocking===1?'':'s')+' ('+openItems+' open including partial) · '+weakGroups+' release'+(weakGroups===1?'':'s')+' with a group below the adoption threshold · '+m.decide.length+' release'+(m.decide.length===1?'':'s')+' needing a decision</p></div>'
+    +'<div class="erb-metrics"><div class="erb-metric" title="'+esc(DEF.readiness)+'"><div class="erb-metric-l">Readiness</div><div class="erb-metric-v">'+(avg!==null?avg+'%':'—')+'</div><div class="erb-metric-s">'+trendHtml(avgTrend)+' vs prior week</div><div class="erb-metric-d">Gate criteria verified · target 80%</div></div>'
+    +'<div class="erb-metric"><div class="erb-metric-l">Go-live ≤ 30 days</div><div class="erb-metric-v">'+m.soon.length+'</div><div class="erb-metric-s">of '+m.rows.length+' active</div><div class="erb-metric-d">'+(m.rows.filter(x=>x.d!==null&&x.d<0).length)+' past planned go-live</div></div></div></div>'
+    +'<div class="erb-grid"><div><div class="erb-h">Top contributors to risk</div>'+(contributors.length?'<ul class="erb-list">'+contributors.join('')+'</ul>':'<p class="ev-line">No release is currently at risk.</p>')+'</div>'
+    +'<div class="erb-decision"><div class="erb-decision-gold"></div><div class="erb-h">Recommended executive action</div><div class="erb-decision-t">'+esc(decision)+'</div>'
+    +'<div class="erb-acts"><button class="btn-primary dz-keep" onclick="document.getElementById(\'rel-radar\').scrollIntoView({behavior:\'smooth\'})">Review evidence</button><button class="btn-outline dz-keep" onclick="exportHandoffPDF()">Open portfolio decision brief</button></div></div></div>'
+    +'</section>';
+  // Release Radar
+  let h='<section class="dz-sec" aria-labelledby="rr-h"><div class="dz-sec-hd"><div><div class="dz-eye">Principal operating view</div><h2 class="dz-ttl" id="rr-h">Release Radar</h2><div class="dz-sub">Sorted by status, then nearest go-live. Readiness bar marks the 80% go-live target.</div></div></div>'
+    +'<div class="dt-wrap"><table class="dt"><thead><tr><th scope="col">Release</th><th scope="col" title="'+esc(DEF.status)+'">Status</th><th scope="col">Go-live</th><th scope="col" title="'+esc(DEF.readiness)+'">Readiness</th><th scope="col" title="'+esc(DEF.trend)+'">Trend</th><th scope="col">Top evidence driver</th><th scope="col" title="'+esc(DEF.adoption)+'">Highest-risk group</th><th scope="col">Accountable lead</th><th scope="col" title="'+esc(DEF.action)+'">Required next action</th></tr></thead><tbody>';
+  m.rows.forEach(x=>{
+    const g=x.rl.gateScore;const drv=x.ev.items[0];
+    h+='<tr><td data-l="Release"><button class="rr-name dz-keep" onclick="openRelease('+x.r.id+')">'+esc(x.r.name)+'</button><div class="rr-sub">'+(x.r.projects||[]).length+' project'+((x.r.projects||[]).length===1?'':'s')+'</div></td>'
+      +'<td data-l="Status">'+stBadge(x.rg.rag,x.rg.label)+'</td>'
+      +'<td data-l="Go-live"><span class="rr-num">'+fmtDate(x.r.golive)+'</span><div class="rr-sub mono">'+esc(fmtDays(x.d))+'</div></td>'
+      +'<td data-l="Readiness"><span class="rr-num">'+(g!==null?g+'%':'—')+'</span>'+(g!==null?'<div class="rr-bar" role="img" aria-label="'+g+'% of the 80% target"><span style="width:'+g+'%"></span><i></i></div>':'')+'</td>'
+      +'<td data-l="Trend">'+trendHtml(x.trend)+'</td>'
+      +'<td data-l="Evidence driver">'+(drv?'<span>'+esc(drv.text)+'</span><div class="rr-sub">'+esc(drv.proj.name)+' · '+esc(drv.gate)+(x.ev.items.length>1?' · +'+(x.ev.items.length-1)+' more':'')+'</div>':'<span class="rr-sub">No open gate items</span>')+'</td>'
+      +'<td data-l="Highest-risk group">'+(x.ev.worstGroup?esc(x.ev.worstGroup.name)+'<div class="rr-sub mono">'+x.ev.worstGroup.score+'% adoption score'+(x.ev.worstGroup.score<60?' · elevated':'')+'</div>':'<span class="rr-sub">No groups assessed</span>')+'</td>'
+      +'<td data-l="Accountable lead">'+(x.leads.length?esc(x.leads.slice(0,2).join(', '))+(x.leads.length>2?' +'+(x.leads.length-2):''):'<span class="rr-sub">Not assigned</span>')+'</td>'
+      +'<td class="rr-act" data-l="Next action">'+esc(x.next)+'</td></tr>';
+  });
+  h+='</tbody></table></div>'
+    +'<details class="dz-key"><summary>How to read this table</summary><dl>'
+    +'<dt>Status</dt><dd>'+esc(DEF.status)+'</dd><dt>Readiness</dt><dd>'+esc(DEF.readiness)+' The tick on each bar marks 80%.</dd>'
+    +'<dt>Trend</dt><dd>'+esc(DEF.trend)+'</dd><dt>Adoption score</dt><dd>'+esc(DEF.adoption)+'</dd>'
+    +'<dt>Top evidence driver</dt><dd>The most severe open gate item in the release: blocking (not met) before partial.</dd><dt>Required next action</dt><dd>'+esc(DEF.action)+'</dd></dl></details></section>';
+  // Evidence requiring attention + recently updated
+  const att=[];m.rows.forEach(x=>x.ev.items.filter(i=>i.sev===0).forEach(i=>att.push({x,i})));
+  const recent=[];releases.forEach(r=>(r.projects||[]).forEach(p=>{const t=p.modified||r.modified;if(t)recent.push({r,p,t});}));
+  recent.sort((a,b)=>String(b.t).localeCompare(String(a.t)));
+  h+='<div class="dz-two dz-sec"><section aria-labelledby="ea-h"><div class="dz-sec-hd"><div><h2 class="dz-ttl" id="ea-h" style="font-size:20px">Evidence requiring attention</h2><div class="dz-sub">Blocking gate items, most urgent release first</div></div></div>'
+    +(att.length?'<ul class="ea-list">'+att.slice(0,6).map(a=>'<li><span class="st st-c">Blocking</span><div><div class="ea-t">'+esc(a.i.text)+'</div><div class="ea-d">'+esc(a.x.r.name)+' · '+esc(a.i.proj.name)+' · '+esc(a.i.gate)+'</div></div></li>').join('')+'</ul>'+(att.length>6?'<p class="ev-line">+'+(att.length-6)+' more in the Release Radar.</p>':'')
+      :'<div class="dz-empty"><div class="dz-empty-d">No blocking gate items. Items marked red in a gate review will appear here with their release and project.</div></div>')
+    +'</section><section aria-labelledby="wc-h"><div class="dz-sec-hd"><div><h2 class="dz-ttl" id="wc-h" style="font-size:20px">Recently updated</h2><div class="dz-sub">Latest project records changed</div></div></div>'
+    +(recent.length?'<ul class="ea-list">'+recent.slice(0,6).map(a=>'<li><span class="ea-when">'+esc(fmtMod(a.t))+'</span><div><div class="ea-t">'+esc(a.p.name)+'</div><div class="ea-d">'+esc(a.r.name)+' · '+esc(a.p.status||'')+'</div></div></li>').join('')+'</ul>'
+      :'<div class="dz-empty"><div class="dz-empty-d">Changes to project records will appear here as the team works.</div></div>')
+    +'</section></div>';
+  rad.innerHTML=h;
+  const cap=(id,txt)=>{const e=document.getElementById(id);if(e)e.textContent=txt;};
+  const atTarget=m.rows.filter(x=>x.rl.gateScore!==null&&x.rl.gateScore>=80).length;
+  cap('cap-port-readiness',avg===null?'No gate reviews recorded yet.':'Average readiness is '+avg+'% against the 80% go-live target; '+atTarget+' of '+m.rows.length+' release'+(m.rows.length===1?'':'s')+(atTarget===1?' is':' are')+' at or above target.');
+  let grp=0,hi=0;releases.forEach(r=>(r.projects||[]).forEach(p=>(p.stakeholders||[]).forEach(sh=>{grp++;if(adoptScore(sh.factors)<60)hi++;})));
+  cap('cap-port-risk',grp?hi+' of '+grp+' stakeholder groups are high or critical adoption risk (score below 60%).':'No stakeholder groups assessed yet.');
+  const sn=_trendSnapshots||[];
+  if(sn.length>=2){
+    const pr=snapReadiness;
+    const fl=x=>{let t=0;(x.releases||[]).forEach(r=>(r.projects||[]).forEach(p=>{t+=(p.flags||0);}));return t;};
+    const last=sn.slice(-12),g0=pr(last[0]),g1=pr(last[last.length-1]),f0=fl(last[0]),f1=fl(last[last.length-1]);
+    cap('cap-trend-gate',g0!=null&&g1!=null?'Readiness moved from '+g0+'% to '+g1+'% over '+last.length+' weeks'+(g1<80?', still below the 80% go-live target.':', at or above the 80% target.'):'');
+    cap('cap-trend-flags','Open gate items went from '+f0+' to '+f1+' over '+last.length+' weeks.');
+  }
+}
+// Release and project decision panels (same evidence model as the portfolio)
+function projTrend(p){
+  const snaps=_trendSnapshots||[];if(snaps.length<2)return null;
+  const val=sn=>{for(const r of (sn.releases||[]))for(const q of (r.projects||[]))if(q.id===p.id&&q.gateScore!=null)return q.gateScore;return null;};
+  const c=val(snaps[snaps.length-1]),pv=val(snaps[snaps.length-2]);return c==null||pv==null?null:c-pv;
+}
+function evidenceStrength(p){
+  // Strength reflects how many independent evidence sources exist, not how good they look.
+  const inputs=[];
+  if(Object.values(p.gateState||{}).some(v=>v&&v!=='na'))inputs.push('gate reviews');
+  if(p.adkarScores&&Object.keys(p.adkarScores).length)inputs.push(fwShort()+' assessment');
+  if((p.stakeholders||[]).some(sh=>(sh.factorsRated||[]).length))inputs.push('stakeholder risk ratings');
+  if((p.stakeholders||[]).some(sh=>shHasTrainResults(sh)))inputs.push('training results');
+  if(p.jira&&p.jira.items)inputs.push('Jira import');
+  if(p.lifecycleSignals&&Object.keys(p.lifecycleSignals).length)inputs.push('lifecycle signals');
+  const n=inputs.length;
+  return{label:n>=4?'High':n>=2?'Moderate':'Emerging',bars:n>=4?3:n>=2?2:1,inputs};
+}
+function evStrengthHtml(es){return'<span class="ev-strength">Evidence strength: '+es.label+' <i aria-hidden="true">'+[1,2,3].map(i=>'<b'+(i<=es.bars?' class="on"':'')+'></b>').join('')+'</i></span>';}
+function goRTab(id){const b=[...document.querySelectorAll('#v-release .nav-btn')].find(x=>(x.getAttribute('onclick')||'').includes("showRelTab('"+id+"'"));if(b)showRelTab(id,b);}
+function renderRelBrief(){
+  const el=document.getElementById('rel-brief');const r=getRel();if(!el||!r)return;
+  const rl=relRollup(r),rg=relRAG(r),d=daysTo(r.golive),ev=relEvidence(r),tr=relTrend(r),leads=relLeads(r);
+  const next=relNextAction(r,rl,ev,d);const pos={green:'erb-g',amber:'erb-r',red:'erb-c'}[rg.rag];
+  const narr=(d===null?'No go-live date is set. ':d<0?'Go-live was planned '+Math.abs(d)+' days ago. ':'Go-live is in '+d+' days. ')
+    +(rl.gateScore!==null?'Readiness is '+rl.gateScore+'%'+(rl.gateScore<80?', below the 80% go-live target':'')+'. ':'Readiness has not been assessed. ')
+    +(ev.blocking?ev.blocking+' gate item'+(ev.blocking===1?' is':'s are')+' blocking'+(ev.items[0]?', led by “'+ev.items[0].text+'” ('+ev.items[0].proj.name+')':'')+'. ':'')
+    +(ev.worstGroup&&ev.worstGroup.score<60?ev.worstGroup.name+' is the highest-risk group at '+ev.worstGroup.score+'%.':'');
+  el.innerHTML='<section class="erb '+pos+'" aria-labelledby="rb-h"><div class="erb-top"><div><div class="erb-eye">Release position and decision</div>'
+    +'<h2 class="erb-pos" id="rb-h">'+esc(r.name)+' '+stBadge(rg.rag,rg.label)+'</h2><p class="erb-narr">'+esc(narr)+'</p>'
+    +'<p class="ev-line"><strong>Evidence:</strong> '+ev.blocking+' blocking · '+ev.watch+' partial gate items · '+(r.phase?'SDLC phase: '+esc(r.phase)+' · ':'')+(r.projects||[]).length+' project'+((r.projects||[]).length===1?'':'s')+(leads.length?' · Leads: '+esc(leads.slice(0,3).join(', ')):' · No accountable lead named')+'</p></div>'
+    +'<div class="erb-metrics"><div class="erb-metric" title="'+esc(DEF.readiness)+'"><div class="erb-metric-l">Readiness</div><div class="erb-metric-v">'+(rl.gateScore!==null?rl.gateScore+'%':'—')+'</div><div class="erb-metric-s">'+trendHtml(tr)+' vs prior week</div><div class="erb-metric-d">Gate criteria verified · target 80%</div></div>'
+    +'<div class="erb-metric"><div class="erb-metric-l">Go-live</div><div class="erb-metric-v">'+fmtDate(r.golive)+'</div><div class="erb-metric-s mono">'+esc(fmtDays(d))+'</div></div></div></div>'
+    +'<div class="erb-grid"><div><div class="erb-h">Evidence requiring attention</div>'+(ev.items.length?'<ul class="erb-list">'+ev.items.slice(0,4).map(i=>'<li>'+(i.sev===0?'<span class="st st-c">Blocking</span>':'<span class="st st-w">Partial</span>')+'<span>'+esc(i.text)+' <span class="rr-sub">'+esc(i.proj.name)+' · '+esc(i.gate)+'</span></span></li>').join('')+'</ul>':'<p class="ev-line">No open gate items.</p>')+'</div>'
+    +'<div class="erb-decision"><div class="erb-decision-gold"></div><div class="erb-h">Most urgent action</div><div class="erb-decision-t">'+esc(next)+'</div>'
+    +'<div class="erb-acts"><button class="btn-primary dz-keep" onclick="goRTab(\'projects\')">Review evidence</button><button class="btn-outline dz-keep" onclick="exportReleasePDF()">Export decision brief</button></div></div></div></section>';
+}
+function renderProjBrief(){
+  const el=document.getElementById('proj-brief');const p=getProj();if(!el||!p)return;
+  const gl=projGoLive(p),d=daysTo(gl),rg=projRAG(p,gl),gs=projGateScore(p),tr=projTrend(p);
+  const flags=getProjFlags(p);const red=flags.filter(f=>p.gateState[f.key]==='red');
+  const hr=(p.stakeholders||[]).length?projHighestRisk(p):null;const es=evidenceStrength(p);
+  let acts=[];try{acts=pilotStatus(p).actions||[];}catch(e){}
+  // Gate evidence and dates outrank setup reminders.
+  const gateAct=d!==null&&d<0?{text:'Go-live date has passed: confirm the actual go-live or set a new date.'}:red.length?{text:'Assign owners to '+red.length+' blocking gate item'+(red.length===1?'':'s')+(d!==null&&d<=30?' before go-live':'')+'.'}:null;
+  const urgent=gateAct||acts.find(a=>a.sev==='red')||acts[0];
+  const ji=typeof jiraTrainingImpact==='function'?jiraTrainingImpact(p):null;
+  const topEv=red[0]?{t:red[0].item,s:red[0].gate+' · blocking'}:ji&&ji.blocked?{t:ji.blocked+' OCM item'+(ji.blocked===1?' has':'s have')+' not passed UAT',s:'Jira import'}:flags[0]?{t:flags[0].item,s:flags[0].gate+' · partial'}:null;
+  const pos={green:'erb-g',amber:'erb-r',red:'erb-c'}[rg.rag];
+  const narr=(gs!==null?'Readiness is '+gs+'%'+(gs<80?', below the 80% go-live target. ':'. '):'Readiness has not been assessed yet. ')
+    +(red.length?red.length+' gate item'+(red.length===1?' is':'s are')+' blocking. ':'')
+    +(hr&&hr.score!=null?(hr.score<60?hr.name+' is below the adoption threshold ('+hr.score+'%, threshold 60%). ':'All groups are within the adoption threshold; the lowest is '+hr.name+' ('+hr.score+'%). '):'')
+    +(d===null?'':d<0?'Go-live was planned '+Math.abs(d)+' days ago.':'Go-live is in '+d+' days.');
+  const link=(lbl,tab)=>'<button class="btn-text dz-keep" onclick="goPTab(\''+tab+'\')">'+lbl+'</button>';
+  el.innerHTML='<section class="erb '+pos+'" aria-labelledby="pb-h"><div class="erb-top"><div><div class="erb-eye">Project decision brief</div>'
+    +'<h2 class="erb-pos" id="pb-h">Readiness position '+stBadge(rg.rag,rg.label)+'</h2><p class="erb-narr">'+esc(narr)+'</p>'
+    +'<p class="ev-line"><strong>Evidence:</strong> '+red.length+' blocking · '+(flags.length-red.length)+' partial gate items · '+fwShort()+' average '+projAdkarAvg(p)+'/5 · '+(p.stakeholders||[]).length+' group'+((p.stakeholders||[]).length===1?'':'s')+' monitored</p>'
+    +'<p class="ev-line">'+evStrengthHtml(es)+' · <strong>Inputs used:</strong> '+(es.inputs.length?esc(es.inputs.join(', ')):'none yet')+'</p></div>'
+    +'<div class="erb-metrics"><div class="erb-metric" title="'+esc(DEF.readiness)+'"><div class="erb-metric-l">Readiness</div><div class="erb-metric-v">'+(gs!==null?gs+'%':'—')+'</div><div class="erb-metric-s">'+trendHtml(tr)+' vs prior week</div><div class="erb-metric-d">Gate criteria verified · target 80%</div></div>'
+    +'<div class="erb-metric"><div class="erb-metric-l">Go-live</div><div class="erb-metric-v">'+fmtDate(gl)+'</div><div class="erb-metric-s mono">'+esc(fmtDays(d))+'</div></div>'
+    +'<div class="erb-metric" title="'+esc(DEF.adoption)+'"><div class="erb-metric-l">Highest-risk group</div><div class="erb-metric-v" style="font-family:var(--font-ui);font-size:16px;font-weight:600">'+(hr&&hr.score!=null?esc(hr.name):'—')+'</div><div class="erb-metric-s mono">'+(hr&&hr.score!=null?hr.score+'% adoption score':'No groups assessed')+'</div><div class="erb-metric-d">'+(hr&&hr.score!=null?(hr.score<60?'Elevated risk (below 60%)':'Within threshold (60%+)'):'')+'</div></div></div></div>'
+    +'<div class="erb-grid"><div><div class="erb-h">Most urgent unresolved evidence</div>'+(topEv?'<ul class="erb-list"><li><span class="st '+(red[0]?'st-c':'st-w')+'">'+(red[0]?'Blocking':'Open')+'</span><span>'+esc(topEv.t)+' <span class="rr-sub">'+esc(topEv.s)+'</span></span></li></ul>':'<p class="ev-line">No unresolved gate items or Jira blockers.</p>')
+    +'<div class="erb-h" style="margin-top:16px">Go to</div><div class="erb-acts" style="margin-top:0;gap:16px">'+link('Gate tracker','gates')+link('Risk log (CRAID)','craid')+link('Stakeholder assessment','adoption')+link('Training timeline','trainplan')+'</div></div>'
+    +'<div class="erb-decision"><div class="erb-decision-gold"></div><div class="erb-h">Recommended action</div><div class="erb-decision-t">'+esc(urgent?urgent.text:'No action outstanding. Confirm readiness at the next checkpoint.')+'</div>'
+    +'<p class="ai-note">Evidence-informed recommendation from the records above. Use professional judgment and validate recommendations with project stakeholders.</p>'
+    +'<div class="erb-acts"><button class="btn-primary dz-keep" onclick="exportStatusReport()">Open decision brief</button></div></div></div></section>';
+}
+// ════════════════════════════════════════════════════════
+// APP SHELL + COMMAND CENTER (docs/ADOPTIQ_DESIGN_SYSTEM.md)
+// Every value is read from existing data and calculations. Where data is
+// missing the panel says so; nothing is estimated or hardcoded.
+// ════════════════════════════════════════════════════════
+const _cc={month:null,showAllActions:false,showAllActivity:false,audit:null,chart:null,userName:''};
+const SB_SECTIONS={
+  people:{title:'People & Impacts',sub:'Who is affected by each initiative, what changes for them, and the gaps the implementation team has logged.',tabs:[['impact','Impact'],['gaps','Gaps'],['adopthm','Adoption Map']],extra:{label:'Portfolio people and capacity',sec:'people-cap-sec'}},
+  risk:{title:'Readiness & Risk',sub:'Gate reviews, ADKAR assessments, lifecycle signals, open issues, dependencies, and the CRAID log for each initiative.',tabs:[['gates','Gate Tracker'],['adkar','ADKAR'],['lifecycle','Lifecycle'],['flags','Open Issues'],['heatmap','Dependencies'],['craid','CRAID Log']]},
+  training:{title:'Training & Enablement',sub:'Training timelines against the DCAS standard, and training results by stakeholder group.',tabs:[['trainplan','Training Timeline'],['adoption','Training results']]},
+  stakeholders:{title:'Stakeholders',sub:'Stakeholder groups, adoption-risk scoring, and pulse feedback for each initiative.',tabs:[['adoption','Adoption Scoring'],['pulse','Pulse']]},
+  adoption:{title:'Adoption & Outcomes',sub:'Post-launch adoption tracking and sustainment actions after go-live.',tabs:[['postlaunch','Post-launch'],['sustain','Sustainment']]},
+  reports:{title:'Reports',sub:'Decision briefs and exports built from the records in AdoptIQ.'}
+};
+function ccProjects(){return releases.flatMap(r=>(r.projects||[]).map(p=>({r,p})));}
+function ccActive(p){return !/complete|on hold/i.test(p.status||'');}
+function portfolioReadiness(){const v=ccProjects().filter(x=>ccActive(x.p)).map(x=>projGateScore(x.p)).filter(v=>v!==null);return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;}
+function snapReadiness(sn){const v=[];(sn.releases||[]).forEach(r=>(r.projects||[]).forEach(p=>{if(p.gateScore!=null&&!/complete|on hold/i.test(p.status||''))v.push(p.gateScore);}));return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;}
+function snapActive(sn){let n=0;(sn.releases||[]).forEach(r=>(r.projects||[]).forEach(p=>{if(!/complete|on hold/i.test(p.status||''))n++;}));return n;}
+function snapRiskPct(sn){let n=0,k=0;(sn.releases||[]).forEach(r=>(r.projects||[]).forEach(p=>{if(/complete|on hold/i.test(p.status||'')||!p.rag)return;n++;if(p.rag!=='green')k++;}));return n?Math.round(k/n*100):null;}
+function ccIso(d){if(!d)return'';if(d instanceof Date)return isoDate(d);return String(d).slice(0,10);}
+function ccFmt(d){const x=new Date(ccIso(d)+'T12:00:00');return isNaN(x)?'—':x.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+
+// ── Shell ──
+function sbSetCurrent(key){document.querySelectorAll('.sb-item').forEach(b=>b.toggleAttribute('aria-current',b.dataset.sb===key));document.querySelectorAll('.sb-item[aria-current]').forEach(b=>b.setAttribute('aria-current','page'));}
+function sbNav(key){
+  document.body.classList.remove('sb-drawer');
+  const pf=document.getElementById('v-portfolio');
+  if(!pf.classList.contains('active'))goPortfolio();
+  pf.dataset.page=key==='command'||key==='initiatives'?key:'section';
+  sbSetCurrent(key);
+  if(key==='command')renderCommandCenter();
+  else if(key!=='initiatives')renderSectionIndex(key);
+  window.scrollTo(0,0);
+  announceToSR&&announceToSR((key==='command'?'Command Center':key==='initiatives'?'Initiatives':SB_SECTIONS[key].title)+' loaded');
+}
+function syncShell(){
+  const on=['v-portfolio','v-release','v-project'].some(id=>document.getElementById(id)?.classList.contains('active'));
+  document.body.classList.toggle('app-shell',on);
+  if(document.getElementById('v-release')?.classList.contains('active')||document.getElementById('v-project')?.classList.contains('active'))sbSetCurrent('initiatives');
+}
+function initShell(){
+  ['v-portfolio','v-release','v-project'].forEach(id=>{const el=document.getElementById(id);if(el)new MutationObserver(syncShell).observe(el,{attributes:true,attributeFilter:['class']});});
+  // Existing controls move into the sidebar so they keep their ids and handlers.
+  const tools=document.getElementById('sb-tools');
+  ['view-role-select','demo-banner-p'].forEach(id=>{const el=document.getElementById(id);if(el&&tools)tools.prepend(el);});
+  document.querySelectorAll('#v-release .top-bar-i,#v-project .top-bar-i').forEach(bar=>{const b=document.createElement('button');b.className='cc-icon sb-open';b.setAttribute('aria-label','Open navigation');b.innerHTML='<i class="ph ph-list"></i>';b.style.color='#fff';b.onclick=()=>document.body.classList.add('sb-drawer');bar.prepend(b);});
+  const strip=document.querySelector('#v-portfolio .action-strip-i');if(strip){const b=document.createElement('button');b.className='cc-icon sb-open';b.setAttribute('aria-label','Open navigation');b.innerHTML='<i class="ph ph-list"></i>';b.onclick=()=>document.body.classList.add('sb-drawer');strip.prepend(b);}
+  const rs=document.getElementById('view-role-select');const lbl=()=>{const u=document.getElementById('sb-urole');if(u&&rs)u.textContent=rs.options[rs.selectedIndex]?.text||'';};if(rs){rs.addEventListener('change',lbl);lbl();}
+  syncShell();
+}
+
+// ── Command Center ──
+function ccMonthOpts(){const o=[];const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+2);for(let i=0;i<15;i++){o.push(d.toISOString().slice(0,7));d.setMonth(d.getMonth()-1);}return o;}
+function ccSelMonth(){return _cc.month||new Date().toISOString().slice(0,7);}
+function ccKpis(){
+  const all=ccProjects(),act=all.filter(x=>ccActive(x.p));
+  const sn=(_trendSnapshots||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const last=sn[sn.length-1],prev=sn[sn.length-2];
+  const monthAgo=(()=>{const t=new Date();t.setDate(t.getDate()-28);const iso=t.toISOString().slice(0,10);const c=sn.filter(s=>s.date<=iso);return c[c.length-1];})();
+  const atRisk=act.filter(x=>projRAG(x.p,projGoLive(x.p)).rag!=='green');
+  const ready=portfolioReadiness();
+  const tr=[];act.forEach(x=>(x.p.stakeholders||[]).forEach(sh=>{const c=shTrainResults(sh).completion;if(c!==null)tr.push(c);}));
+  const riskNow=last?snapRiskPct(last):null,riskPrev=prev?snapRiskPct(prev):null;
+  return{
+    active:{v:act.length,d:monthAgo?act.length-snapActive(monthAgo):null},
+    ready:{v:ready,d:last&&prev&&snapReadiness(last)!=null&&snapReadiness(prev)!=null?snapReadiness(last)-snapReadiness(prev):null},
+    risk:{v:atRisk.length,of:act.length,d:riskNow!=null&&riskPrev!=null?riskNow-riskPrev:null},
+    train:{v:tr.length?Math.round(tr.reduce((a,b)=>a+b,0)/tr.length):null,n:tr.length}
+  };
+}
+function ccDelta(d,unit,goodUp,period){
+  if(d===null||d===undefined)return'';
+  if(d===0)return'No change '+period;
+  const good=goodUp?d>0:d<0;
+  return'<span class="'+(good?'up':'down')+'">'+(d>0?'▲ +':'▼ ')+Math.abs(d)+unit+'</span> '+period;
+}
+function ccTrendSeries(){
+  const end=ccSelMonth();const months=[];const d=new Date(end+'-01T12:00:00');d.setMonth(d.getMonth()-5);
+  for(let i=0;i<6;i++){months.push(d.toISOString().slice(0,7));d.setMonth(d.getMonth()+1);}
+  const sn=_trendSnapshots||[];
+  const byMonth=f=>months.map(m=>{const v=sn.filter(s=>s.date.slice(0,7)===m).map(f).filter(v=>v!=null);return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;});
+  const adopt=months.map(m=>{const v=[];ccProjects().forEach(({p})=>{const gl=projGoLive(p);if(!gl)return;(p.stakeholders||[]).forEach(sh=>{const pl=(p.postLaunch||{})[sh.id]||{};PL_INTERVALS.forEach(iv=>{const o=pl[iv.key];if(!o||o.adoption===undefined||o.adoption===null||isNaN(o.adoption))return;const dt=new Date(gl+'T12:00:00');dt.setDate(dt.getDate()+parseInt(iv.key.slice(1)));if(dt.toISOString().slice(0,7)===m)v.push(+o.adoption);});});});return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;});
+  return{months,labels:months.map(m=>new Date(m+'-01T12:00:00').toLocaleDateString('en-US',{month:'short'})),ready:byMonth(snapReadiness),risk:byMonth(snapRiskPct),adopt};
+}
+function ccActionItems(){
+  const name=(_cc.userName||'').trim().toLowerCase();
+  const leads=p=>['ocm_train','ocm_impl','pm'].flatMap(k=>(p.resources?.[k]||[]).map(v=>String(typeof v==='string'?v:(v&&v.name)||'').toLowerCase()));
+  let pool=ccProjects().filter(x=>ccActive(x.p));
+  const mine=name?pool.filter(x=>leads(x.p).some(n=>n&&(n===name||n.includes(name)||name.includes(n)))):[];
+  const scoped=mine.length?mine:pool;
+  const items=[];
+  scoped.forEach(({r,p})=>{
+    const gl=projGoLive(p),dt=projTTDates(p),d=daysTo(gl);
+    const red=getProjFlags(p).filter(f=>p.gateState[f.key]==='red').length;
+    const due=tab=>tab==='trainplan'?(p.trainingStartDate||dt.uatComplete||gl):tab==='gates'?(dt.uatComplete||gl):gl;
+    if(d!==null&&d<0)items.push({sev:'red',text:'Confirm the actual go-live or set a new date',r,p,tab:'overview',due:gl});
+    if(red)items.push({sev:'red',text:'Assign owners to '+red+' blocking gate item'+(red===1?'':'s'),r,p,tab:'gates',due:due('gates')});
+    let acts=[];try{acts=pilotStatus(p).actions||[];}catch(e){}
+    acts.forEach(a=>items.push({sev:a.sev,text:a.text.replace(/\.$/,''),r,p,tab:a.tab||'overview',due:due(a.tab)}));
+  });
+  const seen=new Set();const out=items.filter(i=>{const k=i.p.id+'|'+i.text;if(seen.has(k))return false;seen.add(k);return true;});
+  out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1)||String(ccIso(a.due)||'9').localeCompare(String(ccIso(b.due)||'9')));
+  return{items:out,mine:mine.length>0};
+}
+function ccActivity(){
+  const ev=[];
+  (_cc.audit||[]).forEach(a=>ev.push({t:a.created_at,ic:'n',icon:'ph-clock-counter-clockwise',title:String(a.action||'Updated').replace(/_/g,' ')+(a.entity_type?' '+a.entity_type:''),sub:a.entity_name||''}));
+  releases.forEach(r=>{
+    (r.jiraLog||[]).forEach(j=>ev.push({t:j.at,ic:'n',icon:'ph-kanban',title:'Jira export imported',sub:r.name+(j.rows?' · '+j.rows+' issues':'')}));
+    (r.projects||[]).forEach(p=>{
+      (p.proofPoints||[]).forEach(pp=>{if(pp.when)ev.push({t:pp.when,ic:'t',icon:'ph-seal-check',title:'Proof point logged',sub:p.name+(pp.what?' · '+pp.what:'')});});
+      (p.stakeholders||[]).forEach(sh=>{(sh.touchpoints||[]).forEach(tp=>{if(tp.date)ev.push({t:tp.date,ic:'o',icon:'ph-chat-circle-text',title:'Stakeholder feedback received',sub:sh.name+' · '+p.name});});
+        (((p.sustainment||{})[sh.id]||{}).interventions||[]).forEach(iv=>{if(iv.date)ev.push({t:iv.date,ic:'p',icon:'ph-graduation-cap',title:'Intervention '+String(iv.status||'logged').toLowerCase(),sub:sh.name+' · '+p.name});});});
+      if(p.modified)ev.push({t:p.modified,ic:'n',icon:'ph-pencil-simple',title:'Initiative status updated',sub:p.name+' · '+(p.status||'')});
+    });
+  });
+  const now=Date.now()+60000;
+  return ev.filter(e=>{const t=new Date(e.t).getTime();return !isNaN(t)&&t<=now;}).sort((a,b)=>new Date(b.t)-new Date(a.t));
+}
+function ccMilestones(){
+  const m=ccSelMonth();const today=new Date().toISOString().slice(0,10);
+  const from=m===today.slice(0,7)?today:m+'-01';
+  const out=[];const add=(date,kind,name,sub,go)=>{const iso=ccIso(date);if(iso&&iso>=from)out.push({iso,kind,name,sub,go});};
+  releases.forEach(r=>{
+    add(r.golive,'golive','Go-live',r.name,'openRelease('+r.id+')');
+    add(r.uatComplete,'uat','UAT complete',r.name,'openRelease('+r.id+')');
+    add(r.techTransfer,'tt','Tech Transfer',r.name,'openRelease('+r.id+')');
+    (r.projects||[]).forEach(p=>{
+      const go='openProjectFromPortfolio('+r.id+','+p.id+',\'trainplan\')';
+      if(p.golive&&p.golive!==r.golive)add(p.golive,'golive','Go-live',p.name,go);
+      let t=null;try{t=calcTrainingTimeline(p);}catch(e){}
+      if(t&&!t.error){
+        if(t.deliveryStart)add(t.deliveryStart,'training','Training delivery starts',p.name,go);
+        else if(p.trainingStartDate)add(p.trainingStartDate,'training','Training starts',p.name,go);
+        if(t.finishHi)add(t.finishHi,'training','Training complete (latest)',p.name,go);
+        (t.checkpoints||[]).forEach(c=>add(c.d,'post',c.n+'-day adoption check',p.name,'openProjectFromPortfolio('+r.id+','+p.id+',\'postlaunch\')'));
+      }else if(p.trainingStartDate)add(p.trainingStartDate,'training','Training starts',p.name,go);
+    });
+  });
+  return out.sort((a,b)=>a.iso.localeCompare(b.iso));
+}
+function ccSearch(q){
+  const el=document.getElementById('cc-results');if(!el)return;
+  q=(q||'').trim().toLowerCase();
+  if(!q){el.classList.remove('open');el.innerHTML='';return;}
+  const res=[];
+  releases.forEach(r=>{
+    if(r.name.toLowerCase().includes(q))res.push({lbl:r.name,sub:'Release',go:'openRelease('+r.id+')'});
+    (r.projects||[]).forEach(p=>{
+      if((p.name||'').toLowerCase().includes(q))res.push({lbl:p.name,sub:'Initiative · '+r.name,go:'openProjectFromPortfolio('+r.id+','+p.id+',\'overview\')'});
+      (p.stakeholders||[]).forEach(sh=>{if((sh.name||'').toLowerCase().includes(q))res.push({lbl:sh.name,sub:'Stakeholder group · '+p.name,go:'openProjectFromPortfolio('+r.id+','+p.id+',\'adoption\')'});});
+    });
+  });
+  el.innerHTML=res.length?res.slice(0,12).map(x=>'<button role="option" onclick="'+x.go+'">'+esc(x.lbl)+' <small>'+esc(x.sub)+'</small></button>').join(''):'<div class="cc-none">No releases, initiatives, or stakeholder groups match “'+esc(q)+'”.</div>';
+  el.classList.add('open');
+}
+function ccToggle(id){document.querySelectorAll('.cc-pop').forEach(p=>{if(p.id!==id)p.classList.remove('open');});const el=document.getElementById(id);if(el)el.classList.toggle('open');}
+async function ccLoadAudit(){
+  if(_cc.audit!==null||isDemoMode||!currentUserId)return;
+  _cc.audit=[];
+  try{const{data}=await _supabase.from('audit_log').select('*').eq('user_id',currentUserId).order('created_at',{ascending:false}).limit(25);_cc.audit=data||[];}catch(e){_cc.audit=[];}
+  if(document.getElementById('v-portfolio').dataset.page==='command')renderCommandCenter();
+}
+function renderCommandCenter(){
+  const el=document.getElementById('cc');if(!el)return;
+  ccLoadAudit();
+  const first=(_cc.userName||'').trim().split(/\s+/)[0];
+  const h=new Date().getHours();const greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  const k=ccKpis();const alerts=window._ccAlerts||[];
+  const sel=ccSelMonth();
+  let html='<header class="cc-hd">'
+    +'<button class="cc-icon sb-open" onclick="document.body.classList.add(\'sb-drawer\')" aria-label="Open navigation"><i class="ph ph-list"></i></button>'
+    +'<div class="cc-search" role="search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input type="search" id="cc-q" placeholder="Search initiatives, people, or releases…" aria-label="Search initiatives, stakeholder groups, or releases" aria-controls="cc-results" oninput="ccSearch(this.value)" onkeydown="if(event.key===\'Escape\'){this.value=\'\';ccSearch(\'\')}"><div class="cc-results" id="cc-results" role="listbox"></div></div>'
+    +'<div class="cc-hd-r">'
+    +'<label class="cc-month"><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="cc-sr">Period</span><select onchange="_cc.month=this.value;renderCommandCenter()">'+ccMonthOpts().map(m=>'<option value="'+m+'"'+(m===sel?' selected':'')+'>'+new Date(m+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})+'</option>').join('')+'</select></label>'
+    +'<div class="cc-rel"><button class="cc-icon" onclick="ccToggle(\'cc-bell\')" aria-label="Notifications, '+alerts.length+' active" aria-haspopup="true"><i class="ph ph-bell"></i>'+(alerts.length?'<span class="cc-dot">'+alerts.length+'</span>':'')+'</button>'
+    +'<div class="cc-pop" id="cc-bell" role="dialog" aria-label="Notifications"><div class="cc-pop-h">Notifications</div>'+(alerts.length?alerts.map(a=>'<div class="cc-pop-i"><span class="st '+(a.cls==='crit'?'st-r':'st-w')+'">'+(a.cls==='crit'?'Urgent':'Watch')+'</span><span>'+a.msg+'</span></div>').join(''):'<div class="cc-pop-i">No notifications. Go-live, overdue, and critical-release alerts appear here.</div>')+'</div></div>'
+    +'<div class="cc-rel"><button class="cc-icon" onclick="ccToggle(\'cc-help\')" aria-label="Help" aria-haspopup="true"><i class="ph ph-question"></i></button>'
+    +'<div class="cc-pop" id="cc-help" role="dialog" aria-label="Help"><div class="cc-pop-h">Help</div><div class="cc-pop-i"><button class="cc-link" onclick="ccToggle(\'cc-help\');landingBookWalkthrough()">Contact the AdoptIQ team</button></div><div class="cc-pop-i"><button class="cc-link" onclick="ccToggle(\'cc-help\');sbNav(\'reports\')">Reports and exports</button></div></div></div>'
+    +'<button class="cc-av" id="cc-av" onclick="openProfile()" aria-label="'+(isDemoMode?'Demo workspace':'Your profile')+'">'+esc(isDemoMode?'D':(document.getElementById('sb-av')?.textContent||'·'))+'</button>'
+    +'</div></header>';
+  html+='<div class="cc-greet"><div class="cc-eyebrow">'+greet+(first?', '+esc(first):'')+'.</div><h1 class="cc-h1" id="cc-h1">Here’s where your change initiatives stand today.</h1></div>';
+  if(!releases.length){
+    el.innerHTML=html+'<div class="dz-empty"><div class="dz-empty-t">No initiatives yet.</div><div class="dz-empty-d">Add a release and its projects to see readiness, risk, training, and milestones here.</div><button class="btn-gold" onclick="sbNav(\'initiatives\');openAddRelease()">Add a release</button></div>';
+    return;
+  }
+  const kpi=(ic,cls,icon,val,vcls,label,sub)=>'<div class="cc-kpi"><div class="cc-kpi-ic '+cls+'" aria-hidden="true"><i class="ph '+icon+'"></i></div><div><div class="cc-kpi-v '+vcls+'">'+val+'</div><div class="cc-kpi-l">'+label+'</div><div class="cc-kpi-s">'+sub+'</div></div></div>';
+  html+='<section class="cc-kpis" aria-label="Key measures">'
+    +kpi('','o','ph-folder-simple',k.active.v,'','Active Initiatives',ccDelta(k.active.d,'',true,'since last month')||'Across '+releases.length+' release'+(releases.length===1?'':'s'))
+    +kpi('','t','ph-users-three',k.ready.v!==null?k.ready.v+'%':'—','t','Overall Readiness',k.ready.v===null?'No gate reviews yet':(ccDelta(k.ready.d,' pts',true,'vs last week')||'Gate criteria verified'))
+    +kpi('','r','ph-warning',k.risk.v,'r','At-Risk',(ccDelta(k.risk.d,' pts',false,'vs last week')?ccDelta(k.risk.d,' pts',false,'vs last week')+' · ':'')+'of '+k.risk.of+' active')
+    +kpi('','p','ph-graduation-cap',k.train.v!==null?k.train.v+'%':'—','','Training Completion',k.train.v!==null?'Across '+k.train.n+' group'+(k.train.n===1?'':'s')+' with results':'No training results recorded yet')
+    +'</section>';
+  // Readiness trend + action items
+  const ts=ccTrendSeries();const has=a=>a.some(v=>v!==null);
+  const lastV=a=>{for(let i=a.length-1;i>=0;i--)if(a[i]!==null)return a[i];return null;};const firstV=a=>a.find(v=>v!==null);
+  let cap=has(ts.ready)?'Readiness moved from '+firstV(ts.ready)+'% to '+lastV(ts.ready)+'% across the period'+(lastV(ts.ready)<80?', below the 80% go-live target.':'.'):'No weekly readiness snapshots in this period yet.';
+  cap+=has(ts.risk)?' '+lastV(ts.risk)+'% of active initiatives are at risk.':' Risk history starts with the next weekly snapshot.';
+  cap+=has(ts.adopt)?' Post-launch adoption averaged '+lastV(ts.adopt)+'% in the latest month with observations.':' No post-launch adoption recorded in this period.';
+  const ai=ccActionItems();const shown=_cc.showAllActions?ai.items:ai.items.slice(0,5);
+  const sevIc=s=>s==='red'?['r','ph-warning']:s==='amber'?['a','ph-clock']:['n','ph-circle-dashed'];
+  html+='<div class="cc-grid"><section class="cc-card" aria-labelledby="cc-trend-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-trend-h">Readiness Trend</h2><button class="cc-link" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\'trends-sec\')?.scrollIntoView(),300)">View details <i class="ph ph-arrow-right"></i></button></div>'
+    +'<div class="cc-legend"><span><i style="background:var(--deep-navy)"></i>Readiness</span><span><i style="background:var(--teal)"></i>Adoption</span><span><i style="background:var(--brick-red)"></i>Risk</span><span><i style="background:var(--burnt-orange);border-radius:0;height:2px;width:14px"></i>80% target</span></div>'
+    +'<div class="cc-chart"><canvas id="cc-trend" role="img" aria-label="Readiness, adoption and risk by month. '+esc(cap)+'"></canvas></div><p class="cc-cap">'+esc(cap)+'</p></section>'
+    +'<section class="cc-card" aria-labelledby="cc-act-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-act-h">My Action Items</h2>'+(ai.items.length>5?'<button class="cc-link" onclick="_cc.showAllActions=!_cc.showAllActions;renderCommandCenter()">'+(_cc.showAllActions?'Show fewer':'View all ('+ai.items.length+')')+' <i class="ph ph-arrow-right"></i></button>':'')+'</div>'
+    +'<div class="cc-li-s" style="margin:-6px 0 6px">'+(ai.mine?'Initiatives where you are a named lead':'All active initiatives')+'</div>'
+    +(shown.length?'<ul class="cc-list">'+shown.map(i=>{const[c,ic]=sevIc(i.sev);const late=i.due&&ccIso(i.due)<new Date().toISOString().slice(0,10);return'<li><span class="cc-li-ic '+c+'" aria-hidden="true"><i class="ph '+ic+'"></i></span><div class="cc-li-b"><button class="cc-li-t" onclick="openProjectFromPortfolio('+i.r.id+','+i.p.id+',\''+i.tab+'\')">'+esc(i.text)+'</button><div class="cc-li-s">'+esc(i.p.name)+' · '+esc(i.r.name)+'</div></div><span class="cc-li-d'+(late?' late':'')+'">'+(i.due?(late?'Overdue · ':'Due ')+ccFmt(i.due):'No date')+'</span><span class="cc-sr">'+(i.sev==='red'?'Urgent':'Attention')+'</span></li>';}).join('')+'</ul>':'<div class="cc-empty"><strong>No open actions.</strong>Actions appear when gates, training plans, or go-live dates need attention.</div>')
+    +'</section></div>';
+  // Recent activity + milestones
+  const act=ccActivity();const actShown=_cc.showAllActivity?act.slice(0,25):act.slice(0,5);
+  const ms=ccMilestones();
+  html+='<div class="cc-grid cc-grid-b"><section class="cc-card" aria-labelledby="cc-ra-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-ra-h">Recent Activity</h2>'
+    +(currentUserId&&!isDemoMode?'<button class="cc-link" onclick="openAuditLog()">View all <i class="ph ph-arrow-right"></i></button>':act.length>5?'<button class="cc-link" onclick="_cc.showAllActivity=!_cc.showAllActivity;renderCommandCenter()">'+(_cc.showAllActivity?'Show fewer':'View all')+' <i class="ph ph-arrow-right"></i></button>':'')+'</div>'
+    +(actShown.length?'<ul class="cc-list">'+actShown.map(a=>'<li><span class="cc-li-ic '+a.ic+'" aria-hidden="true"><i class="ph '+a.icon+'"></i></span><div class="cc-li-b"><div class="cc-li-t">'+esc(a.title.charAt(0).toUpperCase()+a.title.slice(1))+'</div><div class="cc-li-s">'+esc(a.sub)+'</div></div><span class="cc-li-d">'+esc(fmtMod(a.t))+'</span></li>').join('')+'</ul>':'<div class="cc-empty"><strong>No activity recorded yet.</strong>Updates, imports, feedback, and interventions appear here as the team works.</div>')
+    +'</section><section class="cc-card" aria-labelledby="cc-ms-h"><div class="cc-card-hd"><h2 class="cc-card-t" id="cc-ms-h">Upcoming Milestones</h2><button class="cc-link" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\'tl-sec\')?.scrollIntoView(),300)">View full timeline <i class="ph ph-arrow-right"></i></button></div>'
+    +(ms.length?'<div class="cc-ms" tabindex="0" aria-label="Upcoming milestones, scroll horizontally"><ol class="cc-ms-track" style="list-style:none;margin:0;padding:0">'+ms.slice(0,14).map(x=>'<li class="cc-ms-i"><div class="cc-ms-date">'+ccFmt(x.iso)+'</div><div class="cc-ms-dot '+x.kind+'" aria-hidden="true"></div><button class="cc-li-t cc-ms-n" onclick="'+x.go+'">'+esc(x.name)+'</button><div class="cc-ms-s">'+esc(x.sub)+'</div></li>').join('')+'</ol></div>'
+      +'<div class="cc-ms-key"><span><i style="background:var(--burnt-orange)"></i>Go-live</span><span><i style="background:var(--deep-navy)"></i>UAT</span><span><i style="background:#5A6B85"></i>Tech Transfer</span><span><i style="background:var(--soft-purple)"></i>Training</span><span><i style="background:var(--teal)"></i>Post-launch</span></div>'
+      :'<div class="cc-empty"><strong>No milestones from '+ccFmt(sel===new Date().toISOString().slice(0,7)?new Date():sel+'-01')+' onward.</strong>Go-live, UAT, training, and post-launch dates appear here once they are set. Past-due go-lives are in Notifications.</div>')
+    +'</section></div>';
+  if(isDemoMode)html+='<p class="cc-demo-note">Demo workspace: fictional organizations and data.</p>';
+  el.innerHTML=html;
+  // Chart
+  if(_cc.chart){_cc.chart.destroy();_cc.chart=null;}
+  const cv=document.getElementById('cc-trend');
+  if(cv&&window.Chart){
+    _cc.chart=new Chart(cv,{type:'line',data:{labels:ts.labels,datasets:[
+      {label:'Readiness',data:ts.ready,borderColor:'#0B2545',backgroundColor:'#0B2545',tension:0.3,spanGaps:true,pointRadius:3},
+      {label:'Adoption',data:ts.adopt,borderColor:'#178B87',backgroundColor:'#178B87',tension:0.3,spanGaps:true,pointRadius:3},
+      {label:'Risk',data:ts.risk,borderColor:'#A63F32',backgroundColor:'#A63F32',tension:0.3,spanGaps:true,pointRadius:3},
+      {label:'80% target',data:ts.labels.map(()=>80),borderColor:'#C95628',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y===null?'no data':c.parsed.y+'%')}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',stepSize:25}},x:{grid:{display:false}}}}});
+  }
+}
+function renderSectionIndex(key){
+  const el=document.getElementById('pf-section');const cfg=SB_SECTIONS[key];if(!el||!cfg)return;
+  let h='<div class="sx"><button class="cc-icon sb-open" onclick="document.body.classList.add(\'sb-drawer\')" aria-label="Open navigation"><i class="ph ph-list"></i></button><h1 class="sx-h">'+esc(cfg.title)+'</h1><p class="sx-sub">'+esc(cfg.sub)+'</p>';
+  const all=ccProjects();
+  if(!all.length){el.innerHTML=h+'<div class="dz-empty"><div class="dz-empty-t">No initiatives yet.</div><div class="dz-empty-d">Add a release and its projects to open this section.</div><button class="btn-gold" onclick="sbNav(\'initiatives\');openAddRelease()">Add a release</button></div></div>';return;}
+  if(key==='reports'){
+    h+='<div class="dt-wrap"><table class="dt"><thead><tr><th scope="col">Report</th><th scope="col">Scope</th><th scope="col">Action</th></tr></thead><tbody>'
+      +'<tr><td>Portfolio handoff brief (PDF)</td><td>All releases</td><td><button class="btn-sm dz-keep" onclick="exportHandoffPDF()">Export brief</button></td></tr>'
+      +(currentUserId&&!isDemoMode?'<tr><td>Audit log</td><td>Your workspace</td><td><button class="btn-sm dz-keep" onclick="openAuditLog()">View source records</button></td></tr>':'')
+      +releases.map(r=>'<tr><td>Release decision brief (PDF)</td><td>'+esc(r.name)+'</td><td><button class="btn-sm dz-keep" onclick="openRelease('+r.id+');exportReleasePDF()">Export brief</button></td></tr>').join('')
+      +all.map(({r,p})=>'<tr><td>Initiative status report</td><td>'+esc(p.name)+' <span class="rr-sub">'+esc(r.name)+'</span></td><td><button class="btn-sm dz-keep" onclick="openProjectFromPortfolio('+r.id+','+p.id+',\'overview\');setTimeout(exportStatusReport,350)">Open decision brief</button></td></tr>').join('')
+      +'</tbody></table></div></div>';
+    el.innerHTML=h;return;
+  }
+  if(cfg.extra)h+='<p style="margin:-8px 0 16px"><button class="cc-link" onclick="sbNav(\'initiatives\');setTimeout(()=>document.getElementById(\''+cfg.extra.sec+'\')?.scrollIntoView(),300)">'+esc(cfg.extra.label)+' <i class="ph ph-arrow-right"></i></button></p>';
+  h+='<div class="dt-wrap"><table class="dt"><thead><tr><th scope="col">Initiative</th><th scope="col">Release</th><th scope="col">Status</th><th scope="col">Open</th></tr></thead><tbody>'
+    +all.map(({r,p})=>{const rg=projRAG(p,projGoLive(p));return'<tr><td><strong>'+esc(p.name)+'</strong><div class="rr-sub">'+esc(p.status||'')+'</div></td><td>'+esc(r.name)+'</td><td>'+stBadge(rg.rag,rg.label)+'</td><td><div class="sx-tabs">'+cfg.tabs.map(([t,l])=>'<button class="btn-sm dz-keep" onclick="openProjectFromPortfolio('+r.id+','+p.id+',\''+t+'\')">'+esc(l)+'</button>').join('')+'</div></td></tr>';}).join('')
+    +'</tbody></table></div></div>';
+  el.innerHTML=h;
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.cc-rel'))document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));if(!e.target.closest('.cc-search'))document.getElementById('cc-results')?.classList.remove('open');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));document.body.classList.remove('sb-drawer');}});
+document.addEventListener('DOMContentLoaded',initShell);
 
 // ════════════════════════════════════════════════════════
 // ASK ADOPTIQ — Natural Language Query Interface
@@ -1653,7 +2143,7 @@ function renderAiqChips(){
   });
   // Add history chips if any
   if(_aiqHistory.length){
-    h+='<span style="color:rgba(255,255,255,0.2);font-size:9px;padding:4px 0;margin-left:4px">|</span>';
+    h+='<span style="color:rgba(255,255,255,0.2);font-size:10.5px;padding:4px 0;margin-left:4px">|</span>';
     _aiqHistory.slice().reverse().forEach(q=>{
       h+='<span class="aiq-hist-chip" onclick="askAiqChip(\''+esc(q).replace(/'/g,"\\'")+'\')">'+esc(q)+'</span>';
     });
@@ -1786,7 +2276,7 @@ async function askAdoptIQ(){
     area.innerHTML=`<div class="aiq-response"><div class="aiq-response__header"><div class="aiq-response__tag">${esc(question)}</div><button class="aiq-panel__close" onclick="closeAiqAnswer()"><i class="ph ph-x"></i></button></div><div class="aiq-response__body"><div style="color:var(--red);font-size:12px">AIQ is temporarily unavailable. Your data is intact \u2014 try again in a moment.</div></div></div>`;
   }finally{
     clearTimeout(_aiqT1);clearTimeout(_aiqT2);
-    if(btn){btn.disabled=false;btn.textContent='Ask AIQ';}
+    if(btn){btn.disabled=false;btn.textContent='Ask';}
     renderAiqChips();
   }
 }
@@ -1853,8 +2343,8 @@ function renderAiqAnswer(question,result){
           labels:vd.chart_labels||[],
           datasets:[{
             data:vd.chart_values||[],
-            backgroundColor:vd.chart_colors||['#0C1F3F','#b8922a','#6366f1','#1d6840','#b83232','#d97706','#0ea5e9'],
-            borderColor:chartType==='line'?(vd.chart_colors?.[0]||'#b8922a'):undefined,
+            backgroundColor:vd.chart_colors||['#0B2545','#16213A','#8A929D','#178B87','#A63F32','#D5A33D','#5A6B85'],
+            borderColor:chartType==='line'?(vd.chart_colors?.[0]||'#0B2545'):undefined,
             borderWidth:chartType==='line'?2:0,
             fill:chartType==='line'?false:undefined,
             tension:0.3
@@ -1922,7 +2412,7 @@ function renderTimeline(){
   const ticks=[];const tc=new Date(wStart);tc.setDate(1);
   while(tc<=wEnd){ticks.push(new Date(tc));tc.setMonth(tc.getMonth()+1);}
   let html=`<div style="position:relative;margin-left:190px;height:26px;border-bottom:2px solid var(--navy);margin-bottom:0">`;
-  ticks.forEach(t=>{const lp=pct(t);html+=`<div style="position:absolute;left:${lp}%;transform:translateX(-50%);font-size:10px;font-weight:700;letter-spacing:0.07em;color:var(--ink-60);white-space:nowrap;padding-top:3px">${t.toLocaleDateString('en-US',{month:'short',year:'2-digit'})}</div>`;if(lp>0)html+=`<div style="position:absolute;left:${lp}%;top:0;bottom:0;width:1px;background:var(--border)"></div>`;});
+  ticks.forEach(t=>{const lp=pct(t);html+=`<div style="position:absolute;left:${lp}%;transform:translateX(-50%);font-size:11px;font-weight:700;letter-spacing:0.07em;color:var(--ink-60);white-space:nowrap;padding-top:3px">${t.toLocaleDateString('en-US',{month:'short',year:'2-digit'})}</div>`;if(lp>0)html+=`<div style="position:absolute;left:${lp}%;top:0;bottom:0;width:1px;background:var(--border)"></div>`;});
   html+=`<div style="position:absolute;left:${todayPct}%;top:0;width:2px;height:100%;background:var(--gold);z-index:5"></div></div>`;
   const sorted=[...releases].sort((a,b)=>{if(!a.golive&&!b.golive)return 0;if(!a.golive)return 1;if(!b.golive)return -1;return new Date(a.golive)-new Date(b.golive);});
   sorted.forEach(r=>{
@@ -1973,7 +2463,7 @@ function updateRelStatusPill(){
 // ════════════════════════════════════════════════════════
 // RELEASE VIEW
 // ════════════════════════════════════════════════════════
-function renderRelView(){renderRelSumBar();renderRelScope();renderRelKPIs();renderRelProjCards();renderRelOverview();applyRoleRestrictions();if(isReadOnly)applyReadOnlyRestrictions();}
+function renderRelView(){renderRelBrief();renderRelSumBar();renderRelScope();renderRelKPIs();renderRelProjCards();renderRelOverview();applyRoleRestrictions();if(isReadOnly)applyReadOnlyRestrictions();}
 function renderRelSumBar(){
   const r=getRel();if(!r)return;
   document.getElementById('rsb-name').textContent=r.name||'—';
@@ -2098,7 +2588,7 @@ function renderRelOverview(){
   const fp=document.getElementById('rel-ov-flags');
   const allFlags=[];
   projs.forEach(p=>{GATE_DEFS.forEach(gate=>{gate.items.forEach((item,i)=>{if(p.gateState[gate.id+'_'+i]==='red')allFlags.push({gate:gate.label,item:item.text,proj:p.name});});});});
-  if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active flags. Portfolio is on track.</p></div>';}
+  if(!allFlags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No open gate items. Items marked partial or not met in a gate review appear here with their gate.</p></div>';}
   else{fp.innerHTML=allFlags.slice(0,5).map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.proj)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
   renderRelCraidSummary();
 }
@@ -2552,7 +3042,7 @@ function renderGuidedSummary(){
           <svg viewBox="0 0 200 200" class="guided-radar">
             ${radarGrid}
             <polygon points="${radarPoly}" fill="rgba(229,204,148,0.2)" stroke="var(--gold)" stroke-width="2"/>
-            ${radarPoints.map((pt,i)=>`<circle cx="${pt.x}" cy="${pt.y}" r="4" fill="${scores[i]<3?'var(--color-amber,#d97706)':'var(--gold)'}" stroke="var(--nav-bg)" stroke-width="2"/>`).join('')}
+            ${radarPoints.map((pt,i)=>`<circle cx="${pt.x}" cy="${pt.y}" r="4" fill="${scores[i]<3?'var(--color-amber,#D5A33D)':'var(--gold)'}" stroke="var(--nav-bg)" stroke-width="2"/>`).join('')}
             ${radarLabels}
           </svg>
           <div class="guided-radar-legend">
@@ -2666,7 +3156,7 @@ function switchSHTab(shId,idx){
 function renderPSH(){
   const p=getProj();if(!p)return;migrateStakeholders(p);const wrap=document.getElementById('p-sh-wrap');
   if(p.stakeholders.length&&shQuickOn()){applyDerivedFactors(p);wrap.innerHTML=renderShQuick(p);renderPAHM();if(isReadOnly)applyReadOnlyRestrictions();return;}
-  if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
+  if(!p.stakeholders.length){wrap.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No ADKAR scores recorded. Score each dimension to see where readiness is real and where it is assumed.</p><p class="es-txt">ADKAR tells you where readiness is real and where it\u2019s assumed. Start with Awareness \u2014 it\u2019s the foundation everything else depends on.</p></div>';renderPAHM();return;}
   const adkarR=p.adkarScores['R'];
   const rNote=adkarR>=4?'Strong reinforcement environment. Sustain through scheduled check-ins.':adkarR>=3?'Moderate reinforcement signals. Supervisor activation recommended before go-live.':adkarR>=2?'Reinforcement gaps identified. Structured coaching and floor support required.':'Critical reinforcement deficit. Adoption sustainability is at high risk without immediate intervention.';
   const tabNames=['Identity','Adoption Factors','Objectives & Measurement','Reinforcement','Readiness'];
@@ -3101,10 +3591,10 @@ function renderPAHM(){
       const kr=kirkReady(sh),rr=reinReady(sh);const krCls=kr==='ready'?'low':kr==='partial'?'mod':'crit';const rrCls=rr==='ready'?'low':rr==='partial'?'mod':'crit';
       const typeBadge=sh.stakeholderType==='decision_maker'?'<span class="ahm-type-badge dm">DM</span>':'';
       h+=`<tr><td class="ahm-rl">${typeBadge}${esc(sh.name)}</td>`;
-      AF.forEach(f=>{const v=sh.factors[f.key],t=facTier(v);h+=`<td class="ahm-cw"><div class="ahm-cell ${t}">${TIER_MAP[t]}<br><span style="font-size:9px;opacity:0.65">${v}/5</span></div></td>`;});
+      AF.forEach(f=>{const v=sh.factors[f.key],t=facTier(v);h+=`<td class="ahm-cw"><div class="ahm-cell ${t}">${TIER_MAP[t]}<br><span style="font-size:10.5px;opacity:0.65">${v}/5</span></div></td>`;});
       h+=`<td class="ahm-cw"><div class="ahm-cell ${krCls}">${badgeLabel(kr)}</div></td>`;
       h+=`<td class="ahm-cw"><div class="ahm-cell ${rrCls}">${badgeLabel(rr)}</div></td>`;
-      h+=`<td class="ahm-cw"><div class="ahm-cell ${cls}" style="font-size:11px">${sc}%<br><span style="font-size:9px;opacity:0.65">${tier}</span></div></td></tr>`;
+      h+=`<td class="ahm-cw"><div class="ahm-cell ${cls}" style="font-size:11px">${sc}%<br><span style="font-size:10.5px;opacity:0.65">${tier}</span></div></td></tr>`;
     });
   });
   h+='</tbody></table></div>';pan.innerHTML=h;
@@ -3225,7 +3715,7 @@ function openScoreExplainer(){
     {label:'People & Trust',weight:pctLabel(wTot.sent),pct:sentPct,color:'var(--gold)',dsType:getDataSourceType('sentiment',p)},
     {label:'Training & Preparedness',weight:trActive?pctLabel(wTot.train):'—',pct:trActive?trainPct:null,color:'var(--green)',dsType:getDataSourceType('training',p),pending:!trActive,pendingLabel:'Training not yet started'},
     {label:'Project Health',weight:pctLabel(wTot.lc),pct:lcPct,color:'#6B5EA8',dsType:getDataSourceType('lifecycle',p)},
-    {label:'Communication',weight:pctLabel(wTot.comms),pct:commsPct,color:'#4A6FA5',dsType:getDataSourceType('comms',p)},
+    {label:'Communication',weight:pctLabel(wTot.comms),pct:commsPct,color:'#0B2545',dsType:getDataSourceType('comms',p)},
     {label:'Open Issues',weight:pctLabel(wTot.risk),pct:riskPct,color:riskPct>=70?'var(--green)':riskPct>=40?'var(--amber)':'var(--red)',dsType:getDataSourceType('risk',p)}
   ];
 
@@ -3266,10 +3756,10 @@ function openScoreExplainer(){
 
     <h3>Tier Classification</h3>
     <div class="tier-strip">
-      <div class="tier-badge champion ${tierKey==='champion'?'active':''}">Champion<br><span style="font-weight:400;font-size:10px">85–100</span></div>
-      <div class="tier-badge ontrack ${tierKey==='ontrack'?'active':''}">On Track<br><span style="font-weight:400;font-size:10px">65–84</span></div>
-      <div class="tier-badge atrisk ${tierKey==='atrisk'?'active':''}">At Risk<br><span style="font-weight:400;font-size:10px">40–64</span></div>
-      <div class="tier-badge critical ${tierKey==='critical'?'active':''}">Critical<br><span style="font-weight:400;font-size:10px">0–39</span></div>
+      <div class="tier-badge champion ${tierKey==='champion'?'active':''}">Champion<br><span style="font-weight:400;font-size:11px">85–100</span></div>
+      <div class="tier-badge ontrack ${tierKey==='ontrack'?'active':''}">On Track<br><span style="font-weight:400;font-size:11px">65–84</span></div>
+      <div class="tier-badge atrisk ${tierKey==='atrisk'?'active':''}">At Risk<br><span style="font-weight:400;font-size:11px">40–64</span></div>
+      <div class="tier-badge critical ${tierKey==='critical'?'active':''}">Critical<br><span style="font-weight:400;font-size:11px">0–39</span></div>
     </div>
 
     <h3>Gate Scoring Thresholds</h3>
@@ -3495,7 +3985,7 @@ function renderTrajectoryLoading(){
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.save();
-  ctx.font='500 14px "DM Sans",sans-serif';
+  ctx.font='500 14px "Inter",Arial,sans-serif';
   ctx.fillStyle=chartSubColor();
   ctx.textAlign='center';
   ctx.textBaseline='middle';
@@ -3536,11 +4026,11 @@ function renderTrajectoryError(msg){
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.save();
-  ctx.font='500 13px "DM Sans",sans-serif';
-  ctx.fillStyle='#8B1A1A';
+  ctx.font='500 13px "Inter",Arial,sans-serif';
+  ctx.fillStyle='#687280';
   ctx.textAlign='center';
   ctx.textBaseline='middle';
-  ctx.fillText('Prediction unavailable: '+msg,canvas.width/2,canvas.height/2);
+  ctx.fillText('Forecast not available right now.',canvas.width/2,canvas.height/2-9);ctx.fillText('The decision brief uses recorded evidence only.',canvas.width/2,canvas.height/2+11);
   ctx.restore();
 }
 
@@ -3629,11 +4119,11 @@ function renderTrajectoryChart(prediction,data){
         {
           label:'Actual Score',
           data:actualScores,
-          borderColor:'rgba(12,31,63,0.9)',
-          backgroundColor:'rgba(12,31,63,0.1)',
+          borderColor:'#0B2545',
+          backgroundColor:'rgba(11,37,69,0.08)',
           borderWidth:3,
           pointRadius:6,
-          pointBackgroundColor:'rgba(12,31,63,1)',
+          pointBackgroundColor:'#0B2545',
           pointBorderColor:'#fff',
           pointBorderWidth:2,
           pointHoverRadius:8,
@@ -3644,12 +4134,12 @@ function renderTrajectoryChart(prediction,data){
         {
           label:'Predicted Score',
           data:predictedScores,
-          borderColor:'rgba(184,146,42,0.9)',
-          backgroundColor:'rgba(184,146,42,0.08)',
+          borderColor:'rgba(7,27,51,0.9)',
+          backgroundColor:'rgba(11,37,69,0.08)',
           borderWidth:3,
           borderDash:[8,4],
           pointRadius:6,
-          pointBackgroundColor:'rgba(184,146,42,1)',
+          pointBackgroundColor:'rgba(11,37,69,1)',
           pointBorderColor:'#fff',
           pointBorderWidth:2,
           pointHoverRadius:8,
@@ -3661,7 +4151,7 @@ function renderTrajectoryChart(prediction,data){
         {
           label:'At Risk Threshold',
           data:thresholdData,
-          borderColor:'rgba(139,26,26,0.3)',
+          borderColor:'rgba(166,63,50,0.55)',
           borderWidth:1,
           borderDash:[4,4],
           pointRadius:0,
@@ -3678,12 +4168,12 @@ function renderTrajectoryChart(prediction,data){
       scales:{
         y:{
           min:0,max:100,
-          ticks:{stepSize:25,font:{size:10,family:"'DM Sans',sans-serif"},color:chartSubColor(),callback:v=>v+'%'},
+          ticks:{stepSize:25,font:{size:10,family:"'Inter',Arial,sans-serif"},color:chartSubColor(),callback:v=>v+'%'},
           grid:{color:chartGridColor()},
-          title:{display:true,text:'Adoption Score',font:{size:11,family:"'DM Sans',sans-serif",weight:'600'},color:chartTextColor()}
+          title:{display:true,text:'Adoption Score',font:{size:11,family:"'Inter',Arial,sans-serif",weight:'600'},color:chartTextColor()}
         },
         x:{
-          ticks:{font:{size:10,family:"'DM Sans',sans-serif",weight:'500'},color:chartTextColor()},
+          ticks:{font:{size:10,family:"'Inter',Arial,sans-serif",weight:'500'},color:chartTextColor()},
           grid:{display:false}
         }
       },
@@ -3691,7 +4181,7 @@ function renderTrajectoryChart(prediction,data){
         legend:{
           position:'bottom',
           labels:{
-            font:{size:10,family:"'DM Sans',sans-serif"},
+            font:{size:10,family:"'Inter',Arial,sans-serif"},
             padding:16,
             usePointStyle:true,
             pointStyleWidth:10,
@@ -3701,8 +4191,8 @@ function renderTrajectoryChart(prediction,data){
         },
         tooltip:{
           backgroundColor:'rgba(12,31,63,0.95)',
-          titleFont:{size:12,family:"'DM Sans',sans-serif",weight:'600'},
-          bodyFont:{size:11,family:"'DM Sans',sans-serif"},
+          titleFont:{size:12,family:"'Inter',Arial,sans-serif",weight:'600'},
+          bodyFont:{size:11,family:"'Inter',Arial,sans-serif"},
           padding:12,
           cornerRadius:8,
           callbacks:{
@@ -3725,7 +4215,7 @@ function renderTrajectoryChart(prediction,data){
             const yScale=chart.scales.y;
             const yPos=yScale.getPixelForValue(65);
             ctx.save();
-            ctx.font='500 9px "DM Sans",sans-serif';
+            ctx.font='500 9px "Inter",Arial,sans-serif';
             ctx.fillStyle='rgba(139,26,26,0.5)';
             ctx.textAlign='right';
             ctx.fillText('At Risk Threshold',chart.chartArea.right-4,yPos-5);
@@ -3741,7 +4231,7 @@ function renderTrajectoryChart(prediction,data){
         const yScale=chart.scales.y;
         const yPos=yScale.getPixelForValue(65);
         ctx.save();
-        ctx.font='500 9px "DM Sans",sans-serif';
+        ctx.font='500 9px "Inter",Arial,sans-serif';
         ctx.fillStyle='rgba(139,26,26,0.5)';
         ctx.textAlign='right';
         ctx.fillText('At Risk Threshold',chart.chartArea.right-4,yPos-5);
@@ -3849,7 +4339,7 @@ function openDocImport(target){
       <button class="btn-ghost" onclick="document.getElementById('doc-import-modal').classList.remove('open')" style="font-size:22px;padding:0 6px;line-height:1">&times;</button>
     </div>
     <div class="import-drop" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
-      <div class="import-drop-icon">📄</div>
+      <div class="import-drop-icon"><i class="ph ph-file-text"></i></div>
       <div class="import-drop-text">Drag &amp; drop your file here or <strong>browse</strong></div>
       <div class="import-drop-formats">.xlsx &nbsp; .csv &nbsp; .docx &nbsp; .pdf &nbsp; .pptx &nbsp; .txt</div>
     </div>
@@ -3890,7 +4380,7 @@ function openDocImportSmart(docType){
       <button class="btn-ghost" onclick="document.getElementById('doc-import-modal').classList.remove('open')" style="font-size:22px;padding:0 6px;line-height:1">&times;</button>
     </div>
     <div class="import-drop" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
-      <div class="import-drop-icon">📄</div>
+      <div class="import-drop-icon"><i class="ph ph-file-text"></i></div>
       <div class="import-drop-text">Drag &amp; drop your file here or <strong>browse</strong></div>
       <div class="import-drop-formats">.xlsx &nbsp; .csv &nbsp; .docx &nbsp; .pdf &nbsp; .pptx &nbsp; .txt</div>
     </div>
@@ -4327,12 +4817,12 @@ function renderMultiSectionPreview(container,result){
     const items=result[t];
     const cols=getPreviewColumns(t);
     html+=`<div class="import-sec-panel${i===0?' active':''}" id="import-sec-${t}">`;
-    html+='<div style="overflow-x:auto"><table class="import-tbl"><thead><tr><th class="import-check"><input type="checkbox" checked onchange="toggleSmartSection(\''+t+'\',this.checked)"></th><th style="font-size:10px;color:var(--ink-60)">Source</th>';
+    html+='<div style="overflow-x:auto"><table class="import-tbl"><thead><tr><th class="import-check"><input type="checkbox" checked onchange="toggleSmartSection(\''+t+'\',this.checked)"></th><th style="font-size:11px;color:var(--ink-60)">Source</th>';
     cols.forEach(c=>{html+='<th>'+c.label+'</th>';});
     html+='</tr></thead><tbody>';
     items.forEach((item,idx)=>{
       html+='<tr><td class="import-check"><input type="checkbox" '+(item._selected?'checked':'')+' onchange="toggleSmartRow(\''+t+'\','+idx+',this.checked)"></td>';
-      html+='<td style="font-size:10px;color:var(--ink-60);white-space:nowrap">'+esc(item._source||'')+'</td>';
+      html+='<td style="font-size:11px;color:var(--ink-60);white-space:nowrap">'+esc(item._source||'')+'</td>';
       cols.forEach(c=>{
         let val=item[c.key]||'';
         if(val.length>60)val=val.substring(0,60)+'…';
@@ -5849,6 +6339,7 @@ function normalizeSeverity(val){
 
 function renderPOverview(){
   const p=getProj();if(!p)return;
+  renderProjBrief();
   renderPilotOverview(p);
   renderPKPIs();
   renderTrajectoryCard();
@@ -5856,7 +6347,7 @@ function renderPOverview(){
   renderValueCase(p);
   renderProofPoints(p);
   const fp=document.getElementById('p-ov-flags');const flags=getPFlags().slice(0,4);
-  if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No active flags. Portfolio is on track.</p></div>';}
+  if(!flags.length){fp.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">No open gate items. Items marked partial or not met in a gate review appear here with their gate.</p></div>';}
   else{fp.innerHTML=flags.map(f=>`<div class="fpv"><div class="fpv-g">${esc(f.gate)} — ${esc(f.sub)}</div><div class="fpv-i">${esc(f.item)}</div></div>`).join('');}
   renderPResources();
   renderProjCharts();
@@ -5872,10 +6363,11 @@ function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();de
 function chartTextColor(){return getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()||'#0C1F3F';}
 function chartSubColor(){return getComputedStyle(document.documentElement).getPropertyValue('--ink-60').trim()||'#666';}
 function chartGridColor(){const t=document.documentElement.getAttribute('data-theme');return t==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';}
-const CHART_NAVY='rgba(12,31,63,0.85)';const CHART_GOLD='rgba(184,146,42,0.85)';
-const CHART_GREEN='rgba(29,104,64,0.85)';const CHART_AMBER='rgba(138,92,0,0.85)';
-const CHART_RED='rgba(139,26,26,0.85)';const CHART_BLUE='rgba(74,111,165,0.85)';
-const CHART_GRAY='rgba(180,180,180,0.5)';
+// Navy is the primary series; teal/ochre/brick only where they mean status; orange marks the target.
+const CHART_NAVY='#0B2545';const CHART_GOLD='#D5A33D';
+const CHART_GREEN='#178B87';const CHART_AMBER='#A63F32';
+const CHART_RED='#7E2E24';const CHART_BLUE='#071B33';const CHART_TARGET='#C95628';
+const CHART_GRAY='#E7E5E1';
 
 // ════════════════════════════════════════════════════════
 // DATA CONFIDENCE BAR
@@ -6002,7 +6494,7 @@ function renderValueCase(p){
             <div class="vc-real-track"><div class="vc-real-fill" style="width:${vr}%;background:${vrColor}"></div></div>
             <div class="vc-real-val" style="color:${vrColor}">${vr}%</div>
           </div>`:''}
-        </div>`:'<div class="vc-col"><div class="vc-pending"><div class="vc-pending-icon"><i class="ph ph-clock"></i></div><div class="vc-pending-txt">Actual Outcomes</div><div class="vc-pending-sub">This section unlocks after the go-live date to capture whether this project delivered its expected value.</div></div></div>'}
+        </div>`:'<div class="vc-col"><div class="vc-pending"><div class="vc-pending-icon"><i class="ph ph-clock"></i></div><div class="vc-pending-txt">Actual Outcomes</div><div class="vc-pending-sub">This section opens after the go-live date to capture whether this project delivered its expected value.</div></div></div>'}
       </div>
     </div>
     </div>
@@ -6216,7 +6708,7 @@ function renderPLifecycle(){
           ${(ls.training?.startDateChanges||0)>=3?signalStrengthBadge('red'):(ls.training?.startDateChanges||0)>=1?signalStrengthBadge('yellow'):signalStrengthBadge('green')}
         </div>
         ${(ls.training?.startDateChanges||0)>0?`<div class="sig-row" style="flex-direction:column;align-items:flex-start">
-          <div class="sig-label" style="margin-bottom:8px">Reasons for date changes <span style="font-size:10px;color:var(--ink-60)">(select all that apply)</span></div>
+          <div class="sig-label" style="margin-bottom:8px">Reasons for date changes <span style="font-size:11px;color:var(--ink-60)">(select all that apply)</span></div>
           <div class="sig-reason-checks">
             ${['UAT delays','Training environment defects','Insufficient time scoped','System scope changes','Resource unavailability','Other'].map(r=>`<label class="sig-reason-cb"><input type="checkbox" ${(ls.training?.startDateReasons||[]).includes(r)?'checked':''} onchange="updateLSReasons('training','startDateReasons','${r}',this.checked)"> ${r}</label>`).join('')}
           </div>
@@ -6317,14 +6809,14 @@ function renderProjCharts(){
       backgroundColor:[CHART_NAVY,CHART_GOLD,CHART_GREEN,CHART_BLUE],
       borderWidth:0,borderRadius:3}]
   },options:{responsive:true,maintainAspectRatio:false,cutout:'70%',
-    plugins:{legend:{position:'bottom',labels:{font:{size:10,family:"'DM Sans',sans-serif"},padding:12,usePointStyle:true,pointStyleWidth:8,color:chartTextColor()}},
+    plugins:{legend:{position:'bottom',labels:{font:{size:10,family:"'Inter',Arial,sans-serif"},padding:12,usePointStyle:true,pointStyleWidth:8,color:chartTextColor()}},
       tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+'%'}}
     }},
     plugins:[{id:'centerText',afterDraw(chart){
       const{ctx,width,height}=chart;ctx.save();
-      ctx.font='bold 28px "DM Serif Display",Georgia,serif';ctx.fillStyle=chartTextColor();
+      ctx.font='500 26px "Inter",Arial,sans-serif';ctx.fillStyle=chartTextColor();
       ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(avgGate+'%',width/2,height/2-8);
-      ctx.font='500 10px "DM Sans",sans-serif';ctx.fillStyle=chartSubColor();
+      ctx.font='500 10px "Inter",Arial,sans-serif';ctx.fillStyle=chartSubColor();
       ctx.fillText('Overall',width/2,height/2+12);ctx.restore();
     }}]
   });
@@ -6339,7 +6831,7 @@ function renderProjCharts(){
     labels:adkarLabels,datasets:[{data:adkarValues,backgroundColor:adkarColors,borderRadius:4,barPercentage:0.6}]
   },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
     scales:{x:{min:0,max:5,ticks:{stepSize:1,font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
-      y:{ticks:{font:{size:10,family:"'DM Sans',sans-serif",weight:'600'},color:chartTextColor()},grid:{display:false}}},
+      y:{ticks:{font:{size:10,family:"'Inter',Arial,sans-serif",weight:'600'},color:chartTextColor()},grid:{display:false}}},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+'/5'}}}
   }});
 }
@@ -6363,9 +6855,9 @@ function renderPortfolioCharts(){
     plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+'%'}}}},
     plugins:[{id:'centerText2',afterDraw(chart){
       const{ctx,width,height}=chart;ctx.save();
-      ctx.font='bold 32px "DM Serif Display",Georgia,serif';ctx.fillStyle=chartTextColor();
+      ctx.font='500 28px "Inter",Arial,sans-serif';ctx.fillStyle=chartTextColor();
       ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(avgGate+'%',width/2,height/2-10);
-      ctx.font='500 10px "DM Sans",sans-serif';ctx.fillStyle=chartSubColor();
+      ctx.font='500 10px "Inter",Arial,sans-serif';ctx.fillStyle=chartSubColor();
       ctx.fillText('Portfolio Readiness',width/2,height/2+14);ctx.restore();
     }}]
   });
@@ -6385,7 +6877,7 @@ function renderPortfolioCharts(){
       labels:['Low Risk','Moderate','High Risk','Critical'],
       datasets:[{data:[low,mod,high,crit],backgroundColor:[CHART_GREEN,CHART_GOLD,CHART_AMBER,CHART_RED],borderWidth:0,borderRadius:3}]
     },options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
-      plugins:{legend:{position:'right',align:'center',labels:{font:{size:10,family:"'DM Sans',sans-serif"},padding:10,boxWidth:10,usePointStyle:true,pointStyleWidth:8,color:chartTextColor()}},
+      plugins:{legend:{position:'right',align:'center',labels:{font:{size:10,family:"'Inter',Arial,sans-serif"},padding:10,boxWidth:10,usePointStyle:true,pointStyleWidth:8,color:chartTextColor()}},
         tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+' group'+(ctx.raw!==1?'s':'')}}}}
     });
   } else {
@@ -6630,8 +7122,8 @@ function renderWhatDataTells(){
   el.innerHTML=`<div class="wdt-wrap">
     <div class="wdt-hdr">
       <div class="wdt-hdr-left">
-        <div class="wdt-title">What the Data Is Telling Us</div>
-        <div class="wdt-sub">Top signals across all active projects</div>
+        <div class="wdt-title">Pattern-based observations</div>
+        <div class="wdt-sub">Signals across active projects, each with the record it came from</div>
       </div>
       <div class="wdt-hdr-actions">
         <button class="wdt-toggle-btn" onclick="toggleWDT()" id="wdt-toggle">${_wdtCollapsed?'Show ▾':'Hide ▴'}</button>
@@ -6684,8 +7176,8 @@ function renderComplexityHeatmap(){
     const as=calcCompositeScore(p);
     return{name:p.name,release:r.name,rating:cx.rating,effort:cx.effort,score:cx.score,adoptionScore:as};
   }).sort((a,b)=>b.score-a.score);
-  const colorMap={Critical:'var(--red)',High:'#C28E00',Medium:'var(--gold)',Low:'var(--green)'};
-  const bgMap={Critical:'rgba(139,26,26,0.1)',High:'rgba(194,142,0,0.1)',Medium:'rgba(184,146,42,0.08)',Low:'rgba(29,104,64,0.08)'};
+  const colorMap={Critical:'var(--red)',High:'#D5A33D',Medium:'var(--gold)',Low:'var(--green)'};
+  const bgMap={Critical:'rgba(139,26,26,0.1)',High:'rgba(213,163,61,0.1)',Medium:'rgba(11,37,69,0.08)',Low:'rgba(23,139,135,0.08)'};
   el.innerHTML=`<div class="cx-heatmap">
     <div class="cx-sub">Where OCM energy needs to be concentrated</div>
     <div class="cx-grid">${rated.map(p=>`<div class="cx-card" style="border-left:4px solid ${colorMap[p.rating]};background:${bgMap[p.rating]}">
@@ -6707,7 +7199,7 @@ function renderValueRealization(){
   const el=document.getElementById('exec-value-realization');if(!el)return;
   const postGL=[];
   releases.forEach(r=>r.projects.forEach(p=>{if(isPostGoLive(p))postGL.push({p,r});}));
-  if(!postGL.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Value realization unlocks after go-live. This is where you\u2019ll measure whether the change delivered what was promised.</p></div>';return;}
+  if(!postGL.length){el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Value realization starts after go-live: measure here whether the change delivered what was promised.</p></div>';return;}
   let delivered=0,partial=0,notDelivered=0,notAssessed=0;
   const items=postGL.map(({p,r})=>{
     const vr=calcValueRealization(p.valueCase);
@@ -6807,7 +7299,7 @@ function renderRecommendations(){
 }
 
 // ════════════════════════════════════════════════════════
-// SMART RECOMMENDATIONS ENGINE (AI-Powered)
+// EVIDENCE-INFORMED RECOMMENDATIONS (assisted insight)
 // ════════════════════════════════════════════════════════
 const SMART_RECS_URL='https://yufehucjvviwanbulcok.supabase.co/functions/v1/smart-recommendations';
 let _smartRecsCache={};
@@ -6973,7 +7465,7 @@ async function fetchSmartRecs(){
     renderSmartRecsFromData(_smartRecsCache[cacheKey],p);
   }catch(err){
     const list=document.getElementById('smart-recs-list');
-    if(list)list.innerHTML=`<div class="smart-recs-error">Unable to generate recommendations: ${esc(err.message)}</div>`;
+    if(list)list.innerHTML=`<div class="smart-recs-error">Suggested interventions are not available right now. The recommended action in the decision brief above is based on recorded evidence.</div>`;
   }finally{
     if(btn){btn.classList.remove('loading');btn.innerHTML='&#x21BB; Re-analyze';}
   }
@@ -6998,11 +7490,13 @@ function renderSmartRecsFromData(cached,p){
   }
 
   if(!recs.length){
-    list.innerHTML='<div class="smart-recs-loading" style="color:var(--green)"><i class="ph ph-check"></i> No urgent recommendations at this time.</div>';
+    list.innerHTML='<div class="smart-recs-loading">No suggested interventions from the current records. Recommendations appear here when gate, assessment, or stakeholder evidence points to a specific action.</div>';
     return;
   }
 
   const acked=p.acknowledgedRecs||[];
+  // Strength reflects the evidence on record for this project, not the model's confidence.
+  const es=evidenceStrength(p);
 
   list.innerHTML=recs.map((r,i)=>{
     const prCls=(r.priority||'medium').toLowerCase();
@@ -7012,13 +7506,15 @@ function renderSmartRecsFromData(cached,p){
       <div class="smart-rec-top">
         <div class="smart-rec-priority ${prCls}"><span class="smart-rec-dot ${prCls}"></span>${esc(r.priority||'Medium')}</div>
         <div class="smart-rec-btns">
-          <button class="smart-rec-btn ack" onclick="ackSmartRec(${i})" title="Acknowledge"${isAcked?' disabled':''}><i class="ph ph-check"></i>${isAcked?' Acknowledged':''}</button>
-          <button class="smart-rec-btn dismiss" onclick="dismissSmartRec(${i})" title="Dismiss"><i class="ph ph-x"></i></button>
+          <button class="smart-rec-btn ack" onclick="ackSmartRec(${i})" title="Mark reviewed" aria-label="Mark reviewed"${isAcked?' disabled':''}><i class="ph ph-check"></i>${isAcked?' Reviewed':' Mark reviewed'}</button>
+          <button class="smart-rec-btn dismiss" onclick="dismissSmartRec(${i})" title="Dismiss" aria-label="Dismiss recommendation"><i class="ph ph-x"></i></button>
         </div>
       </div>
+      <div class="smart-rec-kind">Suggested intervention · ${evStrengthHtml(es)}</div>
       <div class="smart-rec-action">${esc(r.action)}</div>
       <div class="smart-rec-meta">
-        <div class="smart-rec-trigger"><strong>Data trigger:</strong> ${esc(r.data_trigger)}</div>
+        <div class="smart-rec-trigger"><strong>Basis:</strong> ${esc(r.data_trigger)}</div>
+        <div class="smart-rec-trigger"><strong>Records on file:</strong> ${esc(es.inputs.join(', ')||'none yet')}</div>
         <div class="smart-rec-impact"><i class="ph ph-arrow-up"></i> ${esc(r.estimated_impact)}</div>
         <div class="smart-rec-dimension">${esc(r.target_dimension)}</div>
       </div>
@@ -7182,7 +7678,7 @@ function renderPGaps(){
   h+='<div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn-gold" onclick="addGap()">+ Add Gap</button>';
   h+='<button class="btn-outline" onclick="openDocImport(\'gaps\')" title="Import from document">&#x1F4C4; Import</button>';
   h+='<button class="btn-outline" onclick="bulkClear(\'gaps\')" title="Clear all gaps" style="color:var(--red-bright);border-color:var(--red-bright)"><i class="ph ph-trash"></i> Clear All</button>';
-  h+='<span style="font-size:10px;color:var(--ink-60);font-style:italic">Gaps received from implementation team — focus on training/adoption impact</span></div>';
+  h+='<span style="font-size:11px;color:var(--ink-60);font-style:italic">Gaps received from implementation team — focus on training/adoption impact</span></div>';
   if(gaps.length===0){
     h+='<div style="text-align:center;padding:40px;color:var(--ink-35);font-size:12px">No gaps recorded yet. Click "+ Add Gap" to log gaps from the implementation team\'s analysis.</div>';
   }else{
@@ -7208,10 +7704,10 @@ function renderPGaps(){
 // FEATURE: CRAID LOG (Constraints, Risks, Assumptions, Issues, Dependencies)
 // ════════════════════════════════════════════════════════
 const CRAID_TYPES=[
-  {key:'risk',label:'Risk',abbr:'R',color:'#b83232'},
-  {key:'assumption',label:'Assumption',abbr:'A',color:'#2563eb'},
-  {key:'issue',label:'Issue',abbr:'I',color:'#d97706'},
-  {key:'dependency',label:'Dependency',abbr:'D',color:'#7c3aed'},
+  {key:'risk',label:'Risk',abbr:'R',color:'#A63F32'},
+  {key:'assumption',label:'Assumption',abbr:'A',color:'#5A6B85'},
+  {key:'issue',label:'Issue',abbr:'I',color:'#D5A33D'},
+  {key:'dependency',label:'Dependency',abbr:'D',color:'#0B2545'},
   {key:'constraint',label:'Constraint',abbr:'C',color:'#6b7280'}
 ];
 const CRAID_STATUSES=['Open','In Progress','Mitigated','Closed','Validated','Invalidated'];
@@ -8000,7 +8496,7 @@ function renderSFForecastResult(result){
 
   let h='';
   // Risk strip
-  const satColor=risk.overallSaturation==='critical'?'#b83232':risk.overallSaturation==='high'?'#d97706':risk.overallSaturation==='moderate'?'#2563eb':'#16a34a';
+  const satColor=risk.overallSaturation==='critical'?'#A63F32':risk.overallSaturation==='high'?'#D5A33D':risk.overallSaturation==='moderate'?'#0B2545':'#178B87';
   h+='<div class="sf-risk-strip">';
   h+='<div class="sf-risk-item"><span class="sf-risk-val" style="color:'+satColor+'">'+esc(risk.overallSaturation||'—')+'</span><span class="sf-risk-lbl">Portfolio Saturation</span></div>';
   h+='<div class="sf-risk-item"><span class="sf-risk-val">'+esc(risk.peakPeriod||'—')+'</span><span class="sf-risk-lbl">Peak Period</span></div>';
@@ -8034,7 +8530,7 @@ function renderSFForecastResult(result){
     // Legend
     h+='<div class="sf-legend"><span class="sf-legend-label">Low</span><div class="sf-legend-bar">';
     for(let i=0;i<=10;i++){
-      const colors=['rgba(22,163,106,0.08)','rgba(22,163,106,0.2)','rgba(22,163,106,0.35)','rgba(234,179,8,0.25)','rgba(234,179,8,0.4)','rgba(217,119,6,0.35)','rgba(217,119,6,0.5)','rgba(220,38,38,0.3)','rgba(220,38,38,0.45)','rgba(220,38,38,0.6)','rgba(153,27,27,0.7)'];
+      const colors=['rgba(22,163,106,0.08)','rgba(22,163,106,0.2)','rgba(22,163,106,0.35)','rgba(234,179,8,0.25)','rgba(234,179,8,0.4)','rgba(213,163,61,0.35)','rgba(213,163,61,0.5)','rgba(220,38,38,0.3)','rgba(220,38,38,0.45)','rgba(220,38,38,0.6)','rgba(153,27,27,0.7)'];
       h+='<div class="sf-legend-seg" style="background:'+colors[i]+'"></div>';
     }
     h+='</div><span class="sf-legend-label">Critical</span></div>';
@@ -8222,7 +8718,7 @@ function renderWhatIfResult(result,allProjs){
 // ── Sequencing Mode ──
 function renderSequencingEmpty(){
   const el=document.getElementById('sf-sequencing-content');if(!el)return;
-  el.innerHTML='<div class="sf-empty-state"><div style="font-size:28px;margin-bottom:8px">🔄</div><div class="sf-title" style="font-size:13px;margin-bottom:4px">AI Sequencing Recommendations</div><div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">Get AI-powered suggestions for optimal project sequencing to minimize change fatigue</div><button class="sf-analyze-btn" onclick="runSequencingAnalysis()">Get Recommendations</button></div>';
+  el.innerHTML='<div class="sf-empty-state"><div class="sf-title" style="font-size:13px;margin-bottom:4px">Sequencing recommendations</div><div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">Assisted insight: suggested project order to reduce change fatigue, with the inputs used. Use professional judgment and validate with project stakeholders.</div><button class="sf-analyze-btn" onclick="runSequencingAnalysis()">Get Recommendations</button></div>';
 }
 
 async function runSequencingAnalysis(){
@@ -9159,7 +9655,7 @@ function renderPPulse(){
   let h='';
   if(!hasAnyResults&&isDemoMode){
     h+='<div style="margin-bottom:14px"><button class="btn-gold" onclick="loadPulseDemoData()">Load Sample Survey Data</button>';
-    h+='<span style="margin-left:10px;font-size:10px;color:var(--ink-60);font-style:italic">Generates links and simulates stakeholder responses for all groups</span></div>';
+    h+='<span style="margin-left:10px;font-size:11px;color:var(--ink-60);font-style:italic">Generates links and simulates stakeholder responses for all groups</span></div>';
   }
   shs.forEach(sh=>{
     const cfg=p.pulseConfig[sh.id]||{};
@@ -9176,7 +9672,7 @@ function renderPPulse(){
     // Survey link management
     if(!linkId){
       h+='<button class="btn-gold btn-sm" onclick="createPulseLink('+sh.id+')">Generate Survey Link</button>';
-      h+='<span style="margin-left:8px;font-size:10px;color:var(--ink-60)">Creates an anonymous survey mapped to your assessment dimensions</span>';
+      h+='<span style="margin-left:8px;font-size:11px;color:var(--ink-60)">Creates an anonymous survey mapped to your assessment dimensions</span>';
     }else{
       const url=window.location.origin+'/pulse?link='+linkId;
       h+='<div class="pulse-link-box">';
@@ -9227,7 +9723,7 @@ function renderPPulse(){
         h+='</div>';
       });
       h+='</div>';
-      h+='<div class="pulse-legend"><span class="pulse-leg-prac">■ Team Assessment</span><span class="pulse-leg-pop">■ Stakeholder Feedback</span><span style="margin-left:auto;font-size:9px;color:var(--ink-35)">'+responseCount+' responses</span></div>';
+      h+='<div class="pulse-legend"><span class="pulse-leg-prac">■ Team Assessment</span><span class="pulse-leg-pop">■ Stakeholder Feedback</span><span style="margin-left:auto;font-size:10.5px;color:var(--ink-35)">'+responseCount+' responses</span></div>';
       h+='</div>';
     }
     // Simulate results button (for demo/testing)
@@ -9245,7 +9741,7 @@ function renderPPulse(){
   if(totalTextResponses>0||hasAnyResults){
     h+='<div class="pulse-ai-panel" id="pulse-ai-panel">';
     h+='<div class="pulse-ai-hdr" onclick="togglePulseAI()">';
-    h+='<h3><span class="ai-sparkle"><i class="ph ph-sparkle"></i></span> AI Pulse Insights</h3>';
+    h+='<h3>Pulse survey: pattern-based observations</h3>';
     h+='<div class="pulse-ai-acts">';
     const cached=p._pulseInsightsCache;
     if(cached?.timestamp){h+='<span class="pulse-ai-meta">Analyzed '+fmtDate(cached.timestamp.split('T')[0])+'</span>';}
@@ -9255,7 +9751,7 @@ function renderPPulse(){
     if(cached){
       h+=renderPulseInsightsHTML(cached);
     }else if(totalTextResponses>0){
-      h+='<div style="text-align:center;padding:20px;color:var(--ink-60);font-size:11px">Click <strong>Analyze</strong> to run AI-powered analysis on '+totalTextResponses+' open-ended responses.</div>';
+      h+='<div style="text-align:center;padding:20px;color:var(--ink-60);font-size:11px">Click <strong>Analyze</strong> to run an assisted analysis on '+totalTextResponses+' open-ended responses.</div>';
     }else{
       h+='<div style="text-align:center;padding:20px;color:var(--ink-60);font-size:11px">No open-ended responses to analyze yet. Responses will appear as stakeholders complete surveys.</div>';
     }
@@ -9542,7 +10038,7 @@ function renderPulseInsightsHTML(analysis){
 
   // 3. Themes
   if(analysis.themes?.length){
-    h+='<div class="pai-section-hd">Top Themes <span style="font-weight:400;font-size:10px;color:var(--ink-60)">('+analysis.themes.length+' identified)</span></div>';
+    h+='<div class="pai-section-hd">Top Themes <span style="font-weight:400;font-size:11px;color:var(--ink-60)">('+analysis.themes.length+' identified)</span></div>';
     h+='<div class="pai-themes">';
     analysis.themes.forEach(t=>{
       const trendLabel={new:'<i class="ph ph-circle-fill"></i> New',growing:'<i class="ph ph-arrow-up"></i> Growing',stable:'<i class="ph ph-minus"></i> Stable',declining:'<i class="ph ph-arrow-down"></i> Declining',resolved:'<i class="ph ph-check"></i> Resolved'};
@@ -9558,7 +10054,7 @@ function renderPulseInsightsHTML(analysis){
 
   // 4. Resistance signals
   if(analysis.resistance_signals?.length){
-    h+='<div class="pai-section-hd"><i class="ph ph-warning"></i> Resistance Signals <span style="font-weight:400;font-size:10px;color:var(--ink-60)">('+analysis.resistance_signals.length+' detected)</span></div>';
+    h+='<div class="pai-section-hd"><i class="ph ph-warning"></i> Resistance Signals <span style="font-weight:400;font-size:11px;color:var(--ink-60)">('+analysis.resistance_signals.length+' detected)</span></div>';
     h+='<div class="pai-signals">';
     analysis.resistance_signals.forEach(s=>{
       const typeLabels={active_resistance:'Active Resistance',confusion:'Confusion',disengagement:'Disengagement',fear:'Fear',skepticism:'Skepticism'};
@@ -9577,7 +10073,7 @@ function renderPulseInsightsHTML(analysis){
 
   // 5. Key quotes
   if(analysis.key_quotes?.length){
-    h+='<div class="pai-section-hd">Key Quotes <span style="font-weight:400;font-size:10px;color:var(--ink-60)">Representative anonymous responses</span></div>';
+    h+='<div class="pai-section-hd">Key Quotes <span style="font-weight:400;font-size:11px;color:var(--ink-60)">Representative anonymous responses</span></div>';
     h+='<div class="pai-quotes">';
     analysis.key_quotes.forEach(q=>{
       h+='<div class="pai-quote">';
@@ -9602,7 +10098,7 @@ function renderPulseInsightsHTML(analysis){
   }
 
   // Disclaimer
-  h+='<div class="pai-disclaimer">Analysis generated by AI based on anonymous survey responses. Use professional judgment when interpreting results.</div>';
+  h+='<div class="pai-disclaimer">Assisted insight from anonymous survey responses. Use professional judgment and validate recommendations with project stakeholders.</div>';
 
   return h;
 }
@@ -9616,7 +10112,7 @@ function renderPulseSentimentChart(analysis){
     data:{
       labels:['Positive','Neutral','Negative','Mixed'],
       datasets:[{data:[sb.positive||0,sb.neutral||0,sb.negative||0,sb.mixed||0],
-        backgroundColor:['#1d6840','#6366f1','#b83232','#d97706'],
+        backgroundColor:['#178B87','#8A929D','#A63F32','#D5A33D'],
         borderWidth:0,hoverOffset:4}]
     },
     options:{responsive:false,maintainAspectRatio:true,
@@ -9637,7 +10133,7 @@ function renderPulseTrendChart(p){
   history.forEach(h2=>{(h2.themes||[]).forEach(t=>allThemes.add(t.theme));});
   const themeNames=[...allThemes].slice(0,6);// Top 6 themes
 
-  const colors=['#b8922a','#6366f1','#b83232','#1d6840','#d97706','#0ea5e9'];
+  const colors=['#0B2545','#16213A','#A63F32','#178B87','#D5A33D','#8A929D'];
   const datasets=themeNames.map((name,i)=>({
     label:name,
     data:history.map(h2=>{const t=(h2.themes||[]).find(th=>th.theme===name);return t?t.count:0;}),
@@ -9671,7 +10167,7 @@ async function saveSnapshot(){
       id:r.id,name:r.name,
       projects:r.projects.map(p=>{
         const gs=projGateScore(p);const avg=projAdkarAvg(p);const flags=getProjFlags(p).length;
-        return{id:p.id,name:p.name,gateScore:gs,adkarAvg:avg,flags,status:p.status};
+        return{id:p.id,name:p.name,gateScore:gs,adkarAvg:avg,flags,status:p.status,rag:projRAG(p,projGoLive(p)).rag};
       })
     }))
   };
@@ -10081,7 +10577,7 @@ function openGenModal(type,label){
   modal.className='gen-modal';
   modal.innerHTML=`<div class="gen-modal-box">
     <h2>Generate ${esc(label)}</h2>
-    <div class="gen-modal-sub">Select audience depth and AI narrative options</div>
+    <div class="gen-modal-sub">Select audience depth and narrative options</div>
     <div class="gen-aud-label">Audience Level</div>
     <div class="gen-aud-opts">
       <label class="gen-aud-opt${_genAudienceChoice==='executive'?' selected':''}" onclick="selectGenAud('executive',this)">
@@ -10099,9 +10595,9 @@ function openGenModal(type,label){
     </div>
     <div class="gen-ai-toggle">
       <input type="checkbox" id="gen-ai-check"${_genAIEnabled?' checked':''} onchange="_genAIEnabled=this.checked">
-      <label for="gen-ai-check"><strong>AI-Assisted Narrative</strong> — Generate consultant-grade executive summary from live project data</label>
+      <label for="gen-ai-check"><strong>Assisted narrative</strong>: draft an executive summary from live project data for you to review</label>
     </div>
-    <div class="gen-ai-note">AI narrative supplements existing data tables and charts. It does not replace structured content.</div>
+    <div class="gen-ai-note">The assisted narrative supplements the data tables and charts. Use professional judgment and validate recommendations with project stakeholders.</div>
     <div id="gen-status" class="gen-status" style="display:none"></div>
     <div class="gen-modal-acts">
       <button class="btn-outline" onclick="closeGenModal()">Cancel</button>
@@ -10169,13 +10665,13 @@ async function executeGenerate(){
   let narrative=null;
 
   if(_genAIEnabled&&aiAllowed()){
-    if(status){status.style.display='block';status.className='gen-status';status.textContent='Generating AI narrative…';}
+    if(status){status.style.display='block';status.className='gen-status';status.textContent='Drafting the assisted narrative…';}
     if(btn){btn.disabled=true;btn.textContent='Generating…';}
     try{
       const data=collectNarrativeData(p);
       narrative=await fetchNarrative(_genCurrentType,_genAudienceChoice,data);
     }catch(err){
-      if(status){status.className='gen-status error';status.textContent='AI narrative failed: '+err.message+'. Generating without AI.';}
+      if(status){status.className='gen-status error';status.textContent='Assisted narrative unavailable: '+err.message+'. Generating the brief without it.';}
       await new Promise(r2=>setTimeout(r2,1500));
       narrative=null;
     }finally{
@@ -10204,7 +10700,7 @@ function pdfAINarrative(doc,y,w,h,pg,mg,narrativeText,sectionTitle){
   // Section label
   doc.setFillColor(240,237,230);doc.roundedRect(mg,y,w-28,16,2,2,'F');
   doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(12,31,63);
-  doc.text(sectionTitle||'AI-Assisted Analysis',mg+4,y+10);
+  doc.text(sectionTitle||'Assisted analysis',mg+4,y+10);
   doc.setFontSize(6);doc.setTextColor(140,140,140);doc.setFont('helvetica','italic');
   doc.text('Generated from live project data. Review and adjust as needed.',w-mg,y+10,{align:'right'});
   y+=20;
@@ -10336,7 +10832,7 @@ function genStakeholderAnalysis(aiNarrative,audience){
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
   // AI Narrative (if available)
   if(aiNarrative?.executiveSummary){
-    y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');
+    y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'Assisted executive summary (review before sharing)');
   }
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
@@ -10533,7 +11029,7 @@ function genTrainingPlan(aiNarrative,audience){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'Assisted executive summary (review before sharing)');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   let trainExec='This training plan addresses '+shs.length+' stakeholder group'+(shs.length!==1?'s':'')+' for the '+p.name+' initiative. ';
@@ -10756,7 +11252,7 @@ function genCommsPlan(aiNarrative,audience){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'Assisted executive summary (review before sharing)');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   const posture=gapDims.length>=3?'proactive and intensive':gapDims.length>=1?'targeted':'sustainment-focused';
@@ -10941,7 +11437,7 @@ function genResistancePlan(aiNarrative,audience){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'Assisted executive summary (review before sharing)');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   const resistPosture=critSH.length>=3||critGaps.length>0?'critical':critSH.length>=1?'elevated':'manageable';
@@ -11193,7 +11689,7 @@ function genReadinessRec(aiNarrative,audience){
 
   // ── 1. Executive Summary ──
   doc.addPage();pg[0]++;let y=pdfHeader(doc,w);
-  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'AI-Assisted Executive Summary');}
+  if(aiNarrative?.executiveSummary){y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.executiveSummary,'Assisted executive summary (review before sharing)');}
   y=pdfSection(doc,y,'1. Executive Summary',w);
   doc.setFontSize(9);doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');
   let recExec='Based on a comprehensive analysis of readiness ('+(gate||0)+'%), '+fwShort()+' assessment ('+adkar+'/5), '+
@@ -11465,7 +11961,7 @@ function genReadinessRec(aiNarrative,audience){
 
   // ── AI-Assisted Risk Narrative ──
   if(aiNarrative?.riskNarrative){
-    y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.riskNarrative,'AI-Assisted Risk Narrative');
+    y=pdfAINarrative(doc,y,w,h,pg,mg,aiNarrative.riskNarrative,'Assisted risk narrative (review before sharing)');
   }
 
   pdfFooter(doc,w,h,pg[0]);
@@ -11600,7 +12096,7 @@ async function openTeamPanel(){
       const roleLbl={staff:'Staff',exec_sponsor:'Exec Sponsor',client_viewer:'Client',editor:'Editor',viewer:'Viewer'}[m.role]||m.role;
       const badgeCls=m.role==='staff'?'editor':m.role==='editor'?'editor':'viewer';
       html+=`<div class="team-member-row"><span class="team-role-badge ${badgeCls}">${roleLbl}</span><span>${esc(name)}</span>
-        <button class="btn-sm" style="margin-left:auto;font-size:9px;padding:3px 8px" onclick="removeMember('${teamId}','${m.user_id}')">Remove</button></div>`;
+        <button class="btn-sm" style="margin-left:auto;font-size:10.5px;padding:3px 8px" onclick="removeMember('${teamId}','${m.user_id}')">Remove</button></div>`;
     }
   }
   listEl.innerHTML=html;
@@ -11609,7 +12105,7 @@ async function openTeamPanel(){
   const invEl=document.getElementById('team-invites-pending');
   if(invites&&invites.length){
     invEl.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--ink-60);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em">Pending Invites</div>'+
-      invites.map(inv=>`<div class="team-member-row"><span class="team-role-badge ${inv.role}">${inv.role}</span><span>${esc(inv.email)}</span><span style="font-size:10px;color:var(--ink-35);margin-left:auto">Pending</span></div>`).join('');
+      invites.map(inv=>`<div class="team-member-row"><span class="team-role-badge ${inv.role}">${inv.role}</span><span>${esc(inv.email)}</span><span style="font-size:11px;color:var(--ink-35);margin-left:auto">Pending</span></div>`).join('');
   } else {invEl.innerHTML='';}
   document.getElementById('team-modal').classList.add('open');
 }
@@ -11678,6 +12174,15 @@ function welcomeNext(step){
 async function closeWelcome(){
   document.getElementById('welcome-modal').classList.remove('open');
   await _supabase.auth.updateUser({data:{onboarded:true}});
+}
+const DEMO_AUTHORED='2026-04-15';
+function shiftDemoDates(obj,authored){
+  const t=new Date();t.setHours(12,0,0,0);
+  const days=Math.round((t-new Date(authored+'T12:00:00'))/86400000);
+  if(!days)return;
+  const shift=v=>{const d=new Date(v+'T12:00:00');d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);};
+  const walk=o=>{if(!o||typeof o!=='object')return;Object.keys(o).forEach(k=>{const v=o[k];if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v))o[k]=shift(v);else if(v&&typeof v==='object')walk(v);});};
+  walk(obj);
 }
 async function loadDemoData(){
   releases=[];
@@ -12023,6 +12528,9 @@ async function loadDemoData(){
   // T-shirt sizes (one left unsized to show the prompt)
   const demoSizes={'Clinical Workflow':'XL','Nursing Documentation':'L','Teller Platform':'L','Online Banking':'M','Shop Floor MES':'M','Case Management System':'XL','Public Portal & Self-Service':'M','Payroll Engine':'M'};
   releases.forEach(r=>r.projects.forEach(p=>{if(demoSizes[p.name])p.size=demoSizes[p.name];}));
+  // The demo was written as of DEMO_AUTHORED. Shift every date by the same number of
+  // days so the fictional timeline stays current (spacing between dates is unchanged).
+  shiftDemoDates(releases,DEMO_AUTHORED);
 
   await saveData();setDemoMode(true);renderPortfolio();renderAlerts();showSuccess('You\u2019re in demo mode. Explore freely \u2014 nothing here is real data.');
   initTopBrand();
@@ -12128,6 +12636,7 @@ function renderAlerts(){
     html+=`<button class="alert-toggle-btn" id="alert-toggle-btn" onclick="toggleAlertOverflow()">Show ${overflow} more</button>`;
   }
   html+=`</div>`;
+  window._ccAlerts=alerts;
   bar.innerHTML=html;
 }
 function toggleAlertOverflow(){
@@ -12177,6 +12686,8 @@ function applyReadOnlyRestrictions(){
     const isBack=txt.includes('Back')||txt.includes('Portfolio');
     const isOpen=txt.includes('Open')||el.classList.contains('btn-sm');
     const isCard=el.closest('.r-card')||el.closest('.pc');
+    // Navigation and evidence links stay usable for viewers.
+    if(el.classList.contains('dz-keep'))return;
     if(!isNav&&!isExport&&!isBack&&!isOpen&&!isCard){
       el.disabled=true;el.style.opacity='0.5';el.style.cursor='not-allowed';
     }
@@ -12217,7 +12728,7 @@ async function loadSharedView(token){
     const{data:row,error:qErr}=await _supabase.from('shared_links').select('snapshot,label,created_at,expires_at').eq('token',token).eq('is_active',true).gt('expires_at',new Date().toISOString()).maybeSingle();
     if(qErr||!row){
       document.getElementById('v-login').classList.remove('active');
-      document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);font-family:DM Sans,sans-serif"><div style="text-align:center;max-width:400px;padding:40px"><div style="font-size:48px;margin-bottom:16px"><i class="ph ph-link-break" style="font-size:48px"></i></div><h2 style="font-family:DM Serif Display,Georgia,serif;margin-bottom:12px">Link Expired or Invalid</h2><p style="color:#666;font-size:14px">This shared dashboard link has expired, been revoked, or does not exist.</p><a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;background:#b8922a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Go to AdoptIQ</a></div></div>';
+      document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);font-family:Inter,Arial,sans-serif"><div style="text-align:center;max-width:400px;padding:40px"><div style="font-size:48px;margin-bottom:16px"><i class="ph ph-link-break" style="font-size:48px"></i></div><h2 style="font-family:Playfair Display,Georgia,serif;margin-bottom:12px">Link Expired or Invalid</h2><p style="color:#666;font-size:14px">This shared dashboard link has expired, been revoked, or does not exist.</p><a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;background:#0B2545;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Go to AdoptIQ</a></div></div>';
       return;
     }
     sharedViewData=row;
@@ -12319,37 +12830,20 @@ async function revokeShare(id){
 // HISTORICAL TREND CHARTS
 // ════════════════════════════════════════════════════════
 function generateDemoSnapshots(){
-  // Simulate 8 weeks of improving portfolio data for demo
+  // Eight weeks of illustrative history that ends at the live demo data, so the
+  // trend, the briefs and the radar always agree. Earlier weeks step back toward
+  // lower readiness and more open gate items.
   const today=new Date();const snaps=[];
-  const baseGates=[8,12,15,19,22,25,27,30];
-  const baseFlags=[22,19,17,16,15,14,13,12];
-  const baseAdkar=[2.2,2.4,2.5,2.7,2.8,2.9,3.0,3.0];
   for(let i=7;i>=0;i--){
     const d=new Date(today);d.setDate(d.getDate()-i*7);
-    const idx=7-i;
-    snaps.push({
-      date:d.toISOString().split('T')[0],
-      releases:[
-        {id:1,name:'Q3 EHR Migration',projects:[
-          {id:1,name:'Clinical Workflow',gateScore:baseGates[idx]+9,adkarAvg:(baseAdkar[idx]+0.5).toFixed(1),flags:Math.max(0,baseFlags[idx]-10),status:'In Progress'},
-          {id:2,name:'Nursing Documentation',gateScore:baseGates[idx]+5,adkarAvg:(baseAdkar[idx]+0.3).toFixed(1),flags:Math.max(0,baseFlags[idx]-8),status:'In Progress'}
-        ]},
-        {id:2,name:'Core Banking Modernization',projects:[
-          {id:3,name:'Teller Platform',gateScore:baseGates[idx]+3,adkarAvg:baseAdkar[idx].toFixed(1),flags:Math.max(0,baseFlags[idx]-5),status:'In Progress'},
-          {id:4,name:'Online Banking',gateScore:Math.max(0,baseGates[idx]-5),adkarAvg:(baseAdkar[idx]-0.2).toFixed(1),flags:baseFlags[idx],status:'Not Started'}
-        ]},
-        {id:3,name:'ERP Manufacturing Cutover',projects:[
-          {id:5,name:'Shop Floor MES',gateScore:Math.max(0,baseGates[idx]-8),adkarAvg:(baseAdkar[idx]-0.3).toFixed(1),flags:Math.min(22,baseFlags[idx]+3),status:'Not Started'}
-        ]},
-        {id:4,name:'M\u00FCller & Sons CRM Go-Live',projects:[
-          {id:6,name:'Client 360',gateScore:baseGates[idx]+20,adkarAvg:(baseAdkar[idx]+0.8).toFixed(1),flags:Math.max(0,baseFlags[idx]-12),status:'In Progress'}
-        ]},
-        {id:5,name:'State Benefits Portal Modernization',projects:[
-          {id:7,name:'Case Management',gateScore:100,adkarAvg:'4.5',flags:0,status:'Completed'},
-          {id:8,name:'Public Portal',gateScore:100,adkarAvg:'4.2',flags:0,status:'Completed'}
-        ]}
-      ]
-    });
+    snaps.push({date:d.toISOString().split('T')[0],releases:releases.map((r,ri)=>({id:r.id,name:r.name,projects:(r.projects||[]).map((p,k)=>{
+      const gs=projGateScore(p),fl=getProjFlags(p).length,ad=parseFloat(projAdkarAvg(p));
+      const step=((ri+k)%3)+1;
+      return{id:p.id,name:p.name,status:p.status,rag:projRAG(p,projGoLive(p)).rag,
+        gateScore:gs==null?null:Math.max(0,gs-i*step),
+        flags:fl+Math.round(i*step/4),
+        adkarAvg:Math.max(1,ad-i*0.05).toFixed(1)};
+    })}))});
   }
   return snaps;
 }
@@ -12382,7 +12876,8 @@ async function renderTrendCharts(){
   const labels=recent.map(s=>{const d=new Date(s.date+'T00:00:00');return 'Wk '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'});});
 
   // Calculate portfolio metrics per snapshot
-  const gateScores=recent.map(s=>{let t=0,c=0;s.releases.forEach(r=>(r.projects||[]).forEach(p=>{if(p.gateScore!=null){t+=p.gateScore;c++;}}));return c?Math.round(t/c):null;});
+  // Same definition as the portfolio brief: average of each release's average readiness.
+  const gateScores=recent.map(snapReadiness);
   const flagCounts=recent.map(s=>{let t=0;s.releases.forEach(r=>(r.projects||[]).forEach(p=>{t+=(p.flags||0);}));return t;});
   const adkarAvgs=recent.map(s=>{let t=0,c=0;s.releases.forEach(r=>(r.projects||[]).forEach(p=>{if(p.adkarAvg!=null){t+=parseFloat(p.adkarAvg);c++;}}));return c?parseFloat((t/c).toFixed(1)):null;});
 
@@ -12401,8 +12896,8 @@ async function renderTrendCharts(){
   };
   const kpiEl=document.getElementById('trend-kpis');
   if(kpiEl)kpiEl.innerHTML=`
-    <div class="trend-kpi"><div class="trend-kpi-label">Readiness</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,'%',false)}</div>
-    <div class="trend-kpi"><div class="trend-kpi-label">Risk Flags</div><div class="trend-kpi-val">${curFlags!=null?curFlags:'—'}</div>${deltaHtml(flagDelta,'',true)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">Readiness</div><div class="trend-kpi-val">${curGate!=null?curGate+'%':'—'}</div>${deltaHtml(gateDelta,' pts',false)}</div>
+    <div class="trend-kpi"><div class="trend-kpi-label">Open gate items</div><div class="trend-kpi-val">${curFlags!=null?curFlags:'—'}</div>${deltaHtml(flagDelta,'',true)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">${fwShort()} Score</div><div class="trend-kpi-val">${curAdkar!=null?curAdkar+'/5':'—'}</div>${deltaHtml(adkarDelta,'',false)}</div>
     <div class="trend-kpi"><div class="trend-kpi-label">Weeks Tracked</div><div class="trend-kpi-val">${recent.length}</div><span class="trend-delta trend-neutral">${labels[0]} — ${labels[labels.length-1]}</span></div>
   `;
@@ -12451,7 +12946,7 @@ async function renderTrendCharts(){
   const insToggle=document.getElementById('trend-insights-toggle');
   if(insEl){
     if(!insights.length){
-      insEl.innerHTML='<div class="es"><p class="es-txt">Trends build over time.</p><p class="es-txt">You\u2019ll see readiness trajectories here as scores accumulate across releases. Keep assessing \u2014 the picture will form.</p></div>';
+      insEl.innerHTML='<div class="es"><p class="es-txt">Trends appear after two weekly snapshots. Keep recording readiness and week-to-week change will show here.</p><p class="es-txt">You\u2019ll see readiness trajectories here as scores accumulate across releases. Keep assessing \u2014 the picture will form.</p></div>';
       if(insOverflow)insOverflow.style.display='none';
       if(insToggle)insToggle.style.display='none';
     } else {
@@ -12477,8 +12972,8 @@ async function renderTrendCharts(){
     const goalLine=new Array(labels.length).fill(80);
     chartInstances['trend-gate']=new Chart(gc,{type:'line',data:{
       labels,datasets:[
-        {label:'Readiness %',data:gateScores,borderColor:CHART_GREEN,backgroundColor:'rgba(29,104,64,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GREEN,borderWidth:2},
-        {label:'80% Target',data:goalLine,borderColor:'rgba(184,146,42,0.6)',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
+        {label:'Readiness %',data:gateScores,borderColor:CHART_GREEN,backgroundColor:'rgba(23,139,135,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GREEN,borderWidth:2},
+        {label:'80% Target',data:goalLine,borderColor:CHART_TARGET,borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
       ]
     },options:{responsive:true,maintainAspectRatio:false,
       scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
@@ -12505,7 +13000,7 @@ async function renderTrendCharts(){
   const ac=document.getElementById('chart-trend-adkar');
   if(ac){
     chartInstances['trend-adkar']=new Chart(ac,{type:'line',data:{
-      labels,datasets:[{label:fwShort()+' Avg',data:adkarAvgs,borderColor:CHART_GOLD,backgroundColor:'rgba(184,146,42,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GOLD,borderWidth:2}]
+      labels,datasets:[{label:fwShort()+' Avg',data:adkarAvgs,borderColor:CHART_GOLD,backgroundColor:'rgba(11,37,69,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:CHART_GOLD,borderWidth:2}]
     },options:{responsive:true,maintainAspectRatio:false,
       scales:{y:{min:0,max:5,ticks:{stepSize:1,font:{size:9},color:chartSubColor()},grid:{color:chartGridColor()}},
         x:{ticks:{font:{size:9},color:chartSubColor(),maxRotation:45},grid:{display:false}}},
@@ -12568,8 +13063,8 @@ function renderReleaseSparklines(snapshots){
     // Determine color based on trend
     const first=validPts[0].y;const last=validPts[validPts.length-1].y;
     const trending=last>first?'up':last<first?'down':'flat';
-    const color=trending==='up'?'rgba(29,104,64,0.9)':trending==='down'?'rgba(139,26,26,0.9)':'rgba(184,146,42,0.9)';
-    const fillColor=trending==='up'?'rgba(29,104,64,0.15)':trending==='down'?'rgba(139,26,26,0.15)':'rgba(184,146,42,0.15)';
+    const color=trending==='up'?'rgba(23,139,135,0.9)':trending==='down'?'rgba(139,26,26,0.9)':'rgba(11,37,69,0.9)';
+    const fillColor=trending==='up'?'rgba(23,139,135,0.15)':trending==='down'?'rgba(139,26,26,0.15)':'rgba(11,37,69,0.15)';
     ctx.clearRect(0,0,w,h);
     // Fill
     ctx.beginPath();
