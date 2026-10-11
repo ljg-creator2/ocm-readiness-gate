@@ -103,6 +103,10 @@ module.exports=async function(t){
   if(await pg.isVisible('.cc-tl-next')){await pg.click('.cc-tl-next');await wait(700);ok('Command Center','Milestone arrow scrolls timeline',await ev(pg,()=>document.getElementById('cc-tl').scrollLeft)>tl0);}
   await pg.click('.cc-tl-n');await wait(800);
   ok('Command Center','Milestone opens its release/project',await ev(pg,()=>document.getElementById('v-release').classList.contains('active')||document.getElementById('v-project').classList.contains('active')));
+  await ev(pg,()=>sbNav('initiatives'));await wait(500);
+  ok('Initiatives','No alert banner above the page (removed at the client\'s request)',await ev(pg,()=>!document.getElementById('alert-bar')&&!document.querySelector('.alert-item')));
+  await ev(pg,()=>sbNav('command'));await wait(400);
+  ok('Command Center','Release alerts still feed the notification bell',await ev(pg,()=>Array.isArray(window._ccAlerts)&&window._ccAlerts.length>0&&(document.querySelector('.cc-dot')?.textContent||'')===String(window._ccAlerts.length)));
   ok('Command Center','No JS errors',pg._errs.length===0,pg._errs.join(' | '));
   // ── SIDEBAR + ACCOUNT MENU ──
   for(const k of ['command','initiatives','people','risk','training','stakeholders','adoption','reports']){

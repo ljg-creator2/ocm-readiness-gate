@@ -935,7 +935,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--ink);font-siz
   .two-col{grid-template-columns:1fr}
   .kpi-strip{grid-template-columns:repeat(2,1fr)}
   .phm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  #alert-bar{padding:0 16px}
   .rel-sum{grid-template-columns:1fr;gap:14px}
   .pw{padding:20px 16px 48px}
 }
@@ -989,7 +988,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--ink);font-siz
   .rsb-val.lg{font-size:16px}
   .kpi-strip{grid-template-columns:1fr 1fr}
   .scope-block{padding:12px 14px}
-  #alert-bar{padding:0 12px}
   .alert-item{font-size:11px;padding:7px 0}
   .ss-btn{min-width:28px;min-height:28px;padding:6px 8px;font-size:10.5px}
 }
