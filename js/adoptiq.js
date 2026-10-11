@@ -1331,6 +1331,7 @@ function openRelease(id){
   document.getElementById('r-name').value=r.name||'';
   document.getElementById('r-golive').value=r.golive||'';
   const rtt=document.getElementById('r-techtransfer');if(rtt)rtt.value=r.techTransfer||'';
+  renderRelJiraLast(r);
   const ruat=document.getElementById('r-uat');if(ruat)ruat.value=r.uatComplete||'';
   document.getElementById('r-phase').value=r.phase||'';
   renderRelAgencyChips();updateRelDays();
@@ -4374,21 +4375,47 @@ function parseLooseDate(v){
   const d=new Date(s);return isNaN(d)?'':iso(d.getFullYear(),d.getMonth(),d.getDate());
 }
 
-// ── Jira, phase 1: import a CSV/Excel issue export onto the open release ──
-let _jiraPlan=null;
+// ── Jira import: release dates, OCM-tagged items, QA/UAT status and defects ──
+// Reads a Jira issue export (CSV or Excel). Field matching is adjustable because
+// every Jira is configured differently; defaults follow DCAS conventions.
+const JIRA_MAP_KEY='adoptiq_jira_map';
+const JIRA_MAP_DEFAULT={ocmTag:'OCM Needed',ocmReady:'OCM Ready',qaPass:'QA (Passed|Complete|Done)',uatPass:'UAT (Passed|Complete|Done|Signed ?off)',done:'Done|Closed|Resolved|Released|Deployed'};
+const JIRA_MAP_LABELS={ocmTag:'OCM tag (label, component or field value)',ocmReady:'OCM ready status',qaPass:'Status meaning QA passed',uatPass:'Status meaning UAT passed',done:'Statuses that mean finished'};
+function getJiraMap(){let m={};try{m=JSON.parse(localStorage.getItem(JIRA_MAP_KEY)||'{}')||{};}catch(e){}return{...JIRA_MAP_DEFAULT,...m};}
+function setJiraMap(k,v){const m=getJiraMap();m[k]=v||JIRA_MAP_DEFAULT[k];try{localStorage.setItem(JIRA_MAP_KEY,JSON.stringify(m));}catch(e){}if(_jiraRows)refreshJiraPlan();}
+function jiraRe(p){try{return new RegExp(p,'i');}catch(e){return /$^/;}}
+let _jiraPlan=null,_jiraRows=null,_jiraFile='';
+function jiraExportHelp(){
+  const r=getRel()||{};
+  const key=r.jiraProjKey||'YOURPROJECT';const ver=r.jiraVersion||r.name||'Release name';
+  const jql='project = '+key+' AND fixVersion = "'+ver.replace(/"/g,'')+'" ORDER BY key';
+  return '<details class="jira-map jira-help"><summary>How to export from Jira Cloud</summary><ol>'
+    +'<li>In Jira, open <strong>Filters → View all issues</strong>, then switch the search to <strong>JQL</strong>.</li>'
+    +'<li>Paste this query and press Enter. It pulls the whole release, including the defects your OCM stories link to.'
+    +'<div class="jira-jql"><input type="text" id="jira-jql" readonly value="'+esc(jql)+'" onclick="this.select()"><button class="btn-sm" onclick="navigator.clipboard.writeText(document.getElementById(\'jira-jql\').value);this.textContent=\'Copied!\';setTimeout(()=>this.textContent=\'Copy\',1500)">Copy</button></div>'
+    +(r.jiraProjKey?'':'<span class="tt-muted">Replace YOURPROJECT with your Jira project key (the letters before the dash in an issue number, e.g. ABC in ABC-123). AdoptIQ fills it in after your first import.</span>')
+    +'</li><li>Choose <strong>Export → Export CSV (all fields)</strong>, then upload that file below.</li></ol>'
+    +'<p class="tt-muted">Tips: save the query as a filter so next time is one click. Jira exports up to 1,000 issues at a time. Export one release per file.</p></details>';
+}
 function openJiraImport(){
   let m=document.getElementById('jira-import-modal');if(m)m.remove();
+  _jiraRows=null;_jiraPlan=null;_jiraEpicChoice={};
+  const jm=getJiraMap();
   m=document.createElement('div');m.id='jira-import-modal';m.className='import-modal';
   m.innerHTML='<div class="import-modal-box"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h2>Import from Jira</h2>'
-    +'<div class="import-sub">In Jira, run a filter for this release’s epics, issues and defects, then choose <strong>Export → CSV (all fields)</strong>. AdoptIQ reads UAT, Tech Transfer and go-live dates and counts UAT and training-environment defects. You review every change before it is saved.</div></div>'
-    +'<button class="btn-ghost" onclick="document.getElementById(\'jira-import-modal\').classList.remove(\'open\')" style="font-size:22px;padding:0 6px;line-height:1" aria-label="Close">&times;</button></div>'
+    +'<div class="import-sub">In Jira, filter to this release’s epics, stories and defects, then choose <strong>Export → CSV (all fields)</strong>. AdoptIQ reads release dates, OCM-tagged items, QA and UAT status, and defects, and shows what each means for training. Nothing is saved until you apply it.</div></div>'
+    +'<button class="btn-ghost" onclick="closeJiraImport()" style="font-size:22px;padding:0 6px;line-height:1" aria-label="Close">&times;</button></div>'
     +'<div class="import-drop" onclick="document.getElementById(\'jira-file-input\').click()"><div class="import-drop-text">Choose your Jira export <strong>(.csv or .xlsx)</strong></div></div>'
     +'<input type="file" id="jira-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleJiraFile(this.files[0])">'
-    +'<div id="jira-preview"></div></div>';
+    +jiraExportHelp()
+    +'<details class="jira-map"><summary>Field matching</summary><p class="tt-muted">Adjust these if your Jira uses different names. Patterns are matched case-insensitively; use | for alternatives.</p>'
+    +Object.keys(JIRA_MAP_DEFAULT).map(k=>'<label class="jira-map-row"><span>'+JIRA_MAP_LABELS[k]+'</span><input type="text" id="jira-map-'+k+'" value="'+esc(jm[k])+'" onchange="setJiraMap(\''+k+'\',this.value)"></label>').join('')
+    +'</details><div id="jira-preview"></div></div>';
   document.body.appendChild(m);
-  m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  m.addEventListener('click',function(e){if(e.target===this)closeJiraImport();});
   requestAnimationFrame(()=>m.classList.add('open'));
 }
+function closeJiraImport(){const m=document.getElementById('jira-import-modal');if(m)m.classList.remove('open');const r=getRel();if(r&&document.getElementById('v-release').classList.contains('active'))openRelease(r.id);}
 async function handleJiraFile(file){
   const out=document.getElementById('jira-preview');if(!file||!out)return;
   if(!window.XLSX){out.innerHTML='<div class="import-status error">The spreadsheet reader is still loading. Try again in a moment.</div>';return;}
@@ -4397,69 +4424,222 @@ async function handleJiraFile(file){
     const wb=XLSX.read(buf,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:false});
     if(!rows.length)throw new Error('The file has no rows.');
-    _jiraPlan=planJiraImport(rows);
-    out.innerHTML=renderJiraPlan(_jiraPlan);
+    _jiraRows=rows;_jiraFile=file.name;refreshJiraPlan();
   }catch(e){out.innerHTML='<div class="import-status error">Could not read that file: '+esc(e.message)+'</div>';}
 }
+function refreshJiraPlan(){const out=document.getElementById('jira-preview');if(!out||!_jiraRows)return;_jiraPlan=planJiraImport(_jiraRows);out.innerHTML=renderJiraPlan(_jiraPlan);}
 function jiraCols(rows,re){return Object.keys(rows[0]||{}).filter(k=>re.test(k));}
 function jiraVal(row,cols){return cols.map(c=>String(row[c]||'').trim()).filter(Boolean).join(' ');}
+let _jiraEpicChoice={};
 function planJiraImport(rows){
-  const r=getRel();
-  const C={type:jiraCols(rows,/^issue\s*type$/i),summary:jiraCols(rows,/^summary$/i),fix:jiraCols(rows,/^fix\s*versions?(\/s)?(_\d+)?$/i),
-    due:jiraCols(rows,/^due\s*date$/i),resolved:jiraCols(rows,/^resolved$/i),labels:jiraCols(rows,/^labels(_\d+)?$/i),env:jiraCols(rows,/^environment$/i),
-    epic:jiraCols(rows,/^(epic\s*link|epic\s*name|parent|parent\s*summary|custom field \(epic (link|name)\))(_\d+)?$/i)};
+  const r=getRel();const jm=getJiraMap();
+  const C={key:jiraCols(rows,/^issue\s*key$/i),type:jiraCols(rows,/^issue\s*type$/i),summary:jiraCols(rows,/^summary$/i),status:jiraCols(rows,/^status$/i),
+    fix:jiraCols(rows,/^fix\s*versions?(\/s)?(_\d+)?$/i),due:jiraCols(rows,/^due\s*date$/i),resolved:jiraCols(rows,/^resolved$/i),created:jiraCols(rows,/^created$/i),
+    labels:jiraCols(rows,/^labels(_\d+)?$/i),comps:jiraCols(rows,/^components?(_\d+)?$/i),env:jiraCols(rows,/^environment$/i),
+    epicName:jiraCols(rows,/^(parent\s*summary|epic\s*name|custom field \(epic name\))(_\d+)?$/i),epicKey:jiraCols(rows,/^(parent\s*key|epic\s*link|parent|custom field \(epic link\))(_\d+)?$/i),
+    links:jiraCols(rows,/(issue\s*link|linked\s*issues)/i),defectLinks:jiraCols(rows,/issue\s*link\s*\(defect\)/i),
+    qa:jiraCols(rows,/\bqa\b/i).filter(c=>!/summary|needed/i.test(c)),uat:jiraCols(rows,/\buat\b/i).filter(c=>!/summary|needed/i.test(c)),
+    ocmField:jiraCols(rows,jiraRe(jm.ocmTag)),programs:jiraCols(rows,/impacted programs/i),appcat:jiraCols(rows,/application category/i)};
   const versions=[...new Set(rows.flatMap(x=>C.fix.map(c=>String(x[c]||'').trim()).filter(Boolean)))];
-  const norm=t=>t.toLowerCase().replace(/[^a-z0-9]/g,'');
+  const norm=t=>String(t||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const rn=norm(r?r.name:'');
-  const version=versions.find(v=>norm(v)===rn)||versions.find(v=>rn&&(norm(v).includes(rn)||rn.includes(norm(v))))||(versions.length===1?versions[0]:'');
-  const inScope=rows.filter(x=>!version||C.fix.some(c=>String(x[c]||'').trim()===version));
-  const isBug=x=>/bug|defect/i.test(jiraVal(x,C.type));
-  const dateOf=x=>parseLooseDate(jiraVal(x,C.due))||parseLooseDate(jiraVal(x,C.resolved));
-  const pick=(re,which)=>{const ds=inScope.filter(x=>!isBug(x)&&re.test(jiraVal(x,C.summary))).map(dateOf).filter(Boolean).sort();return ds.length?(which==='min'?ds[0]:ds[ds.length-1]):'';};
-  const plan={version,versions,rows:inScope.length,changes:[],projects:[]};
-  if(!r)return plan;
-  const uat=pick(/\bUAT\b|user acceptance/i,'max'),tt=pick(/tech(nical)?\s*transfer/i,'min'),gl=pick(/go[- ]?live|cutover|production (deploy|release)|deploy to prod/i,'max');
-  if(gl&&gl!==r.golive)plan.changes.push({field:'golive',label:'Release go-live',from:r.golive,to:gl});
-  if(uat&&uat!==r.uatComplete)plan.changes.push({field:'uatComplete',label:'UAT complete',from:r.uatComplete,to:uat});
-  if(tt&&tt!==r.techTransfer)plan.changes.push({field:'techTransfer',label:'Tech Transfer start',from:r.techTransfer,to:tt});
-  const bugs=inScope.filter(isBug);
-  (r.projects||[]).forEach(p=>{
-    const pn=norm(p.name);
-    const mine=bugs.filter(x=>{const e=norm(jiraVal(x,C.epic));return pn&&e&&(e.includes(pn)||pn.includes(e));});
-    if(!mine.length)return;
-    const tag=x=>(jiraVal(x,C.labels)+' '+jiraVal(x,C.env)+' '+jiraVal(x,C.summary)).toLowerCase();
-    const trainEnv=mine.filter(x=>/train/.test(tag(x))).length;
-    const uatD=mine.filter(x=>/\buat\b/.test(tag(x))).length;
-    plan.projects.push({id:p.id,name:p.name,total:mine.length,uat:uatD,train:trainEnv});
+  const version=(r&&r.jiraVersion&&versions.includes(r.jiraVersion)?r.jiraVersion:'')||versions.find(v=>norm(v)===rn)||versions.find(v=>rn&&(norm(v).includes(rn)||rn.includes(norm(v))))||(versions.length===1?versions[0]:'');
+  const inScope=rows.filter(x=>!version||!C.fix.length||C.fix.some(c=>String(x[c]||'').trim()===version));
+  const reTag=jiraRe(jm.ocmTag),reReady=jiraRe(jm.ocmReady),reQA=jiraRe(jm.qaPass),reUAT=jiraRe(jm.uatPass),reDone=jiraRe(jm.done);
+  const yes=v=>/^(yes|y|true|required)$/i.test(String(v||'').trim());
+  const keyRe=/\b[A-Z][A-Z0-9]+-\d+\b/g;
+  const statusCount={},defectStatusCount={};
+  const issues=inScope.map(x=>{
+    const status=jiraVal(x,C.status),type=jiraVal(x,C.type);
+    const bug=/bug|defect/i.test(type);
+    const sc=bug?defectStatusCount:statusCount;sc[status||'(none)']=(sc[status||'(none)']||0)+1;
+    const ready=reReady.test(status);
+    const finished=reDone.test(status);
+    const uatPassed=!bug&&(reUAT.test(status)||ready||finished||/pass/i.test(jiraVal(x,C.uat)));
+    const qaPassed=!bug&&(uatPassed||reQA.test(status)||/\buat\b/i.test(status)||/pass/i.test(jiraVal(x,C.qa)));
+    const tagText=[jiraVal(x,C.labels),jiraVal(x,C.comps)].join(' ');
+    return{key:jiraVal(x,C.key),summary:jiraVal(x,C.summary),type,status,bug,
+      ocm:!bug&&(reTag.test(tagText)||C.ocmField.some(c=>yes(x[c]))||ready),ready,qaPassed,uatPassed,
+      open:bug?(!finished&&!/closed|resolved|done|fixed|cancel|won.?t/i.test(status)):false,
+      created:parseLooseDate(jiraVal(x,C.created)),date:parseLooseDate(jiraVal(x,C.due))||parseLooseDate(jiraVal(x,C.resolved)),
+      epic:jiraVal(x,C.epicName)||jiraVal(x,C.epicKey),
+      links:(jiraVal(x,C.links)+' '+jiraVal(x,C.epicKey)).match(keyRe)||[],defectKeys:jiraVal(x,C.defectLinks).match(keyRe)||[],
+      programs:C.programs.map(c=>String(x[c]||'').trim()).filter(Boolean).join(', '),appcat:jiraVal(x,C.appcat),
+      tags:(jiraVal(x,C.labels)+' '+jiraVal(x,C.env)+' '+jiraVal(x,C.summary)).toLowerCase()};
   });
-  plan.unmatchedBugs=bugs.length-plan.projects.reduce((a,x)=>a+x.total,0);
+  const plan={file:_jiraFile,version,versions,rows:inScope.length,changes:[],projects:[],epics:[],statuses:statusCount,defectStatuses:defectStatusCount,unmatched:{ocm:0,bugs:0}};
+  if(!r)return plan;
+  const pick=(re,which)=>{const ds=issues.filter(i=>!i.bug&&re.test(i.summary)).map(i=>i.date).filter(Boolean).sort();return ds.length?(which==='min'?ds[0]:ds[ds.length-1]):'';};
+  const uat=pick(/\bUAT\b|user acceptance/i,'max'),tt=pick(/tech(nical)?\s*transfer/i,'min'),gl=pick(/go[- ]?live|cutover|production (deploy|release)|deploy to prod/i,'max');
+  if(gl&&gl!==r.golive)plan.changes.push({field:'golive',label:'Release go-live',from:r.golive||'',to:gl});
+  if(uat&&uat!==r.uatComplete)plan.changes.push({field:'uatComplete',label:'UAT complete',from:r.uatComplete||'',to:uat});
+  if(tt&&tt!==r.techTransfer)plan.changes.push({field:'techTransfer',label:'Tech Transfer start',from:r.techTransfer||'',to:tt});
+  // Epic → project: remembered choice, then a name match, otherwise create a new project
+  const remembered=r.jiraEpicMap||{};
+  const epicNames=[...new Set(issues.filter(i=>!i.bug&&i.epic).map(i=>i.epic))];
+  epicNames.forEach(en=>{
+    let choice=_jiraEpicChoice[en];
+    if(choice===undefined){
+      const rp=remembered[en]&&(r.projects||[]).find(p=>p.id===remembered[en]);
+      const nm=(r.projects||[]).find(p=>{const pn=norm(p.name),e=norm(en);return pn&&e&&(pn===e||e.includes(pn)||pn.includes(e));});
+      const hasOcm=issues.some(i=>i.epic===en&&i.ocm);
+      choice=rp?String(rp.id):nm?String(nm.id):hasOcm?'new':'skip';
+      _jiraEpicChoice[en]=choice;
+    }
+    const its=issues.filter(i=>i.epic===en&&!i.bug);
+    plan.epics.push({name:en,choice,stories:its.length,ocm:its.filter(i=>i.ocm).length});
+  });
+  const targetOf=en=>{const c=_jiraEpicChoice[en];return!c||c==='skip'?null:c==='new'?'new:'+en:c;};
+  const byKey={};issues.forEach(i=>{if(i.key)byKey[i.key]=i;i.target=i.epic?targetOf(i.epic):null;});
+  // Defects follow their own epic, or the story they are linked to
+  issues.filter(i=>i.bug).forEach(d=>{
+    const st=issues.find(s=>!s.bug&&(s.defectKeys.includes(d.key)||d.links.includes(s.key)));
+    if(!d.target&&st)d.target=st.target;
+  });
+  const groups={};
+  issues.forEach(i=>{if(!i.target)return;(groups[i.target]=groups[i.target]||[]).push(i);});
+  Object.entries(groups).forEach(([target,mine])=>{
+    const isNew=target.startsWith('new:');
+    const epic=isNew?target.slice(4):(mine.find(i=>!i.bug)?.epic||'');
+    const p=isNew?null:(r.projects||[]).find(q=>String(q.id)===target);
+    const ocm=mine.filter(i=>i.ocm),bugs=mine.filter(i=>i.bug);
+    ocm.forEach(o=>{
+      const keys=[...new Set([...o.defectKeys,...bugs.filter(d=>d.links.includes(o.key)).map(d=>d.key)])];
+      o.defects=keys.map(k=>{const d=byKey[k];return d&&d.bug?{key:k,summary:d.summary,status:d.status,open:d.open}:{key:k,summary:'',status:'',open:null};});
+    });
+    plan.projects.push({target,isNew,id:p?p.id:null,name:p?p.name:epic,epics:[...new Set(mine.filter(i=>!i.bug).map(i=>i.epic))],
+      items:ocm.map(o=>({key:o.key,summary:o.summary,status:o.status,ready:o.ready,qaPassed:o.qaPassed,uatPassed:o.uatPassed,created:o.created,defects:o.defects,programs:o.programs,appcat:o.appcat})),
+      ocm:ocm.length,ready:ocm.filter(o=>o.ready).length,uatPassed:ocm.filter(o=>o.uatPassed).length,
+      openOnOcm:ocm.filter(o=>o.defects.some(d=>d.open)).length,unknownDefects:ocm.reduce((a,o)=>a+o.defects.filter(d=>d.open===null).length,0),
+      uatDefects:bugs.filter(d=>/\buat\b/.test(d.tags)).length,trainDefects:bugs.filter(d=>/train/.test(d.tags)).length,bugs:bugs.length});
+  });
+  plan.unmatched.ocm=issues.filter(i=>i.ocm&&!i.target).length;
+  plan.unmatched.bugs=issues.filter(i=>i.bug&&!i.target).length;
   return plan;
 }
+function setJiraEpicChoice(en,v){_jiraEpicChoice[en]=v;refreshJiraPlan();}
+function jiraProjLine(x){
+  return x.ocm+' OCM item'+(x.ocm===1?'':'s')+' · '+x.uatPassed+' passed UAT · '+x.ready+' OCM Ready · '+x.openOnOcm+' with open defects'
+    +(x.unknownDefects?' · '+x.unknownDefects+' linked defect'+(x.unknownDefects===1?'':'s')+' not in this export':'')
+    +(x.bugs?' · '+x.uatDefects+' UAT / '+x.trainDefects+' training-env defects':'');
+}
 function renderJiraPlan(pl){
+  const r=getRel();const jm=getJiraMap();
   let h='<div class="jira-plan">';
-  h+='<p>'+pl.rows+' issues'+(pl.version?' in fix version <strong>'+esc(pl.version)+'</strong>':'')+(pl.versions.length>1&&!pl.version?'. More than one fix version found and none matched this release name, so all rows were read.':'.')+'</p>';
-  if(!pl.changes.length&&!pl.projects.length){return h+'<div class="import-status">Nothing to update. No UAT, Tech Transfer or go-live issues with dates, and no defects matched to this release’s projects.</div></div>';}
-  h+='<table class="size-tbl"><thead><tr><th>Update</th><th>Now</th><th>From Jira</th></tr></thead><tbody>';
+  h+='<p>'+pl.rows+' issues'+(pl.version?' in fix version <strong>'+esc(pl.version)+'</strong>':'')+(pl.versions.length>1&&!pl.version?'. More than one fix version was found and none matched this release name, so all rows were read.':'.')+'</p>';
+  const sts=Object.entries(pl.statuses).sort((a,b)=>b[1]-a[1]);
+  const reQA=jiraRe(jm.qaPass),reUAT=jiraRe(jm.uatPass),reReady=jiraRe(jm.ocmReady),reDone=jiraRe(jm.done);
+  h+='<p class="jira-statuses"><strong>Story statuses:</strong> '+sts.map(([s,n])=>{
+    const m=reReady.test(s)?'OCM Ready':reUAT.test(s)||reDone.test(s)?'counts as UAT passed':reQA.test(s)||/\buat\b/i.test(s)?'counts as QA passed':'not yet past QA';
+    return esc(s)+' ('+n+', '+m+')';}).join(' · ')+'. If any are counted wrong, adjust <strong>Field matching</strong> above.</p>';
+  const dst=Object.entries(pl.defectStatuses||{}).sort((a,b)=>b[1]-a[1]);
+  if(dst.length)h+='<p class="jira-statuses"><strong>Defect statuses:</strong> '+dst.map(([s,n])=>{const closed=reDone.test(s)||/closed|resolved|done|fixed|cancel|won.?t/i.test(s);return esc(s)+' ('+n+', '+(closed?'closed':'open')+')';}).join(' · ')+'.</p>';
+  if(pl.epics.length){
+    h+='<div class="tt-sub">Epics → AdoptIQ projects</div><table class="size-tbl"><thead><tr><th>Jira epic</th><th>Stories</th><th>OCM items</th><th>Goes to</th></tr></thead><tbody>';
+    pl.epics.forEach(ep=>{
+      h+='<tr><td>'+esc(ep.name)+'</td><td>'+ep.stories+'</td><td>'+ep.ocm+'</td><td><select aria-label="Project for '+esc(ep.name)+'" onchange="setJiraEpicChoice(this.dataset.epic,this.value)" data-epic="'+esc(ep.name)+'">'
+        +'<option value="new"'+(ep.choice==='new'?' selected':'')+'>Create new project</option>'
+        +(r.projects||[]).map(p=>'<option value="'+p.id+'"'+(String(p.id)===ep.choice?' selected':'')+'>'+esc(p.name)+'</option>').join('')
+        +'<option value="skip"'+(ep.choice==='skip'?' selected':'')+'>Skip</option></select></td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  if(!pl.changes.length&&!pl.projects.length)return h+'<div class="import-status">Nothing to update. No dated UAT, Tech Transfer or go-live items, and no stories assigned to a project.</div></div>';
+  h+='<div class="tt-sub">Will update</div><table class="size-tbl"><thead><tr><th>Item</th><th>Now</th><th>From Jira</th></tr></thead><tbody>';
   pl.changes.forEach(c=>{h+='<tr><td>'+esc(c.label)+'</td><td>'+(c.from?fmtDate(c.from):'—')+'</td><td><strong>'+fmtDate(c.to)+'</strong></td></tr>';});
-  pl.projects.forEach(x=>{h+='<tr><td>'+esc(x.name)+': defects</td><td>—</td><td><strong>'+x.uat+' UAT · '+x.train+' training environment</strong> ('+x.total+' total)</td></tr>';});
+  pl.projects.forEach(x=>{h+='<tr><td>'+esc(x.name)+(x.isNew?' <span class="tt-inherit">new project</span>':'')+'</td><td>—</td><td>'+esc(jiraProjLine(x))+'</td></tr>';});
   h+='</tbody></table>';
-  if(pl.unmatchedBugs>0)h+='<p class="tt-muted">'+pl.unmatchedBugs+(pl.unmatchedBugs===1?' defect was':' defects were')+' not matched to a project by epic name, so '+(pl.unmatchedBugs===1?'it was':'they were')+' not counted.</p>';
-  return h+'<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-gold" onclick="applyJiraPlan()">Apply updates</button><button class="btn-ghost" onclick="document.getElementById(\'jira-import-modal\').classList.remove(\'open\')">Cancel</button></div></div>';
+  const um=[];if(pl.unmatched.ocm)um.push(pl.unmatched.ocm+' OCM item'+(pl.unmatched.ocm===1?'':'s'));if(pl.unmatched.bugs)um.push(pl.unmatched.bugs+' defect'+(pl.unmatched.bugs===1?'':'s'));
+  if(um.length)h+='<p class="tt-muted">Not included (no epic, or epic skipped): '+um.join(' and ')+'.</p>';
+  if(!pl.changes.length)h+='<p class="tt-muted">No UAT, Tech Transfer or go-live dates were found in this file, so release dates stay as they are.</p>';
+  return h+'<div style="margin-top:12px;display:flex;gap:8px"><button class="btn-gold" onclick="applyJiraPlan()">Apply updates</button><button class="btn-ghost" onclick="closeJiraImport()">Cancel</button></div></div>';
 }
 function applyJiraPlan(){
   const r=getRel();const pl=_jiraPlan;if(!r||!pl)return;
+  const now=new Date().toISOString();
   pl.changes.forEach(c=>{r[c.field]=c.to;});
+  if(pl.version)r.jiraVersion=pl.version;
+  {const k=(pl.projects||[]).flatMap(x=>x.items||[]).map(i=>String(i.key||'').split('-')[0]).find(Boolean);if(k)r.jiraProjKey=k;}
+  if(!r.jiraEpicMap)r.jiraEpicMap={};
   pl.projects.forEach(x=>{
-    const p=(r.projects||[]).find(q=>q.id===x.id);if(!p)return;
+    let p=x.isNew?null:(r.projects||[]).find(q=>q.id===x.id);
+    if(!p){p=newProject(x.name,[],0);migrateResources(p);p.status='In Progress';r.projects.push(p);x.id=p.id;x.createdNew=true;}
+    x.epics.forEach(en=>{r.jiraEpicMap[en]=p.id;});
     if(!p.lifecycleSignals)p.lifecycleSignals={};
-    p.lifecycleSignals.testing=Object.assign({},p.lifecycleSignals.testing,{uatDefects:x.uat});
-    p.lifecycleSignals.training=Object.assign({},p.lifecycleSignals.training,{envDefects:x.train});
+    if(x.bugs){
+      p.lifecycleSignals.testing=Object.assign({},p.lifecycleSignals.testing,{uatDefects:x.uatDefects});
+      p.lifecycleSignals.training=Object.assign({},p.lifecycleSignals.training,{envDefects:x.trainDefects});
+    }
+    p.jira={importedAt:now,file:pl.file,version:pl.version,items:x.items,uatDefects:x.uatDefects,trainDefects:x.trainDefects,bugs:x.bugs};
     applyTTDerived(p);
   });
+  const entry={at:now,file:pl.file,version:pl.version,rows:pl.rows,changes:pl.changes,projects:pl.projects.map(x=>({id:x.id,name:x.name+(x.createdNew?' (new project)':''),line:jiraProjLine(x),blocked:x.ocm-x.uatPassed,openOnOcm:x.openOnOcm})),unmatched:pl.unmatched};
+  r.jiraLog=[entry,...(r.jiraLog||[])].slice(0,10);
+  _jiraEpicChoice={};
   touch('rel');schedSave();
-  const m=document.getElementById('jira-import-modal');if(m)m.classList.remove('open');
-  openRelease(r.id);
+  const out=document.getElementById('jira-preview');if(out)out.innerHTML=renderJiraLogEntry(r,entry,true);
   showSuccess('Jira updates applied.');
+}
+function renderJiraLogEntry(r,e,justApplied){
+  let h='<div class="jira-plan"><div class="import-status success">'+(justApplied?'Applied. ':'')+'Jira import of '+esc(e.file||'export')+' on '+new Date(e.at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+(e.version?' · fix version '+esc(e.version):'')+' · '+e.rows+' issues</div>';
+  h+='<div class="tt-sub">What changed</div><ul class="jira-changes">';
+  if(!e.changes.length)h+='<li>Release dates: no change.</li>';
+  e.changes.forEach(c=>{h+='<li><strong>'+esc(c.label)+':</strong> '+(c.from?fmtDate(c.from):'empty')+' → '+fmtDate(c.to)+'</li>';});
+  e.projects.forEach(x=>{
+    h+='<li><strong>'+esc(x.name)+':</strong> '+esc(x.line)+(x.blocked?' <span class="jira-flag">'+x.blocked+' not cleared for material build</span>':'')
+      +' <button class="btn-sm" onclick="document.getElementById(\'jira-import-modal\')&&document.getElementById(\'jira-import-modal\').classList.remove(\'open\');openProjectFromPortfolio('+r.id+','+x.id+',\'trainplan\')">Open project</button></li>';
+  });
+  return h+'</ul><p class="tt-muted">Details for each project are on its Training Timeline tab under “Jira: OCM items”.</p><div style="margin-top:10px"><button class="btn-ghost" onclick="closeJiraImport()">Close</button></div></div>';
+}
+function showJiraLog(){
+  const r=getRel();if(!r||!(r.jiraLog||[]).length)return;
+  openJiraImport();
+  const out=document.getElementById('jira-preview');if(out)out.innerHTML=renderJiraLogEntry(r,r.jiraLog[0],false);
+}
+function renderRelJiraLast(r){
+  const el=document.getElementById('r-jira-last');if(!el)return;
+  const e=(r.jiraLog||[])[0];
+  el.innerHTML=e?'Last import '+new Date(e.at).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · <a href="#" onclick="showJiraLog();return false">view changes</a>':'Not imported yet';
+}
+// Training implications of the project's last Jira import
+function jiraTrainingImpact(p){
+  const j=p&&p.jira;if(!j||!j.items)return null;
+  const uat=projTTDates(p).uatComplete;
+  const today=new Date().toISOString().slice(0,10);
+  const rows=j.items.map(it=>{
+    const open=(it.defects||[]).filter(d=>d.open===true);
+    const unknown=(it.defects||[]).filter(d=>d.open===null);
+    const late=!!(uat&&it.created&&it.created>uat);
+    let state,impl,rank;
+    if(!it.qaPassed){state='In build / QA';impl='Not testable yet. Do not build materials.';rank=0;}
+    else if(!it.uatPassed){state='Passed QA, in UAT';impl='Plan the content, but hold the build until UAT passes.';rank=1;}
+    else if(open.length){state=it.ready?'OCM Ready':'Passed UAT';impl=open.length+' open defect'+(open.length===1?'':'s')+'. Build with care; you may need workaround content or rework.';rank=2;}
+    else{state=it.ready?'OCM Ready':'Passed UAT';impl='Cleared for material development.';rank=3;}
+    if(unknown.length)impl+=' '+unknown.length+' linked defect'+(unknown.length===1?'':'s')+' not in this export; check '+(unknown.length===1?'its':'their')+' status in Jira.';
+    if(late)impl+=' Added after UAT; check the training build plan.';
+    return{...it,openDefects:open.length,unknownDefects:unknown.length,late,state,impl,rank};
+  }).sort((a,b)=>a.rank-b.rank);
+  return{rows,total:rows.length,cleared:rows.filter(x=>x.uatPassed).length,blocked:rows.filter(x=>!x.uatPassed).length,
+    withDefects:rows.filter(x=>x.uatPassed&&x.openDefects).length,unknown:rows.reduce((a,x)=>a+x.unknownDefects,0),late:rows.filter(x=>x.late).length,ready:rows.filter(x=>x.ready).length,
+    buildStarted:!!(uat&&today>=uat),importedAt:j.importedAt};
+}
+function renderJiraCard(p){
+  const ji=jiraTrainingImpact(p);
+  if(!ji)return'<div class="jira-card jira-card-empty"><i class="ph ph-kanban"></i><div><strong>Jira: OCM items.</strong> Import a Jira export from the release header to see which OCM-tagged items have cleared UAT for material development.</div></div>';
+  let h='<div class="jira-card"><div class="jira-card-hd"><strong>Jira: OCM items</strong><span class="tt-muted">from the import on '+new Date(ji.importedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>';
+  if(!ji.total)return h+'<p class="tt-muted">No items tagged for OCM in this project’s epic.</p></div>';
+  const pct=Math.round(ji.cleared/ji.total*100);
+  h+='<div class="jira-gate"><div class="jira-gate-bar"><span style="width:'+pct+'%"></span></div><div><strong>'+ji.cleared+' of '+ji.total+'</strong> OCM items have passed UAT and can go into material development'+(ji.ready?' · '+ji.ready+' marked OCM Ready':'')+'.</div></div>';
+  const flags=[];
+  if(ji.blocked)flags.push(ji.blocked+' not yet past UAT'+(ji.buildStarted?' (material build window has started)':''));
+  if(ji.withDefects)flags.push(ji.withDefects+' passed UAT with open defects');
+  if(ji.unknown)flags.push(ji.unknown+' linked defect'+(ji.unknown===1?'':'s')+' not in the export');
+  if(ji.late)flags.push(ji.late+' added after UAT');
+  if(flags.length)h+='<p class="jira-flags">'+flags.map(esc).join(' · ')+'</p>';
+  const hasCtx=ji.rows.some(x=>x.programs||x.appcat);
+  h+='<div class="hm-scroll"><table class="size-tbl tt-tbl"><thead><tr><th>Item</th>'+(hasCtx?'<th>Programs / area</th>':'')+'<th>Status</th><th>Stage</th><th>Open defects</th><th>Training implication</th></tr></thead><tbody>';
+  ji.rows.forEach(x=>{h+='<tr><td><strong>'+esc(x.key)+'</strong> '+esc(x.summary)+'</td>'+(hasCtx?'<td class="tt-note">'+esc([x.programs,x.appcat].filter(Boolean).join(' · '))+'</td>':'')+'<td>'+esc(x.status)+'</td><td>'+esc(x.state)+'</td><td>'+(x.openDefects||'—')+(x.unknownDefects?' <span class="tt-muted">(+'+x.unknownDefects+' unknown)</span>':'')+'</td><td class="tt-note">'+esc(x.impl)+'</td></tr>';});
+  return h+'</tbody></table></div></div>';
 }
 function commitMultiSectionImport(){
   const p=getProj();if(!p)return;
@@ -8462,6 +8642,7 @@ function renderPTrainPlan(){
       h+='</tbody></table></div>';
     }
   }
+  h+=renderJiraCard(p);
   h+=renderTTStdEditor(st);
   el.innerHTML=h;
   if(isReadOnly)applyReadOnlyRestrictions();
@@ -8545,6 +8726,10 @@ function pilotStatus(p){
   if(!t.error&&t.vsGolive!==null&&t.vsGolive<0)act('red','Training finishes '+Math.abs(t.vsGolive)+' business days after go-live. Rescope the course or audience, or move dates.','trainplan');
   if(!trainers.length)act('amber','Name the OCM Training lead.','resources');
   if(!impl.length)act('amber','Name the OCM Implementation lead.','resources');
+  const ji=jiraTrainingImpact(p);
+  if(ji&&ji.blocked)act(ji.buildStarted?'red':'amber',ji.blocked+' OCM item'+(ji.blocked===1?' has':'s have')+' not passed UAT, so materials can’t be built for '+(ji.blocked===1?'it':'them')+' yet.','trainplan');
+  if(ji&&ji.withDefects)act('amber',ji.withDefects+' OCM item'+(ji.withDefects===1?' has':'s have')+' open defects; plan workaround content or rework.','trainplan');
+  if(ji&&ji.late)act('amber',ji.late+' OCM item'+(ji.late===1?' was':'s were')+' added after UAT; check the training build plan.','trainplan');
   dx.filter(x=>x.d.status==='intervene').forEach(x=>{
     const g=SUS_GAPS[x.d.primary];
     const ivs=(((p.sustainment||{})[x.sh.id]||{}).interventions||[]).filter(i=>i.type===x.d.primary&&i.status!=='Verified');
@@ -8616,6 +8801,12 @@ function exportStatusReport(){
       b+='<tr><td>'+e(sh.name)+'</td><td>'+SUS_STATUS[d.status].label+'</td><td>'+e(forecastLabel(sh))+'</td><td>'+trTxt+'</td><td>'+lat+'</td><td>'+(d.primary?SUS_GAPS[d.primary].label+': '+e(SUS_GAPS[d.primary].actions[0]):'—')+'</td><td>'+(last?e(SUS_GAPS[last.type].tag)+' · '+e(last.status)+(last.note?' · '+e(last.note):''):'—')+'</td></tr>';
     });
     b+='</table>';
+  }
+  const jr=jiraTrainingImpact(p);
+  if(jr&&jr.total){
+    b+='<h2>OCM-tagged changes (from Jira)</h2><p>'+jr.cleared+' of '+jr.total+' OCM items have passed UAT and are cleared for material development'+(jr.withDefects?'; '+jr.withDefects+' of those have open defects':'')+(jr.late?'; '+jr.late+' added after UAT':'')+'.</p>';
+    const blocking=jr.rows.filter(x=>x.rank<3);
+    if(blocking.length)b+='<table class="grid"><tr><th>Item</th><th>Stage</th><th>Training implication</th></tr>'+blocking.map(x=>'<tr><td>'+e(x.key)+' '+e(x.summary)+'</td><td>'+e(x.state)+'</td><td>'+e(x.impl)+'</td></tr>').join('')+'</table>';
   }
   b+='<h2>Next actions</h2>';
   b+=s.actions.length?'<ol>'+s.actions.map(a=>'<li'+(a.sev==='red'?' class="red"':'')+'>'+e(a.text)+'</li>').join('')+'</ol>':'<p class="muted">Nothing outstanding.</p>';

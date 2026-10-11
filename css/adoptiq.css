@@ -2751,3 +2751,27 @@ body.ai-off .gen-ai-toggle,body.ai-off .gen-ai-note,body.ai-off #p-trajectory-ca
 .sus-fc{font-family:var(--font-body);font-size:10px;color:var(--ink-60)}
 .jira-plan{margin-top:12px;font-family:var(--font-body);font-size:12px;color:var(--ink)}
 @media(max-width:768px){.shq-risk-grid{grid-template-columns:1fr}}
+
+/* ── Jira: OCM items ── */
+.r-jira-last{margin-top:4px;font-size:10px;color:rgba(255,255,255,0.6)}
+.r-jira-last a{color:var(--gold-light,#e5cc94)}
+.jira-map{margin-top:10px;font-family:var(--font-body);font-size:12px}
+.jira-map summary{cursor:pointer;font-weight:700;color:var(--ink)}
+.jira-help ol{margin:6px 0 4px 18px;padding:0;line-height:1.5}
+.jira-help li{margin-bottom:6px}
+.jira-jql{display:flex;gap:6px;margin-top:4px}
+.jira-jql input{flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-mono,monospace);font-size:11px;color:var(--ink);background:var(--surface)}
+.jira-map-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:6px}
+.jira-map-row span{flex:0 0 240px;max-width:100%;font-size:11px;color:var(--ink-60)}
+.jira-map-row input{flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-mono,monospace);font-size:11px;color:var(--ink);background:var(--surface)}
+.jira-changes{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.jira-changes li{line-height:1.5}
+.jira-flag{display:inline-block;font-size:10px;font-weight:700;color:var(--red-bright);background:var(--red-bg);padding:1px 6px;border-radius:3px}
+.jira-card{margin-top:18px;border:1px solid var(--border);border-radius:var(--r6);padding:12px 14px;background:var(--surface);font-family:var(--font-body);font-size:12px;color:var(--ink)}
+.jira-card-empty{display:flex;gap:10px;align-items:center;color:var(--ink-60)}
+.jira-card-empty>i{font-size:16px;color:var(--gold-text)}
+.jira-card-hd{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin-bottom:8px}
+.jira-gate{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.jira-gate-bar{height:8px;border-radius:4px;background:var(--border);overflow:hidden}
+.jira-gate-bar span{display:block;height:100%;background:var(--green)}
+.jira-flags{margin:4px 0 8px;color:var(--red-bright);font-weight:600}
