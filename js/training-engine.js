@@ -469,6 +469,34 @@ TE.heatCell=function(p,gi,wsName){
   return{state:worst.status,deps};
 };
 
+// ── Suggestions from data already entered elsewhere ──
+// Drafts only: nothing becomes a Training record until a person reviews and saves it.
+// Sources: open CRAID entries of type Dependency, and Impact Assessment groups.
+TE.CRAID_CLOSED=/^(closed|mitigated|validated|invalidated|resolved|done)$/i;
+TE.suggestions=function(p){
+  const t=p.training;const done=(t.suggest&&t.suggest.done)||{};const out={dependencies:[],workflows:[]};
+  arr(p.craid).forEach(c=>{
+    if(String(c.type||'').toLowerCase()!=='dependency'||TE.CRAID_CLOSED.test(String(c.status||'').trim()))return;
+    const key='craid:'+c.id;if(done[key]||t.dependencies.some(d=>String(d.craidId)===String(c.id)))return;
+    out.dependencies.push({key,source:'CRAID log',label:c.title||c.description||'Untitled dependency',
+      note:[c.severity?'Severity '+c.severity:'',c.dependsOn?'Depends on '+c.dependsOn:'',c.dueDate?'Due '+c.dueDate:''].filter(Boolean).join(' · '),
+      preset:{title:c.title||'',owner:c.owner||'',requiredBy:c.dueDate||'',consequence:c.description||'',craidId:c.id,source:'craid',status:'awaiting'}});
+  });
+  const groups=(p.impactAssessment&&arr(p.impactAssessment.groups))||[];
+  groups.forEach((g,i)=>{
+    if(!g||(!g.futureState&&!g.currentState))return;
+    const name=String(g.name||'Group '+(i+1));const key='impact:'+name.toLowerCase();
+    if(done[key]||t.workflows.some(w=>String(w.impactGroup||'').toLowerCase()===name.toLowerCase()))return;
+    const sh=arr(p.stakeholders).find(s=>String(s.name||'').trim().toLowerCase()===name.trim().toLowerCase());
+    out.workflows.push({key,source:'Impact Assessment',label:name,note:[g.level?g.level+' impact':'',arr(g.changeTypes).join(', ')].filter(Boolean).join(' · '),
+      preset:{name:name+': changed way of working',change:[g.currentState?'Today: '+g.currentState:'',g.futureState?'After: '+g.futureState:''].filter(Boolean).join(' '),
+        audienceIds:sh?[sh.id]:[],impactGroup:name}});
+  });
+  return out;
+};
+TE.markSuggestion=function(p,key,state){const t=p.training;if(!t.suggest||typeof t.suggest!=='object')t.suggest={done:{}};if(!t.suggest.done)t.suggest.done={};
+  if(state)t.suggest.done[key]=state;else delete t.suggest.done[key];};
+
 // ── Milestones (dependency-based) ──
 // Per deliverable: planned/actual dates and whether each activity may start now.
 TE.milestones=function(p,ctx){

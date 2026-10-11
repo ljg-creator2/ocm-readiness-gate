@@ -78,6 +78,42 @@ module.exports=async function(t){
   okJ('No JS errors',pg._errs.length===0,pg._errs.join(' | '));
   await pg.context().close();
 
+  // ── Suggestions from data already entered (CRAID log, Impact Assessment, Resources) ──
+  pg=await t.page({wait:1500});
+  await ev(pg,()=>landingToDemo());await wait(2500);
+  await ev(pg,()=>{isReadOnly=false;document.body.classList.remove('readonly-mode');const r=releases.find(x=>x.projects.some(p=>p.name==='Clinical Workflow'));const p=r.projects.find(p=>p.name==='Clinical Workflow');openProjectFromPortfolio(r.id,p.id,'deps');});await wait(800);
+  const okS=(n,c,d)=>ok('Suggestions',n,c,d);
+  const before=await ev(pg,()=>({deps:getProj().training.dependencies.length,box:!!document.querySelector('#tr-deps .tr-suggest'),items:TE.suggestions(getProj()).dependencies.map(x=>x.label)}));
+  okS('Open CRAID dependencies are suggested, not created',before.box&&before.items.length>=1,JSON.stringify(before));
+  await pg.click('#tr-deps .tr-suggest >> text=Review and add');await wait(300);
+  const pre=await ev(pg,()=>({title:document.getElementById('trf-title').value,owner:document.getElementById('trf-owner').value,ws:document.getElementById('trf-workstream').value,due:document.getElementById('trf-requiredBy').value}));
+  okS('Review opens the form pre-filled from the CRAID entry',pre.title===before.items[0]&&!!pre.owner&&!!pre.due,JSON.stringify(pre));
+  okS('Workstream is filled from the owner\'s role in Resources',pre.ws==='Project Manager',pre.ws);
+  await pg.click('#tr-dlg-save');await wait(300);
+  const after=await ev(pg,()=>{const t=getProj().training;return{deps:t.dependencies.length,craid:t.dependencies.some(d=>d.craidId),left:TE.suggestions(getProj()).dependencies.length,box:!!document.querySelector('#tr-deps .tr-suggest')};});
+  okS('Saving adds one record linked to the CRAID entry and clears the suggestion',after.deps===before.deps+1&&after.craid&&after.left===before.items.length-1,JSON.stringify(after));
+  await pg.click('#tr-deps >> text=Add dependency');await wait(200);
+  await pg.fill('#trf-workstream','Functional');await pg.dispatchEvent('#trf-workstream','input');
+  const own=await ev(pg,()=>document.getElementById('trf-owner').value);
+  okS('Choosing a workstream fills the accountable person from Resources',own==='Dr. Emily Wilson',own);
+  await pg.fill('#trf-owner','Someone Else');await pg.fill('#trf-workstream','QA');await pg.dispatchEvent('#trf-workstream','input');
+  okS('A person typed by hand is never overwritten',await ev(pg,()=>document.getElementById('trf-owner').value)==='Someone Else');
+  await ev(pg,()=>trCloseDialog());
+  await ev(pg,()=>showPGroup('learn'));await wait(400);
+  const wfs=await ev(pg,()=>({labels:TE.suggestions(getProj()).workflows.map(x=>x.label),box:!!document.querySelector('#tr-learndev .tr-suggest')}));const wf=wfs.labels;
+  okS('Impact Assessment groups are suggested as changed workflows',wf.length>=1&&wfs.box,JSON.stringify(wfs));
+  await pg.click('#tr-learndev .tr-suggest >> text=Dismiss');await wait(300);
+  okS('Dismiss removes one suggestion and adds nothing',await ev(pg,n=>TE.suggestions(getProj()).workflows.length===n-1&&getProj().training.workflows.length===0,wf.length));
+  await pg.click('#tr-learndev .tr-suggest >> text=Review and add');await wait(300);
+  const wfv=await ev(pg,()=>({name:document.getElementById('trf-name').value,change:document.getElementById('trf-change').value}));
+  okS('Workflow form is pre-filled with today and after',/changed way of working/.test(wfv.name)&&/Today:/.test(wfv.change)&&/After:/.test(wfv.change),JSON.stringify(wfv));
+  await pg.click('#tr-dlg-save');await wait(300);
+  okS('Saved workflow is linked to its impact group',await ev(pg,()=>getProj().training.workflows.length===1&&!!getProj().training.workflows[0].impactGroup));
+  await ev(pg,()=>{isReadOnly=true;showPGroup('deps');});await wait(300);
+  okS('View-only shows suggestions without add buttons',await ev(pg,()=>{const b=document.querySelector('#tr-deps .tr-suggest');return !b||!b.querySelector('button');}));
+  okS('No JS errors',pg._errs.length===0,pg._errs.join(' | '));
+  await pg.context().close();
+
   // ── Sign-in drawer over the landing page ──
   pg=await t.page({wait:1500});
   await pg.focus('.ld-signin');await pg.click('.ld-signin');await wait(400);

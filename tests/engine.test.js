@@ -129,4 +129,19 @@ test('unreviewed checkpoint is a condition, a hold blocks',()=>{
   assert.ok(!TE.activityStatus(p,TE.byId(p.training.deliverables,'d2')).provisional.ok,'hold blocks');
   p.training.checkpoints={};const b=TE.brief(p,ctx);assert.ok(b.conditions.some(c=>/not yet reviewed/.test(c.text)),'shown as a condition in the brief');
 });
+test('suggestions come from open CRAID dependencies and impact groups, once',()=>{
+  const p=project();
+  p.craid=[{id:11,type:'dependency',title:'Lab interface live',owner:'A. Patel',dueDate:'2026-11-01',status:'Open',description:'Scenarios need lab results'},
+    {id:12,type:'dependency',title:'Old one',status:'Closed'},{id:13,type:'risk',title:'Not a dependency',status:'Open'}];
+  p.impactAssessment={groups:[{name:'Intake Specialists',currentState:'Paper forms',futureState:'Eligibility screen'},{name:'Empty group'}]};
+  let s=TE.suggestions(p);
+  assert.deepStrictEqual(s.dependencies.map(x=>x.preset.craidId),[11],'only open CRAID dependencies');
+  assert.strictEqual(s.dependencies[0].preset.requiredBy,'2026-11-01');
+  assert.strictEqual(s.workflows.length,1,'groups without a described change are skipped');
+  assert.deepStrictEqual(s.workflows[0].preset.audienceIds.map(String),['1'],'matched to the stakeholder group');
+  assert.strictEqual(p.training.dependencies.length,1,'suggesting creates nothing');
+  p.training.dependencies.push(TE.newDependency(s.dependencies[0].preset));
+  TE.markSuggestion(p,s.workflows[0].key,'dismissed');
+  s=TE.suggestions(p);assert.strictEqual(s.dependencies.length+s.workflows.length,0,'added and dismissed items are not suggested again');
+});
 console.log('\n'+(n-fail)+'/'+n+' passed');process.exit(fail?1:0);

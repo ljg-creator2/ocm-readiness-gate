@@ -134,6 +134,35 @@ function trShowHistory(){
 }
 function trMarkReviewed(){const p=trProj();if(!p||!trCanEdit())return;p.training.lastReview=trToday();TE.log(p,{type:'review',text:'Readiness reviewed'},trCtx(p));trSaved('Review date recorded.');}
 
+// ════════════ SUGGESTIONS (from data already entered) ════════════
+// Owner and workstream come from the project's Resources tab.
+function trOwnerFor(p,ws){const r=RES_ROLES.find(x=>x.label.toLowerCase()===String(ws||'').trim().toLowerCase());return r?getEffectiveRes(p,r.key,'name'):'';}
+function trWorkstreamFor(p,owner){if(!owner)return'';const r=RES_ROLES.find(x=>(p.resources&&Array.isArray(p.resources[x.key])?p.resources[x.key]:[]).some(m=>m&&m.name&&m.name.trim().toLowerCase()===owner.trim().toLowerCase()));return r?r.label:'';}
+function trSuggestBox(p,kind){
+  const list=TE.suggestions(p)[kind];if(!list.length)return'';
+  const what=kind==='dependencies'?'dependenc'+(list.length===1?'y':'ies'):'changed workflow'+(list.length===1?'':'s');
+  const src=[...new Set(list.map(x=>x.source))].join(' and ');
+  return'<section class="tr-suggest" aria-labelledby="trs-'+kind+'"><div class="tr-suggest-hd"><h3 id="trs-'+kind+'">'+list.length+' suggested '+what+' from your '+esc(src)+'</h3>'
+    +'<p class="tr-help">Drafted from what is already entered. Nothing is added until you review and save it.</p></div><ul>'
+    +list.map(x=>'<li><span class="tr-suggest-t"><strong>'+esc(x.label)+'</strong><span class="tr-sub">'+esc(x.source)+(x.note?' · '+esc(x.note):'')+'</span></span>'
+      +(trCanEdit()?'<span class="tr-suggest-a">'+trBtn('Review and add','trAcceptSuggestion('+trQ(kind)+','+trQ(x.key)+')','btn-primary btn-sm')+trBtn('Dismiss','trDismissSuggestion('+trQ(x.key)+')','btn-text')+'</span>':'')+'</li>').join('')
+    +'</ul>'+(trCanEdit()?'':'<p class="tr-help">View-only: someone with edit access can add these.</p>')+'</section>';
+}
+function trAcceptSuggestion(kind,key){
+  const p=trProj();if(!p||!trCanEdit())return;const x=TE.suggestions(p)[kind].find(y=>y.key===key);if(!x)return;
+  const pre=JSON.parse(JSON.stringify(x.preset));
+  if(kind==='dependencies'){if(!pre.workstream)pre.workstream=trWorkstreamFor(p,pre.owner);trEditDep(null,pre);}
+  else trEditWorkflow(null,pre);
+}
+function trDismissSuggestion(key){const p=trProj();if(!p||!trCanEdit())return;TE.markSuggestion(p,key,'dismissed');TE.log(p,{type:'suggestion',text:'Suggestion dismissed: '+key},trCtx(p));trSaved('Suggestion dismissed.');}
+// Fill the accountable person from Resources when the workstream is chosen (only while the field is empty or still auto-filled).
+function trWireOwnerFill(p){
+  const ws=document.getElementById('trf-workstream'),ow=document.getElementById('trf-owner');if(!ws||!ow||ws.disabled)return;
+  let auto=false;const hint=document.createElement('p');hint.className='tr-help';hint.id='trf-owner-hint';ow.insertAdjacentElement('afterend',hint);
+  const fill=()=>{const n=trOwnerFor(p,ws.value);if(n&&(!ow.value||auto)){ow.value=n;auto=true;hint.textContent='Filled from Resources. Change it if someone else is accountable.';}else if(!n&&auto){hint.textContent='';}};
+  ow.addEventListener('input',()=>{auto=false;hint.textContent='';});ws.addEventListener('input',fill);ws.addEventListener('change',fill);fill();
+}
+
 // ════════════ DEPENDENCIES & EVIDENCE ════════════
 let _trDepFilter='open';
 function trRenderDeps(){
@@ -143,11 +172,11 @@ function trRenderDeps(){
     .sort((a,b)=>(b.critical-a.critical)||((TE.DEP_STATUS[b.status].rank)-(TE.DEP_STATUS[a.status].rank))||String(a.requiredBy||'9').localeCompare(String(b.requiredBy||'9')));
   const f=(k,l)=>'<button type="button" class="tr-filter'+(_trDepFilter===k?' on':'')+'" aria-pressed="'+(_trDepFilter===k)+'" onclick="_trDepFilter='+trQ(k)+';trRenderDeps()">'+esc(l)+'</button>';
   const permits=d=>TE.GATED_ACTIVITIES.filter(a=>d.permits&&d.permits[a]).map(a=>(TE.ACTIVITIES.find(x=>x.key===a)||{}).label);
-  el.innerHTML='<div class="tr-bar"><div class="tr-filters" role="group" aria-label="Filter by status">'+f('open','Unresolved ('+(t.dependencies.length-counts.satisfied-counts.exception)+')')+f('blocked','Blocked ('+counts.blocked+')')+f('exception','Exceptions ('+counts.exception+')')+f('satisfied','Satisfied ('+counts.satisfied+')')+f('all','All ('+t.dependencies.length+')')+'</div>'
+  el.innerHTML=trSuggestBox(p,'dependencies')+'<div class="tr-bar"><div class="tr-filters" role="group" aria-label="Filter by status">'+f('open','Unresolved ('+(t.dependencies.length-counts.satisfied-counts.exception)+')')+f('blocked','Blocked ('+counts.blocked+')')+f('exception','Exceptions ('+counts.exception+')')+f('satisfied','Satisfied ('+counts.satisfied+')')+f('all','All ('+t.dependencies.length+')')+'</div>'
     +(trCanEdit()?trBtn('<i class="ph ph-plus"></i> Add dependency','trEditDep()','btn-primary btn-sm'):'')+'</div>'
     +(list.length?'<div class="dt-wrap"><table class="dt tr-table"><thead><tr><th scope="col">Required input</th><th scope="col">Owner</th><th scope="col">Needed by</th><th scope="col">Status</th><th scope="col">Consequence for Training</th><th scope="col">Can continue</th><th scope="col">Next action</th></tr></thead><tbody>'
       +list.map(d=>{const a=TE.depAffects(p,d);const late=d.requiredBy&&!TE.isResolved(d)&&trToday()>d.requiredBy;
-        return'<tr><td><button type="button" class="tr-rowlink" onclick="trEditDep('+trQ(d.id)+')">'+(d.critical?'<span class="tr-crit">Critical</span> ':'')+esc(d.title||'Untitled')+'</button><div class="tr-sub">'+a.scenarioIds.length+' scenario'+(a.scenarioIds.length===1?'':'s')+' · '+a.deliverableIds.length+' deliverable'+(a.deliverableIds.length===1?'':'s')+(a.audienceIds.length?' · '+esc(trAud(p,a.audienceIds).join(', ')):'')+(d.source==='legacy-heatmap'?' · from the earlier dependency map':'')+'</div></td>'
+        return'<tr><td><button type="button" class="tr-rowlink" onclick="trEditDep('+trQ(d.id)+')">'+(d.critical?'<span class="tr-crit">Critical</span> ':'')+esc(d.title||'Untitled')+'</button><div class="tr-sub">'+a.scenarioIds.length+' scenario'+(a.scenarioIds.length===1?'':'s')+' · '+a.deliverableIds.length+' deliverable'+(a.deliverableIds.length===1?'':'s')+(a.audienceIds.length?' · '+esc(trAud(p,a.audienceIds).join(', ')):'')+(d.source==='legacy-heatmap'?' · from the earlier dependency map':d.source==='craid'?' · from the CRAID log':'')+'</div></td>'
         +'<td>'+esc(d.workstream||'—')+'<div class="tr-sub">'+esc(d.owner||'No accountable person')+'</div></td>'
         +'<td class="mono'+(late?' tr-late':'')+'">'+trD(d.requiredBy)+(late?'<div class="tr-sub">Past due</div>':'')+'</td>'
         +'<td>'+trChip(d.status,TE.depStatusLabel(d.status))+(d.evidence&&d.evidence.ref?'<div class="tr-sub">Evidence: '+esc(d.evidence.ref)+(d.evidence.version?' · '+esc(d.evidence.version):'')+'</div>':TE.isResolved(d)?'<div class="tr-sub tr-late">No evidence reference</div>':'')+'</td>'
@@ -202,12 +231,13 @@ function trEditDep(id,preset){
     if(!id){const n=TE.newDependency(Object.assign({},v,{status:'awaiting',created:trToday(),updated:trToday()}));t.dependencies.push(n);
       const r=TE.updateDependency(p,n.id,{status:v.status,exception:v.exception,next:v.next},trCtx(p));
       if(r&&r.error){t.dependencies.pop();return r.error;}
-      TE.log(p,{type:'dependency',refId:n.id,text:'Dependency recorded: '+n.title+' ('+TE.depStatusLabel(n.status)+')'},trCtx(p));trSaved('Dependency added.');return;}
+      if(n.craidId)TE.markSuggestion(p,'craid:'+n.craidId,'added');
+      TE.log(p,{type:'dependency',refId:n.id,text:'Dependency recorded: '+n.title+' ('+TE.depStatusLabel(n.status)+')'+(n.craidId?' from the CRAID log':'')},trCtx(p));trSaved('Dependency added.');return;}
     const patch={};Object.keys(v).forEach(k=>{patch[k]=v[k];});
     const r=TE.updateDependency(p,id,patch,trCtx(p));if(r&&r.error)return r.error;
     const nf=r?(r.flagged.scenarios.length+r.flagged.deliverables.length):0;
     trSaved(nf?'Saved. '+nf+' linked item'+(nf===1?' is':'s are')+' flagged for review.':'Dependency saved.');
-  });
+  });  trWireOwnerFill(p);
 }
 function trDeleteRec(kind,id){
   const p=trProj();if(!p||!trCanEdit())return;const list=p.training[kind];const i=list.findIndex(x=>String(x.id)===String(id));if(i<0)return;
@@ -258,7 +288,7 @@ function trRenderLearnDev(){
       +(trCanEdit()?'<div>'+trBtn('Record a run','trScenarioRun('+trQ(s.id)+')','btn-text')+'</div>':'')+'</td>'
       +'<td>'+esc(used.map(d=>d.title).join(', ')||'—')+'</td></tr>';}).join('')+'</tbody></table></div>'
     :trEmpty('No scenarios yet.','Record the training-critical scenarios, their QA or UAT evidence and whether they run in the learning environment.');
-  el.innerHTML='<p class="tr-help tr-lead">Author content in your existing tools. AdoptIQ keeps the links, reviews and the reasons materials need to change.</p>'
+  el.innerHTML='<p class="tr-help tr-lead">Author content in your existing tools. AdoptIQ keeps the links, reviews and the reasons materials need to change.</p>'+trSuggestBox(p,'workflows')
     +sect('Changed workflows','What changes for people, and who it affects',trBtn('<i class="ph ph-plus"></i> Add workflow','trEditWorkflow()'),wf)
     +sect('Learning objectives','Audience, changed task, expected performance, evaluation',trBtn('<i class="ph ph-plus"></i> Add objective','trEditObjective()'),ob)
     +sect('Training scenarios','Evidence that each scenario runs where learners will practise',trBtn('<i class="ph ph-plus"></i> Add scenario','trEditScenario()'),sc)
@@ -274,13 +304,14 @@ function trDelivTable(p){
       +'<td>'+trChip(d.state,TE.delivStateLabel(d.state))+(d.revisionFlag?'<div class="tr-sub tr-late">Review flagged: '+esc(d.revisionFlag.reason)+'</div>':'')+'</td>'
       +'<td>'+dev+'</td><td>'+del+why+'</td><td>'+esc(d.owner||'—')+'</td></tr>';}).join('')+'</tbody></table></div>';
 }
-function trEditWorkflow(id){
-  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.workflows,id):TE.newWorkflow();if(!rec)return;
+function trEditWorkflow(id,preset){
+  const p=trProj();if(!p)return;const t=p.training;const rec=id?TE.byId(t.workflows,id):TE.newWorkflow(preset||{});if(!rec)return;
   const fields=[{k:'name',label:'Workflow',req:true,ph:'e.g. Claims intake'},{k:'change',label:'What changes',type:'textarea',rows:3},{k:'version',label:'Design or release reference',ph:'e.g. FDD v3, R1030'},
     {k:'audienceIds',label:'Affected audiences',type:'multi',opts:trOpts(p.stakeholders||[]),none:'Add stakeholder groups in People & Learning Impacts first.'}];
   trDialog(id?'Changed workflow':'New changed workflow','<div class="tr-form">'+trForm(fields,rec)+'</div>'+(id&&trCanEdit()?'<p><button type="button" class="btn-text tr-danger" onclick="trDeleteRec(\'workflows\','+trQ(id)+')">Delete this workflow</button></p>':''),()=>{
     const v=trCollect(fields,rec);const miss=trMissing(fields,v);if(miss)return miss;
-    if(id)Object.assign(rec,v);else{t.workflows.push(Object.assign(rec,v));TE.log(p,{type:'workflow',refId:rec.id,text:'Workflow recorded: '+rec.name},trCtx(p));}
+    if(id)Object.assign(rec,v);else{t.workflows.push(Object.assign(rec,v));if(rec.impactGroup)TE.markSuggestion(p,'impact:'+String(rec.impactGroup).toLowerCase(),'added');
+      TE.log(p,{type:'workflow',refId:rec.id,text:'Workflow recorded: '+rec.name+(rec.impactGroup?' from the Impact Assessment':'')},trCtx(p));}
     trSaved('Workflow saved.');});
 }
 function trWorkflowChange(id){
