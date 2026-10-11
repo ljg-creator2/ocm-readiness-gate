@@ -12742,10 +12742,9 @@ async function renderAuditLog(){
 // ════════════════════════════════════════════════════════
 // IN-APP ALERTS
 // ════════════════════════════════════════════════════════
+// Release alerts (overdue, launching soon, critical). Shown only in the Command Center bell;
+// the banner above the Initiatives page was removed at the client's request.
 function renderAlerts(){
-  const bar=document.getElementById('alert-bar');if(!bar)return;
-  const today=new Date();today.setHours(0,0,0,0);
-  const dismissed=JSON.parse(sessionStorage.getItem('adoptiq_dismissed_alerts')||'[]');
   const alerts=[];
   releases.forEach(r=>{
     const rl=relRollup(r);
@@ -12763,36 +12762,7 @@ function renderAlerts(){
     if(rl.status.cls==='critical')
       alerts.push({id:'crit-'+r.id,cls:'crit',msg:`<span class="alert-link" onclick="openRelease(${r.id})">${esc(r.name)}</span> is <strong>Critical</strong> — ${rl.flags} open issue${rl.flags===1?'':'s'} require attention.`});
   });
-  // Deduplicate and filter dismissed
-  const seen=new Set();const deduped=alerts.filter(a=>{const k=a.id;if(seen.has(k)||dismissed.includes(k))return false;seen.add(k);return true;});
-  if(!deduped.length){bar.style.display='none';return;}
-  bar.style.display='block';
-  const MAX_VISIBLE=3;
-  const visible=deduped.slice(0,MAX_VISIBLE);
-  const overflow=deduped.length-MAX_VISIBLE;
-  let html=`<div style="max-width:1440px;margin:0 auto;padding:4px 0">`;
-  html+=visible.map(a=>`<div class="alert-item" data-alert-id="${a.id}"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span><button class="alert-dismiss" onclick="dismissAlert('${a.id}')" title="Dismiss">&times;</button></div>`).join('');
-  if(overflow>0){
-    html+=`<div class="alert-overflow" id="alert-overflow">${deduped.slice(MAX_VISIBLE).map(a=>`<div class="alert-item" data-alert-id="${a.id}"><span class="alert-dot ${a.cls}"></span><span>${a.msg}</span><button class="alert-dismiss" onclick="dismissAlert('${a.id}')" title="Dismiss">&times;</button></div>`).join('')}</div>`;
-    html+=`<button class="alert-toggle-btn" id="alert-toggle-btn" onclick="toggleAlertOverflow()">Show ${overflow} more</button>`;
-  }
-  html+=`</div>`;
   window._ccAlerts=alerts;
-  bar.innerHTML=html;
-}
-function toggleAlertOverflow(){
-  const ov=document.getElementById('alert-overflow');
-  const btn=document.getElementById('alert-toggle-btn');
-  if(!ov||!btn)return;
-  const showing=ov.classList.toggle('show');
-  btn.textContent=showing?'Show less':'Show '+ov.querySelectorAll('.alert-item').length+' more';
-}
-function dismissAlert(alertId){
-  const dismissed=JSON.parse(sessionStorage.getItem('adoptiq_dismissed_alerts')||'[]');
-  dismissed.push(alertId);
-  sessionStorage.setItem('adoptiq_dismissed_alerts',JSON.stringify(dismissed));
-  const item=document.querySelector(`.alert-item[data-alert-id="${alertId}"]`);
-  if(item){item.style.transition='opacity 0.2s';item.style.opacity='0';setTimeout(()=>{item.remove();const bar=document.getElementById('alert-bar');if(bar&&!bar.querySelector('.alert-item'))bar.style.display='none';},200);}
 }
 
 // ════════════════════════════════════════════════════════
