@@ -62,6 +62,19 @@ function hideLogin(){document.getElementById('v-login').classList.remove('active
 function landingToLogin(){hideLanding();showLogin();showSignin();}
 async function landingToDemo(){hideLanding();hideLogin();await loadDemoData();document.getElementById('v-portfolio').classList.add('active');}
 function landingBookWalkthrough(){openBookingModal();}
+// Landing: search opens the demo workspace with its search field focused.
+async function landingSearch(){await landingToDemo();setTimeout(()=>document.getElementById('cc-q')?.focus(),400);}
+// Landing: Watch Overview plays the existing product walkthrough.
+function landingWatchOverview(){
+  let m=document.getElementById('ld-video');
+  if(!m){m=document.createElement('div');m.id='ld-video';m.className='ld-video';m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','AdoptIQ overview');
+    m.innerHTML='<div class="ld-video-box"><button class="ld-video-x" onclick="landingCloseOverview()" aria-label="Close overview">&times;</button><img src="img/walkthrough.gif" alt="AdoptIQ walkthrough: portfolio, lifecycle signals, stakeholder tracking and planning"></div>';
+    m.addEventListener('click',e=>{if(e.target===m)landingCloseOverview();});document.body.appendChild(m);}
+  m.classList.add('open');m.querySelector('.ld-video-x').focus();
+}
+function landingCloseOverview(){document.getElementById('ld-video')?.classList.remove('open');}
+// Landing: capability cards scroll one card at a time.
+function landingCards(dir){const el=document.getElementById('ld-cards');if(!el)return;const c=el.querySelector('.ld-card');el.scrollBy({left:dir*((c?c.offsetWidth:280)+20),behavior:'smooth'});}
 // Opens the demo on the project that most needs a decision, at its readiness brief.
 async function landingOpenBrief(){
   await landingToDemo();
@@ -2113,7 +2126,7 @@ function renderSectionIndex(key){
   el.innerHTML=h;
 }
 document.addEventListener('click',e=>{if(!e.target.closest('.cc-rel'))document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));if(!e.target.closest('.cc-search'))document.getElementById('cc-results')?.classList.remove('open');});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));document.body.classList.remove('sb-drawer');}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){landingCloseOverview();document.querySelectorAll('.cc-pop.open').forEach(p=>p.classList.remove('open'));document.body.classList.remove('sb-drawer');}});
 document.addEventListener('DOMContentLoaded',initShell);
 
 // ════════════════════════════════════════════════════════

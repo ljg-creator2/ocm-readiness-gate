@@ -108,175 +108,78 @@
      LANDING PAGE
 ══════════════════════════════════════════ -->
 <div id="v-landing" class="active">
-  <nav class="lp-nav" aria-label="Site">
-    <div class="lp-nav-i">
-      <div class="lp-nav-brand"><span class="lp-nav-name">AdoptIQ</span><span class="lp-nav-by">Providence Consulting Firm</span></div>
-      <div class="lp-nav-right">
-        <a href="#lp-chain" class="lp-nav-link">Evidence chain</a>
-        <a href="#lp-methods" class="lp-nav-link">Methodology</a>
-        <a href="#lp-features" class="lp-nav-link">Capabilities</a>
-        <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle light/dark theme"><span id="theme-icon-lp"><i class="ph ph-moon"></i></span></button>
-        <button class="lp-nav-signin" onclick="landingToLogin()">Sign in</button>
+  <!-- Approved landing: "Executive & Elegant" (design-reference/adoptiq-approved-command-center.png) -->
+  <section class="ld-hero" aria-labelledby="ld-h1">
+    <nav class="ld-nav" aria-label="Site">
+      <a class="ld-logo" href="#ld-top" aria-label="AdoptIQ home"><img src="img/brand/adoptiq-logo-dark.svg" alt="AdoptIQ, Change Intelligence" width="240" height="90"></a>
+      <div class="ld-links">
+        <a href="#ld-platform">Platform</a>
+        <a href="#ld-pillars">Solutions</a>
+        <a href="#ld-action">Resources</a>
+        <a href="#ld-about">About</a>
       </div>
-    </div>
-  </nav>
-
-  <main id="main-landing">
-  <section class="lx-hero" aria-labelledby="lx-h1">
-    <div class="lx-wrap lx-hero-i">
-      <div class="lx-hero-text">
-        <p class="lx-eyebrow">Adoption intelligence for high-stakes change</p>
-        <h1 class="lx-h1" id="lx-h1">Turn change-readiness judgment into decision-ready evidence.</h1>
-        <p class="lx-lead">AdoptIQ gives change, implementation, training, and enablement leaders a structured way to connect frontline signals, readiness gates, learning outcomes, risks, and executive decisions.</p>
-        <div class="lx-ctas">
-          <button class="btn-gold lx-btn-lg" onclick="landingToDemo()">Explore the readiness workspace</button>
-          <button class="btn-outline lx-btn-lg" onclick="landingOpenBrief()">View an executive decision brief</button>
+      <div class="ld-nav-r">
+        <button class="ld-icon" onclick="landingSearch()" aria-label="Search the demo workspace"><i class="ph ph-magnifying-glass"></i></button>
+        <button class="ld-signin" onclick="landingToLogin()">Sign In</button>
+        <button class="ld-btn ld-btn-sm" onclick="landingBookWalkthrough()">Request a Demo <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
+      </div>
+    </nav>
+    <div class="ld-hero-i" id="ld-top">
+      <div class="ld-hero-text">
+        <p class="ld-eyebrow">People. Readiness. Real progress.</p>
+        <h1 class="ld-h1" id="ld-h1">Turn<br>change plans<br>into <em>real results.</em></h1>
+        <p class="ld-lead">AdoptIQ brings people, readiness, training, risk, and adoption into one connected workspace for change teams.</p>
+        <div class="ld-ctas">
+          <button class="ld-btn" onclick="landingToDemo()">Explore the Platform <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
+          <button class="ld-btn-ghost" onclick="landingWatchOverview()"><span class="ld-play" aria-hidden="true"><i class="ph ph-play"></i></span>Watch Overview</button>
         </div>
       </div>
-      <figure class="lx-proof" aria-label="Sample AdoptIQ portfolio view">
-        <div class="lx-proof-bar"><span>Portfolio</span><span class="lx-proof-tag">Sample workspace · fictional data</span></div>
-        <div class="lx-proof-body">
-          <div class="erb erb-a lx-proof-erb">
-            <div class="erb-eye">Executive readiness brief</div>
-            <div class="erb-pos">Portfolio position <span class="st st-a">Watch</span></div>
-            <p class="erb-narr">Two releases go live within 30 days. Delivery readiness is stable, but UAT closure and stakeholder confidence are below threshold for Core Banking Modernization.</p>
-            <p class="ev-line"><strong>Evidence:</strong> 3 open blocking issues · 2 groups below readiness threshold · gate review in 5 days</p>
-            <div class="erb-decision lx-proof-dec"><div class="erb-decision-gold"></div><div class="erb-decision-t">Decision needed: confirm remediation ownership before the next gate review.</div></div>
-          </div>
-          <table class="dt lx-proof-dt">
-            <thead><tr><th>Release</th><th>Status</th><th>Go-live</th><th>Readiness</th></tr></thead>
-            <tbody>
-              <tr><td>Q3 EHR Migration</td><td><span class="st st-g">On track</span></td><td class="mono">41 days</td><td class="mono">84%</td></tr>
-              <tr><td>Core Banking Modernization</td><td><span class="st st-a">Watch</span></td><td class="mono">22 days</td><td class="mono">68%</td></tr>
-              <tr><td>ERP Manufacturing Cutover</td><td><span class="st st-c">Critical</span></td><td class="mono">9 days</td><td class="mono">51%</td></tr>
-            </tbody>
-          </table>
+      <div class="ld-hero-media"><img src="img/brand/adoptiq-product-showcase.webp" alt="The AdoptIQ Command Center on a laptop: active initiatives, overall readiness, at-risk initiatives, training completion, readiness trend, action items, and upcoming milestones" width="1920" height="1250"></div>
+    </div>
+    <ul class="ld-pillars" id="ld-pillars" aria-label="What AdoptIQ does">
+      <li><i class="ph ph-users-three" aria-hidden="true"></i><strong>Unify</strong><span>People, data, and plans</span></li>
+      <li><i class="ph ph-clock-countdown" aria-hidden="true"></i><strong>Anticipate</strong><span>Risks and gaps</span></li>
+      <li><i class="ph ph-seal-check" aria-hidden="true"></i><strong>Activate</strong><span>Training and interventions</span></li>
+      <li><i class="ph ph-chart-line-up" aria-hidden="true"></i><strong>Sustain</strong><span>Real, lasting outcomes</span></li>
+    </ul>
+  </section>
+
+  <section class="ld-platform" id="ld-platform" aria-labelledby="ld-plat-h">
+    <div class="ld-wrap">
+      <div class="ld-plat-hd">
+        <div>
+          <p class="ld-eyebrow">A platform for what’s next</p>
+          <h2 class="ld-h2" id="ld-plat-h">Everything your change team<br>needs in one place.</h2>
         </div>
-      </figure>
-    </div>
-    <div class="lx-wrap"><p class="lx-proofline">Not another methodology. The operating system that makes the methods you already use measurable, traceable, and defensible.</p></div>
-  </section>
-
-  <section class="lx-sec lx-problem" aria-labelledby="lx-problem-h">
-    <div class="lx-wrap">
-      <h2 class="sr-only" id="lx-problem-h">The problem AdoptIQ solves</h2>
-      <div class="lx-split">
-        <div><p class="lx-split-k">The practitioner's view</p><p class="lx-split-t">You know the change is at risk.</p><p class="lx-split-d">You were in the sessions. You heard the questions nobody asked out loud and saw completion rates hide real gaps.</p></div>
-        <div><p class="lx-split-k">The leadership question</p><p class="lx-split-t">The challenge is proving it early enough for leaders to act.</p><p class="lx-split-d">Steering committees act on evidence they can trace. Instinct, however well calibrated, rarely survives the room on its own.</p></div>
+        <div class="ld-arrows">
+          <button onclick="landingCards(-1)" aria-label="Previous"><i class="ph ph-caret-left"></i></button>
+          <button onclick="landingCards(1)" aria-label="Next"><i class="ph ph-caret-right"></i></button>
+        </div>
+      </div>
+      <div class="ld-cards" id="ld-cards" tabindex="0" aria-label="Platform capabilities">
+        <article class="ld-card"><span class="ld-card-ic o"><i class="ph ph-users-three"></i></span><h3>People &amp; Impacts</h3><p>Understand who’s affected and what they need.</p></article>
+        <article class="ld-card"><span class="ld-card-ic t"><i class="ph ph-chart-bar"></i></span><h3>Readiness &amp; Risk</h3><p>Identify risks early and track readiness in real time.</p></article>
+        <article class="ld-card"><span class="ld-card-ic p"><i class="ph ph-graduation-cap"></i></span><h3>Training &amp; Enablement</h3><p>Deliver the right learning to the right people.</p></article>
+        <article class="ld-card"><span class="ld-card-ic o"><i class="ph ph-users"></i></span><h3>Adoption &amp; Outcomes</h3><p>Measure adoption and track lasting outcomes.</p></article>
       </div>
     </div>
   </section>
 
-  <section class="lx-sec lx-chain-sec" id="lp-chain" aria-labelledby="lx-chain-h">
-    <div class="lx-wrap">
-      <p class="lx-eyebrow">From practitioner observation to executive action</p>
-      <h2 class="lx-h2" id="lx-chain-h">The Readiness Evidence Chain</h2>
-      <ol class="lx-chain">
-        <li><span class="lx-chain-n">01</span><div><h3>Signal</h3><p>What practitioners observe in meetings, surveys, training, testing, and stakeholder conversations.</p></div></li>
-        <li><span class="lx-chain-n">02</span><div><h3>Assessment</h3><p>Structured readiness, ADKAR, gate, and learning evaluation.</p></div></li>
-        <li><span class="lx-chain-n">03</span><div><h3>Risk</h3><p>Traceable impacts, dependencies, blockers, and adoption exposure.</p></div></li>
-        <li><span class="lx-chain-n">04</span><div><h3>Action</h3><p>Targeted intervention, owner, and timing.</p></div></li>
-        <li><span class="lx-chain-n">05</span><div><h3>Decision</h3><p>Go/no-go recommendation, resource decision, or executive escalation.</p></div></li>
-        <li><span class="lx-chain-n">06</span><div><h3>Outcome</h3><p>Measured post-launch adoption, reinforcement, and value realization.</p></div></li>
-      </ol>
-      <p class="lx-chain-note">Each link keeps its source. When someone asks “how do you know?”, the answer is one click back along the chain.</p>
-    </div>
-  </section>
-
-  <section class="lx-sec lx-methods" id="lp-methods" aria-labelledby="lx-methods-h">
-    <div class="lx-wrap lx-methods-i">
-      <div>
-        <p class="lx-eyebrow">Methodology architecture</p>
-        <h2 class="lx-h2" id="lx-methods-h">Built on the methods practitioners already use.</h2>
-        <p class="lx-body">AdoptIQ does not replace your methodology. It gives it a durable evidence layer.</p>
-      </div>
-      <div class="dt-wrap">
-        <table class="dt">
-          <thead><tr><th scope="col">Discipline</th><th scope="col">Methods</th><th scope="col">What AdoptIQ records</th></tr></thead>
-          <tbody>
-            <tr><th scope="row">Readiness and stakeholder transition</th><td>ADKAR · Bridges</td><td>Dimension scores by affected group, with the observations behind them</td></tr>
-            <tr><th scope="row">Delivery governance and readiness gates</th><td>PMI · lifecycle / SDLC governance</td><td>Gate criteria verified, deferred, or failed, and who signed off</td></tr>
-            <tr><th scope="row">Learning and behavior change</th><td>Kirkpatrick</td><td>Completion, assessment results, observed behavior, and outcomes (L1–L4)</td></tr>
-            <tr><th scope="row">Enterprise alignment and reinforcement</th><td>Kotter · McKinsey 7S</td><td>Sponsorship, structure, and capacity signals that shape readiness</td></tr>
-            <tr class="lx-role"><th scope="row">AdoptIQ's role</th><td colspan="2">Captures evidence, connects signals across releases, and supports the go/no-go decision.</td></tr>
-          </tbody>
-        </table>
+  <section class="ld-action" id="ld-action" aria-labelledby="ld-act-h">
+    <img class="ld-action-wave" src="img/brand/adoptiq-wave.svg" alt="" aria-hidden="true">
+    <div class="ld-wrap ld-action-i">
+      <p class="ld-motto">People.<br>Readiness.<br>Real progress.</p>
+      <div class="ld-action-r">
+        <h2 class="ld-action-h" id="ld-act-h">See AdoptIQ in action.</h2>
+        <p>Discover how leading organizations turn change plans into measurable results.</p>
+        <button class="ld-btn" onclick="landingBookWalkthrough()">Request a Demo <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
       </div>
     </div>
   </section>
 
-  <section class="lx-sec lx-features" id="lp-features" aria-labelledby="lx-feat-h">
-    <div class="lx-wrap">
-      <p class="lx-eyebrow">Capabilities</p>
-      <h2 class="lx-h2" id="lx-feat-h">What changes when readiness has evidence behind it</h2>
-      <div class="lx-feat">
-        <article>
-          <h3>Gate reviews that hold up in the room.</h3>
-          <p>A structured record of what was verified, what was deferred, and what the evidence says, attached to every readiness gate.</p>
-          <div class="lx-crop"><div class="lx-gate"><span>Gate 3 · Post-Dev / Pre-UAT</span><span class="st st-a">2 of 6 deferred</span></div><div class="lx-gate"><span>Gate 4 · Post-UAT / Pre-Go-Live</span><span class="st st-n">Not started</span></div></div>
-          <p class="lx-outcome">Outcome: a go/no-go recommendation you can trace to its criteria.</p>
-        </article>
-        <article>
-          <h3>Stakeholder signals that don't get lost in meeting notes.</h3>
-          <p>Trust, anxiety, and engagement observations are logged against the affected group and feed its readiness score.</p>
-          <div class="lx-crop"><div class="lx-sig"><span>Regional Operations</span><span class="mono">ADKAR 2.6 / 5</span><span class="trend trend-down">▼ 0.4</span></div><div class="lx-sig"><span>Finance Operations</span><span class="mono">ADKAR 3.8 / 5</span><span class="trend trend-flat">— 0.0</span></div></div>
-          <p class="lx-outcome">Outcome: concerns surface as evidence, not anecdotes.</p>
-        </article>
-        <article>
-          <h3>Training completion is not adoption.</h3>
-          <p>Track learning, behavior change, reinforcement, and outcomes, not merely whether a learner completed a module.</p>
-          <div class="lx-crop"><div class="lx-kirk"><span>L1 Reaction</span><span>L2 Learning</span><span>L3 Behavior</span><span>L4 Results</span></div></div>
-          <p class="lx-outcome">Outcome: readiness scored on what people can do, not what they attended.</p>
-        </article>
-        <article>
-          <h3>Early lifecycle warnings before adoption fails.</h3>
-          <p>Requirements disputes, testing gaps, and quiet SMEs show up weeks before go-live, while there is still time to act.</p>
-          <div class="lx-crop"><div class="lx-sig"><span>UAT defects affecting trained workflows</span><span class="st st-r">3 open</span></div></div>
-          <p class="lx-outcome">Outcome: interventions start before the post-mortem would have.</p>
-        </article>
-        <article>
-          <h3>Cross-release change load and capacity.</h3>
-          <p>When several releases land on the same groups in one quarter, AdoptIQ shows where saturation is building and who is carrying the work.</p>
-          <div class="lx-crop"><div class="lx-load"><span style="width:38%"></span><span style="width:27%"></span><span class="lx-load-hot" style="width:22%"></span></div><div class="lx-load-l"><span>Q3 change load · Regional Operations</span><span class="mono">87% of capacity</span></div></div>
-          <p class="lx-outcome">Outcome: sequencing decisions based on load, not on who escalated loudest.</p>
-        </article>
-        <article>
-          <h3>Executive-ready go/no-go and handoff briefs.</h3>
-          <p>Export a decision brief or full handoff report built from the evidence already logged.</p>
-          <div class="lx-crop"><div class="lx-brief"><span class="lx-brief-t">Go/no-go brief · Core Banking Modernization</span><span>Position · Evidence · Risks · Decision required</span></div></div>
-          <p class="lx-outcome">Outcome: the brief is ready before the meeting, not built the night before.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <section class="lx-sec lx-walk" aria-labelledby="lx-walk-h">
-    <div class="lx-wrap">
-      <p class="lx-eyebrow">Product walkthrough</p>
-      <h2 class="lx-h2" id="lx-walk-h">Two minutes in the workspace</h2>
-      <p class="lx-body">Recorded on an earlier version of the interface; the workflow is the same.</p>
-      <div class="lx-walk-media"><img src="img/walkthrough.gif" alt="AdoptIQ walkthrough: portfolio dashboard, lifecycle signals, stakeholder tracking and complexity planning" loading="lazy"></div>
-    </div>
-  </section>
-
-  <section class="lx-sec lx-cred" aria-label="Who built AdoptIQ">
-    <div class="lx-wrap"><p class="lx-cred-t">Built by practitioners who have had to defend readiness recommendations in the room.</p></div>
-  </section>
-
-  <section class="lx-final" aria-labelledby="lx-final-h">
-    <div class="lx-wrap">
-      <h2 class="lx-final-h" id="lx-final-h">The next time leadership asks whether the organization is ready, bring evidence, not a spreadsheet built the night before.</h2>
-      <div class="lx-ctas">
-        <button class="btn-gold lx-btn-lg" onclick="landingToDemo()">Explore the readiness workspace</button>
-        <button class="btn-outline lx-btn-lg lx-on-dark" onclick="landingBookWalkthrough()">Schedule a working session</button>
-      </div>
-    </div>
-  </section>
-  </main>
-
-  <footer class="lp-footer">
+  <footer class="lp-footer ld-footer" id="ld-about">
     <div class="lp-footer-i">
-      <div class="lp-footer-brand"><span class="lp-footer-logo">A</span><span class="lp-footer-name">Providence Consulting Firm</span></div>
+      <img class="ld-footer-logo" src="img/brand/adoptiq-logo-dark.svg" alt="AdoptIQ, Change Intelligence" width="180" height="68">
       <div class="lp-footer-links">
         <button class="lp-footer-link" onclick="landingToLogin()">Sign In</button>
         <button class="lp-footer-link" onclick="landingBookWalkthrough()">Contact</button>
