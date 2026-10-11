@@ -79,11 +79,10 @@
 </script>
 
 <!-- Preconnect for performance -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" href="fonts/playfair-display-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://unpkg.com">
 
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
@@ -95,8 +94,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>A</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
 <link rel="stylesheet" href="css/design-tokens.css">
-<link rel="stylesheet" href="css/adoptiq.css">
+<link rel="stylesheet" href="css/adoptiq.css?v=20261011qa">
+<link rel="stylesheet" href="css/brand.css?v=20261011qa">
+<link rel="stylesheet" href="css/system.css?v=20261011qa">
 </head>
 <body data-density="comfortable">
 <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -106,146 +108,78 @@
      LANDING PAGE
 ══════════════════════════════════════════ -->
 <div id="v-landing" class="active">
-  <nav class="lp-nav">
-    <div class="lp-nav-i">
-      <div class="lp-nav-brand"><span class="lp-nav-logo">A</span><span class="lp-nav-name">AdoptIQ</span></div>
-      <div class="lp-nav-right">
-        <a href="#lp-features" class="lp-nav-link">Features</a>
-        <a href="#lp-how" class="lp-nav-link">How It Works</a>
-        <button class="lp-nav-theme" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle light/dark theme"><span id="theme-icon-lp"><i class="ph ph-moon"></i></span></button>
-        <button class="lp-nav-signin" onclick="landingToLogin()">Sign In</button>
+  <!-- Approved landing: "Executive & Elegant" (design-reference/adoptiq-approved-command-center.png) -->
+  <section class="ld-hero" aria-labelledby="ld-h1">
+    <nav class="ld-nav" aria-label="Site">
+      <a class="ld-logo" href="#ld-top" aria-label="AdoptIQ home"><img src="img/brand/adoptiq-logo-dark-v2.png" alt="AdoptIQ, Change Intelligence" width="800" height="243"></a>
+      <div class="ld-links">
+        <a href="#ld-platform">Platform</a>
+        <a href="#ld-pillars">Solutions</a>
+        <a href="#ld-action">Resources</a>
+        <a href="#ld-about">About</a>
       </div>
-    </div>
-  </nav>
-
-  <section class="lp-hero">
-    <div class="lp-hero-i">
-      <div class="lp-hero-text">
-        <p class="lp-eyebrow">For OCM Practitioners Who Need Evidence, Not Opinions</p>
-        <h1 class="lp-h1">Leadership asks if people are ready.<span class="lp-h1-line2">Now you have the answer.</span></h1>
-        <p class="lp-hero-sub">You already know who's struggling. You've seen the anxiety in the room, heard the questions no one's asking out loud, watched training completion rates mask real gaps. AdoptIQ turns what you already know into evidence. Structured, scored, and ready for the table when it matters.</p>
-        <div class="lp-hero-ctas">
-          <button class="lp-btn-primary" onclick="landingToDemo()">See It With Real Data</button>
-          <button class="lp-btn-secondary" onclick="landingBookWalkthrough()">Talk to the Team</button>
+      <div class="ld-nav-r">
+        <button class="ld-icon" onclick="landingSearch()" aria-label="Search the demo workspace"><i class="ph ph-magnifying-glass"></i></button>
+        <button class="ld-signin" onclick="landingToLogin()">Sign In</button>
+        <button class="ld-btn ld-btn-sm" onclick="landingBookWalkthrough()">Request a Demo <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
+      </div>
+    </nav>
+    <div class="ld-hero-i" id="ld-top">
+      <div class="ld-hero-text">
+        <p class="ld-eyebrow">People. Readiness. Real progress.</p>
+        <h1 class="ld-h1" id="ld-h1">Turn<br>change plans<br>into <em>real results.</em></h1>
+        <p class="ld-lead">AdoptIQ brings people, readiness, training, risk, and adoption into one connected workspace for change teams.</p>
+        <div class="ld-ctas">
+          <button class="ld-btn" onclick="landingToDemo()">Explore the Platform <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
+          <button class="ld-btn-ghost" onclick="landingWatchOverview()"><span class="ld-play" aria-hidden="true"><i class="ph ph-play"></i></span>Watch Overview</button>
         </div>
       </div>
-      <div class="lp-hero-img">
-        <div class="lp-screenshot"><img src="img/hero-dashboard.png" alt="AdoptIQ portfolio dashboard showing readiness KPIs, executive summary, and risk distribution" style="width:100%;height:100%;object-fit:cover;border-radius:var(--r10)"></div>
+      <div class="ld-hero-media"><img src="img/brand/adoptiq-hero-laptop.webp" alt="The AdoptIQ Command Center on a laptop: active initiatives, overall readiness, at-risk initiatives, training completion, readiness trend, action items, and upcoming milestones" width="1536" height="1024"></div>
+    </div>
+    <ul class="ld-pillars" id="ld-pillars" aria-label="What AdoptIQ does">
+      <li><i class="ph ph-users-three" aria-hidden="true"></i><strong>Unify</strong><span>People, data, and plans</span></li>
+      <li><i class="ph ph-clock-countdown" aria-hidden="true"></i><strong>Anticipate</strong><span>Risks and gaps</span></li>
+      <li><i class="ph ph-seal-check" aria-hidden="true"></i><strong>Activate</strong><span>Training and interventions</span></li>
+      <li><i class="ph ph-chart-line-up" aria-hidden="true"></i><strong>Sustain</strong><span>Real, lasting outcomes</span></li>
+    </ul>
+  </section>
+
+  <section class="ld-platform" id="ld-platform" aria-labelledby="ld-plat-h">
+    <div class="ld-wrap">
+      <div class="ld-plat-hd">
+        <div>
+          <p class="ld-eyebrow">A platform for what’s next</p>
+          <h2 class="ld-h2" id="ld-plat-h">Everything your change team<br>needs in one place.</h2>
+        </div>
+        <div class="ld-arrows">
+          <button onclick="landingCards(-1)" aria-label="Previous"><i class="ph ph-caret-left"></i></button>
+          <button onclick="landingCards(1)" aria-label="Next"><i class="ph ph-caret-right"></i></button>
+        </div>
+      </div>
+      <div class="ld-cards" id="ld-cards" tabindex="0" aria-label="Platform capabilities">
+        <article class="ld-card"><span class="ld-card-ic o"><i class="ph ph-users-three"></i></span><h3>People &amp; Impacts</h3><p>Understand who’s affected and what they need.</p></article>
+        <article class="ld-card"><span class="ld-card-ic t"><i class="ph ph-chart-bar"></i></span><h3>Readiness &amp; Risk</h3><p>Identify risks early and track readiness in real time.</p></article>
+        <article class="ld-card"><span class="ld-card-ic p"><i class="ph ph-graduation-cap"></i></span><h3>Training &amp; Enablement</h3><p>Deliver the right learning to the right people.</p></article>
+        <article class="ld-card"><span class="ld-card-ic o"><i class="ph ph-users"></i></span><h3>Adoption &amp; Outcomes</h3><p>Measure adoption and track lasting outcomes.</p></article>
       </div>
     </div>
   </section>
 
-  <section class="lp-problem">
-    <div class="lp-section-i">
-      <h2 class="lp-h2">You know the change is at risk. The problem is proving it.</h2>
-      <p class="lp-problem-text">Most OCM practitioners are carrying the same thing: a well-calibrated instinct built from years of fieldwork, and almost nothing to back it up in a stakeholder meeting. The training numbers look fine. The survey scores are acceptable. But you were in those sessions. You know what the data isn't capturing. AdoptIQ gives that knowledge a structure so what you know becomes something you can show.</p>
-    </div>
-  </section>
-
-  <section class="lp-features" id="lp-features">
-    <div class="lp-section-i" style="max-width:1100px">
-      <p class="lp-eyebrow">What AdoptIQ Does</p>
-      <h2 class="lp-h2">Built around the work OCM actually does, not how software thinks it works</h2>
-      <div class="lp-feat-grid">
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-          <h3 class="lp-feat-title">Gate Reviews That Mean Something</h3>
-          <p class="lp-feat-desc">Not a checklist. A structured record of what was verified, what was deferred, and what the evidence actually says so your go/no-go recommendation holds up in the room.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
-          <h3 class="lp-feat-title">The Signals No One Else Is Tracking</h3>
-          <p class="lp-feat-desc">Trust levels. Anxiety signals. Engagement outliers. The things you learn in hallway conversations and working sessions. Logged, scored, and tied to readiness instead of lost in your notes.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
-          <h3 class="lp-feat-title">Training Completions Don't Tell You Enough</h3>
-          <p class="lp-feat-desc">Track whether behavior actually changed, not just whether someone clicked through a module. Kirkpatrick levels 1 through 4, tied directly to your readiness picture.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <h3 class="lp-feat-title">Early Warning, Not Postmortem</h3>
-          <p class="lp-feat-desc">Requirements disputes. Testing gaps. Key SMEs going quiet. AdoptIQ tracks the lifecycle signals that show up weeks before adoption fails, when there's still time to act.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
-          <h3 class="lp-feat-title">An Answer to "How Do You Know?"</h3>
-          <p class="lp-feat-desc">Every score traces back to a source. Every recommendation has a proof point. When that question comes across the table, you open AdoptIQ, not a spreadsheet you built at midnight.</p>
-        </div>
-        <div class="lp-feat-card">
-          <div class="lp-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-          <h3 class="lp-feat-title">Across Every Release, Not Just the Loudest One</h3>
-          <p class="lp-feat-desc">When three releases are landing in the same quarter, someone's going to absorb too much change at once. AdoptIQ shows you where saturation is building before it becomes a crisis.</p>
-        </div>
+  <section class="ld-action" id="ld-action" aria-labelledby="ld-act-h">
+    <img class="ld-action-wave" src="img/brand/adoptiq-wave.svg" alt="" aria-hidden="true">
+    <div class="ld-wrap ld-action-i">
+      <p class="ld-motto">People.<br>Readiness.<br>Real progress.</p>
+      <div class="ld-action-r">
+        <h2 class="ld-action-h" id="ld-act-h">See AdoptIQ in action.</h2>
+        <p>Discover how leading organizations turn change plans into measurable results.</p>
+        <button class="ld-btn" onclick="landingBookWalkthrough()">Request a Demo <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
       </div>
     </div>
   </section>
 
-  <section class="lp-how" id="lp-how">
-    <div class="lp-section-i" style="max-width:1000px">
-      <p class="lp-eyebrow">How It Works</p>
-      <h2 class="lp-h2">Structured around the way practitioners actually work</h2>
-      <div class="lp-steps">
-        <div class="lp-step">
-          <div class="lp-step-num">1</div>
-          <h3 class="lp-step-title">Map Your Portfolio</h3>
-          <p class="lp-step-desc">Build out your releases and the projects inside them. Map the workstreams, identify the affected groups, and set your gate checkpoints before the work starts, not after something goes wrong.</p>
-        </div>
-        <div class="lp-step-arrow"><i class="ph ph-arrow-right"></i></div>
-        <div class="lp-step">
-          <div class="lp-step-num">2</div>
-          <h3 class="lp-step-title">Log What You're Seeing</h3>
-          <p class="lp-step-desc">ADKAR scores, trust signals, training outcomes, lifecycle flags. Enter what you're observing as you observe it. AdoptIQ builds the readiness picture as you go, not in a scramble before the steering committee.</p>
-        </div>
-        <div class="lp-step-arrow"><i class="ph ph-arrow-right"></i></div>
-        <div class="lp-step">
-          <div class="lp-step-num">3</div>
-          <h3 class="lp-step-title">Walk Into the Room Prepared</h3>
-          <p class="lp-step-desc">Pull an executive dashboard, a go/no-go brief, or a full handoff report in minutes. Every recommendation is backed by the evidence you logged, not a judgment call you'll have to defend on the fly.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="lp-video">
-    <div class="lp-section-i">
-      <p class="lp-eyebrow">See It In Action</p>
-      <h2 class="lp-h2">Two minutes. Real data. No sales pitch.</h2>
-      <div class="lp-video-wrap">
-        <img src="img/walkthrough.gif" alt="AdoptIQ platform walkthrough showing portfolio dashboard, lifecycle signals, stakeholder trust tracking, and complexity planning" style="width:100%;border-radius:var(--r10);border:1px solid rgba(255,255,255,0.1);box-shadow:0 20px 60px rgba(0,0,0,0.4)" loading="lazy">
-      </div>
-    </div>
-  </section>
-
-  <section class="lp-credibility">
-    <div class="lp-section-i">
-      <h2 class="lp-h2">The methodologies you already use.<br>The structure you've been missing.</h2>
-      <p class="lp-cred-text">AdoptIQ was built by consultants who got tired of translating their fieldwork into slide decks the night before a steering committee. It's not a new methodology. It's the infrastructure that makes the methodologies you already know measurable, shareable, and defensible. ADKAR for readiness dimensions. PMI for project governance. Kirkpatrick for training outcomes. Kotter, Bridges, and McKinsey 7S woven into the assessment framework.</p>
-      <div class="lp-method-logos">
-        <span class="lp-method-badge">ADKAR</span>
-        <span class="lp-method-badge">Bridges</span>
-        <span class="lp-method-badge">Kirkpatrick</span>
-        <span class="lp-method-badge">Kotter</span>
-        <span class="lp-method-badge">McKinsey 7S</span>
-        <span class="lp-method-badge">PMI</span>
-      </div>
-    </div>
-  </section>
-
-  <section class="lp-final-cta">
-    <div class="lp-section-i">
-      <h2 class="lp-h2">The next time someone asks if the organization is ready, have the answer.</h2>
-      <p class="lp-final-sub">Explore a live portfolio with real data, or spend 30 minutes with our team walking through your specific program.</p>
-      <div class="lp-hero-ctas">
-        <button class="lp-btn-primary" onclick="landingToDemo()">See It With Real Data</button>
-        <button class="lp-btn-secondary" onclick="landingBookWalkthrough()">Talk to the Team</button>
-      </div>
-    </div>
-  </section>
-
-  <footer class="lp-footer">
+  <footer class="lp-footer ld-footer" id="ld-about">
     <div class="lp-footer-i">
-      <div class="lp-footer-brand"><span class="lp-footer-logo">A</span><span class="lp-footer-name">Providence Consulting Firm</span></div>
+      <img class="ld-footer-logo" src="img/brand/adoptiq-logo-dark-v2.png" alt="AdoptIQ, Change Intelligence" width="800" height="243">
       <div class="lp-footer-links">
         <button class="lp-footer-link" onclick="landingToLogin()">Sign In</button>
         <button class="lp-footer-link" onclick="landingBookWalkthrough()">Contact</button>
@@ -263,94 +197,132 @@
      LOGIN SCREEN
 ══════════════════════════════════════════ -->
 <div id="v-login">
-  <div class="login-card">
-    <div class="login-logo">A</div>
-    <div class="login-title">AdoptIQ</div>
-    <div class="login-sub">Adoption Intelligence for Practitioners Who Need More Than a Gut Feeling</div>
+  <!-- Approved sign-in: "Split-Screen Authentication" (design-reference/adoptiq-approved-command-center.png) -->
+  <div class="si">
+    <section class="si-brand" aria-label="AdoptIQ">
+      <button type="button" class="si-logo" onclick="showLanding()" aria-label="Back to the AdoptIQ home page"><img src="img/brand/adoptiq-logo-dark-v2.png" alt="AdoptIQ, Change Intelligence" width="800" height="243"></button>
+      <p class="si-motto">People.<br>Readiness.<br>Real progress.</p>
+      <img class="si-wave" src="img/brand/adoptiq-wave.svg" alt="" aria-hidden="true">
+    </section>
 
-    <!-- SIGN IN FORM -->
-    <div id="login-signin">
-      <div class="login-field">
-        <label for="signin-email">Email</label>
-        <input id="signin-email" type="email" placeholder="you@agency.gov" autocomplete="email" aria-label="Email address">
-      </div>
-      <div class="login-field">
-        <label for="signin-pw">Password</label>
-        <input id="signin-pw" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()" aria-label="Password">
-      </div>
-      <button class="btn-gold" style="width:100%" onclick="signIn()">Sign In</button>
-      <div style="text-align:center;margin-top:12px;font-size:11px">
-        <span role="button" tabindex="0" onclick="showForgot()" onkeydown="if(event.key==='Enter')showForgot()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Forgot password?</span>
-      </div>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
-        Don't have an account? <span role="button" tabindex="0" onclick="showSignup()" onkeydown="if(event.key==='Enter')showSignup()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Create one</span>
-      </div>
-      <div style="margin-top:20px;padding:14px;border-top:1px solid var(--border);text-align:center">
-        <div style="font-size:11px;color:var(--ink-60);margin-bottom:10px">Want to explore first?</div>
-        <button class="btn-outline" style="width:100%" onclick="(async()=>{await loadDemoData();hideLogin();document.getElementById('v-portfolio').classList.add('active');setDemoMode(true);})()">Try Demo</button>
-        <div style="font-size:10px;color:var(--ink-35);margin-top:8px">Sample data for exploration only</div>
-      </div>
-      <div class="login-err" id="login-err"></div>
-    </div>
+    <main class="si-main" id="main-login">
+      <div class="si-card">
 
-    <!-- CREATE ACCOUNT FORM -->
-    <div id="login-signup" style="display:none">
-      <div class="login-field">
-        <label for="signup-email">Email</label>
-        <input id="signup-email" type="email" placeholder="you@agency.gov" autocomplete="email" aria-label="Email address">
-      </div>
-      <div class="login-field">
-        <label for="signup-pw">Password</label>
-        <input id="signup-pw" type="password" placeholder="Min 12 chars, uppercase, number, special char" autocomplete="new-password" oninput="checkPasswordStrength()" onkeydown="if(event.key==='Enter')createAccount()" aria-label="Password">
-        <div id="pw-strength" style="font-size:11px;color:var(--amber);margin-top:4px;min-height:16px"></div>
-      </div>
-      <div class="login-field">
-        <label for="signup-confirm">Confirm Password</label>
-        <input id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')createAccount()" aria-label="Confirm password">
-      </div>
-      <button class="btn-gold" style="width:100%" onclick="createAccount()">Create Account</button>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
-        Already have an account? <span role="button" tabindex="0" onclick="showSignin()" onkeydown="if(event.key==='Enter')showSignin()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Sign in</span>
-      </div>
-      <div class="login-err" id="signup-err"></div>
-    </div>
+        <!-- SIGN IN FORM -->
+        <div id="login-signin">
+          <h1 class="si-h">Welcome back.</h1>
+          <p class="si-sub">Sign in to your AdoptIQ workspace.</p>
+          <div class="login-field">
+            <label for="signin-email">Email address</label>
+            <input id="signin-email" type="email" placeholder="name@organization.gov" autocomplete="email">
+          </div>
+          <div class="login-field">
+            <label for="signin-pw">Password</label>
+            <div class="si-pw">
+              <input id="signin-pw" type="password" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()">
+              <button type="button" class="si-eye" onclick="togglePwVisibility('signin-pw',this)" aria-label="Show password" aria-pressed="false"><i class="ph ph-eye" aria-hidden="true"></i></button>
+            </div>
+          </div>
+          <div class="si-row">
+            <label class="si-check"><input type="checkbox" id="signin-remember" checked> Keep me signed in</label>
+            <button type="button" class="si-link" onclick="showForgot()">Forgot password?</button>
+          </div>
+          <button type="button" class="si-btn" onclick="signIn()">Sign In</button>
+          <div class="si-or"><span>or</span></div>
+          <button type="button" class="si-ms" onclick="signInMicrosoft()">
+            <svg width="20" height="20" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+            Sign in with Microsoft
+          </button>
+          <div class="login-err" id="login-err" role="alert"></div>
+          <p class="si-new">New to AdoptIQ? <button type="button" class="si-accent" onclick="landingBookWalkthrough()">Request a demo <i class="ph ph-arrow-right" aria-hidden="true"></i></button></p>
+          <p class="si-alt"><button type="button" onclick="showSignup()">Create an account</button><span aria-hidden="true">·</span><button type="button" onclick="(async()=>{await loadDemoData();hideLogin();document.getElementById('v-portfolio').classList.add('active');setDemoMode(true);})()">Try the demo</button></p>
+        </div>
 
-    <!-- FORGOT PASSWORD FORM -->
-    <div id="login-forgot" style="display:none">
-      <p style="font-size:12px;color:var(--ink-60);margin-bottom:16px">Enter your email to receive a password reset link.</p>
-      <div class="login-field">
-        <label for="forgot-email">Email</label>
-        <input id="forgot-email" type="email" placeholder="you@agency.gov" autocomplete="email" onkeydown="if(event.key==='Enter')sendPasswordReset()" aria-label="Email address">
-      </div>
-      <button class="btn-gold" style="width:100%" onclick="sendPasswordReset()">Send Reset Link</button>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
-        <span role="button" tabindex="0" onclick="showSignin()" onkeydown="if(event.key==='Enter')showSignin()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Back to sign in</span>
-      </div>
-      <div class="login-err" id="forgot-err"></div>
-    </div>
+        <!-- CREATE ACCOUNT FORM -->
+        <div id="login-signup" style="display:none">
+          <h1 class="si-h">Create your account.</h1>
+          <p class="si-sub">Set up your AdoptIQ workspace.</p>
+          <div class="login-field">
+            <label for="signup-email">Email address</label>
+            <input id="signup-email" type="email" placeholder="name@organization.gov" autocomplete="email">
+          </div>
+          <div class="login-field">
+            <label for="signup-pw">Password</label>
+            <input id="signup-pw" type="password" placeholder="Min 12 chars, uppercase, number, special char" autocomplete="new-password" oninput="checkPasswordStrength()" onkeydown="if(event.key==='Enter')createAccount()">
+            <div id="pw-strength" class="si-hint"></div>
+          </div>
+          <div class="login-field">
+            <label for="signup-confirm">Confirm password</label>
+            <input id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')createAccount()">
+          </div>
+          <button type="button" class="si-btn" onclick="createAccount()">Create Account</button>
+          <div class="login-err" id="signup-err" role="alert"></div>
+          <p class="si-new">Already have an account? <button type="button" class="si-accent" onclick="showSignin()">Sign in</button></p>
+        </div>
 
-    <!-- EMAIL VERIFICATION PENDING -->
-    <div id="login-verify" style="display:none">
-      <div style="text-align:center;padding:8px 0 4px">
-        <div style="font-size:36px;margin-bottom:10px"><i class="ph ph-envelope"></i></div>
-        <div style="font-family:var(--font-d);font-size:18px;color:var(--ink);margin-bottom:8px">Check Your Email</div>
-        <p style="font-size:12.5px;color:var(--ink-60);line-height:1.7;margin-bottom:20px">
-          We sent a verification link to <strong id="verify-email-display"></strong>.<br>
-          Click the link in the email to activate your account, then return here to sign in.
-        </p>
-        <button class="btn-gold" style="width:100%" onclick="showSignin()">Back to Sign In</button>
-        <div style="margin-top:12px;font-size:11px;color:var(--ink-35)">Didn't receive it? Check spam, or <span role="button" tabindex="0" onclick="resendVerification()" onkeydown="if(event.key==='Enter')resendVerification()" style="color:var(--gold);cursor:pointer;text-decoration:underline">resend</span></div>
-        <div class="login-err" id="verify-err"></div>
+        <!-- FORGOT PASSWORD FORM -->
+        <div id="login-forgot" style="display:none">
+          <h1 class="si-h">Reset your password.</h1>
+          <p class="si-sub">Enter your email to receive a password reset link.</p>
+          <div class="login-field">
+            <label for="forgot-email">Email address</label>
+            <input id="forgot-email" type="email" placeholder="name@organization.gov" autocomplete="email" onkeydown="if(event.key==='Enter')sendPasswordReset()">
+          </div>
+          <button type="button" class="si-btn" onclick="sendPasswordReset()">Send Reset Link</button>
+          <div class="login-err" id="forgot-err" role="alert"></div>
+          <p class="si-new"><button type="button" class="si-accent" onclick="showSignin()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to sign in</button></p>
+        </div>
+
+        <!-- EMAIL VERIFICATION PENDING -->
+        <div id="login-verify" style="display:none">
+          <h1 class="si-h">Check your email.</h1>
+          <p class="si-sub">We sent a verification link to <strong id="verify-email-display"></strong>. Click the link in the email to activate your account, then return here to sign in.</p>
+          <button type="button" class="si-btn" onclick="showSignin()">Back to Sign In</button>
+          <p class="si-new">Didn't receive it? Check spam, or <button type="button" class="si-accent" onclick="resendVerification()">resend</button></p>
+          <div class="login-err" id="verify-err" role="alert"></div>
+        </div>
       </div>
-    </div>
+    </main>
   </div>
-  <div class="login-footer">Providence Consulting Firm</div>
 </div>
 
 <!-- ══════════════════════════════════════════
      PORTFOLIO VIEW
 ══════════════════════════════════════════ -->
-<div id="v-portfolio" role="main">
+<!-- ══════════════════════════════════════════
+     APP SHELL: sidebar (see docs/ADOPTIQ_DESIGN_SYSTEM.md)
+══════════════════════════════════════════ -->
+<aside class="sb" id="app-sidebar" aria-label="AdoptIQ navigation">
+  <div class="sb-brand">
+    <img class="sb-logo" src="img/brand/adoptiq-logo-dark-v2.png" alt="AdoptIQ, Change Intelligence" width="800" height="243">
+  </div>
+  <nav class="sb-nav" aria-label="Sections">
+    <button class="sb-item" data-sb="command" onclick="sbNav('command')" aria-current="page"><i class="ph ph-house"></i><span>Command Center</span></button>
+    <button class="sb-item" data-sb="initiatives" onclick="sbNav('initiatives')"><i class="ph ph-stack"></i><span>Initiatives</span></button>
+    <button class="sb-item" data-sb="people" onclick="sbNav('people')"><i class="ph ph-users-three"></i><span>People &amp; Impacts</span></button>
+    <button class="sb-item" data-sb="risk" onclick="sbNav('risk')"><i class="ph ph-warning"></i><span>Readiness &amp; Risk</span></button>
+    <button class="sb-item" data-sb="training" onclick="sbNav('training')"><i class="ph ph-graduation-cap"></i><span>Training &amp; Enablement</span></button>
+    <button class="sb-item" data-sb="stakeholders" onclick="sbNav('stakeholders')"><i class="ph ph-user-circle-gear"></i><span>Stakeholders</span></button>
+    <button class="sb-item" data-sb="adoption" onclick="sbNav('adoption')"><i class="ph ph-chart-line-up"></i><span>Adoption &amp; Outcomes</span></button>
+    <button class="sb-item" data-sb="reports" onclick="sbNav('reports')"><i class="ph ph-file-text"></i><span>Reports</span></button>
+  </nav>
+  <img class="sb-wave" src="img/brand/adoptiq-wave.svg" alt="" aria-hidden="true">
+  <div class="sb-foot" id="sb-foot">
+    <div class="sb-tools" id="sb-tools" role="menu" aria-label="Account">
+      <button role="menuitem" onclick="sbMenu(false);openProfile()"><i class="ph ph-user-circle" aria-hidden="true"></i> Profile and password</button>
+      <button role="menuitem" onclick="toggleTheme()"><i class="ph ph-moon" aria-hidden="true"></i> Theme</button>
+      <button role="menuitem" class="btn-signout" onclick="signOut()"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
+    </div>
+    <button class="sb-user" id="sb-user" onclick="sbMenu()" aria-haspopup="menu" aria-expanded="false" aria-controls="sb-tools" aria-label="Account menu">
+      <span class="sb-av" id="sb-av">·</span>
+      <span class="sb-uwrap"><span class="sb-uname" id="sb-uname">Profile</span><span class="sb-urole" id="sb-urole">Administrator</span></span>
+      <i class="ph ph-caret-up sb-caret" aria-hidden="true"></i>
+    </button>
+  </div>
+</aside>
+<div class="sb-scrim" onclick="document.body.classList.remove('sb-drawer')"></div>
+
+<div id="v-portfolio" role="main" data-page="command">
   <div id="viewer-banner-p" class="viewer-banner" style="display:none" role="alert"><span>View-Only Mode</span> — You are viewing a shared, read-only version of this dashboard.</div>
   <header class="top-bar">
     <div class="top-bar-i">
@@ -366,7 +338,7 @@
           <span id="theme-icon"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl">Dark</span>
         </button>
-        <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
+        <button id="demo-banner-p" onclick="exitDemo()" style="display:none;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <select id="view-role-select" class="role-select" aria-label="View role" onchange="applyViewRole(this.value);renderPortfolio()">
           <option value="admin">Administrator</option>
           <option value="staff">Staff / Team</option>
@@ -378,6 +350,9 @@
       </div>
     </div>
   </header>
+  <div id="cc" class="cc" aria-labelledby="cc-h1"></div>
+  <div id="pf-section"></div>
+  <div id="pf-initiatives">
 
   <div class="action-strip">
     <div class="action-strip-i">
@@ -386,9 +361,9 @@
         <span class="save-ind" id="save-ind">Saved</span>
       </div>
       <div class="action-strip-sec">
-        <button class="btn-outline btn-share" onclick="openShareModal()" style="font-size:10px;padding:6px 14px" title="Share this dashboard publicly">Share</button>
-        <button class="btn-outline btn-export" onclick="exportHandoffPDF()" style="font-size:10px;padding:6px 14px" title="Export complete portfolio as branded PDF">Handoff PDF</button>
-        <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
+        <button class="btn-outline btn-share" onclick="openShareModal()" style="font-size:11px;padding:6px 14px" title="Share this dashboard publicly">Share</button>
+        <button class="btn-outline btn-export" onclick="exportHandoffPDF()" style="font-size:11px;padding:6px 14px" title="Export complete portfolio as branded PDF">Handoff PDF</button>
+        <button class="btn-outline" onclick="openAuditLog()" style="font-size:11px;padding:6px 14px">Audit Log</button>
       </div>
     </div>
   </div>
@@ -400,20 +375,23 @@
   <div class="aiq-panel" id="aiq-bar">
     <div class="aiq-panel-inner">
       <div class="aiq-search-wrap">
-        <span class="aiq-icon"><i class="ph ph-sparkle"></i></span>
-        <input type="text" id="aiq-input" class="aiq-input" aria-label="Ask AdoptIQ" placeholder="Ask AdoptIQ anything about your portfolio…" autocomplete="off" onkeydown="if(event.key==='Enter')askAdoptIQ()">
-        <button class="aiq-go" id="aiq-go-btn" onclick="askAdoptIQ()">Ask AIQ</button>
+        <span class="aiq-icon"><i class="ph ph-magnifying-glass"></i></span>
+        <input type="text" id="aiq-input" class="aiq-input" aria-label="Ask AdoptIQ" placeholder="Ask a question about this portfolio, e.g. which release has the lowest readiness?" autocomplete="off" onkeydown="if(event.key==='Enter')askAdoptIQ()">
+        <button class="aiq-go" id="aiq-go-btn" onclick="askAdoptIQ()">Ask</button>
       </div>
       <div class="aiq-chips" id="aiq-chips"></div>
     </div>
   </div>
   <div class="aiq-messages" id="aiq-answer-area" style="display:none"></div>
   <!-- Mobile NLQ FAB -->
-  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ" aria-label="Open AIQ Analyst"><i class="ph ph-sparkle"></i></button>
+  <button class="aiq-fab" id="aiq-fab" onclick="toggleAiqMobile()" title="Ask AdoptIQ" aria-label="Ask a question about this portfolio"><i class="ph ph-magnifying-glass"></i></button>
 
   <div class="port-body" id="main-content">
+    <div id="port-brief"></div>
+    <div id="rel-radar"></div>
     <div id="what-data-tells"></div>
-    <div class="prog-strip">
+    <!-- Superseded by the Executive Readiness Brief and Release Radar; kept so existing renderers still run -->
+    <div class="prog-strip" style="display:none">
       <div class="ps-card cn"><div class="ps-lbl">Active Releases</div><div class="ps-val" id="ps-total">0</div><div class="ps-sub">Across all agencies</div></div>
       <div class="ps-card cr"><div class="ps-lbl">Total Open Issues</div><div class="ps-val" id="ps-flags">0</div><div class="ps-sub">Across all releases</div></div>
       <div class="ps-card ca"><div class="ps-lbl">Releases At Risk</div><div class="ps-val" id="ps-atrisk">0</div><div class="ps-sub" id="ps-crit-sub">Including critical</div></div>
@@ -421,23 +399,25 @@
       <div class="ps-card cb"><div class="ps-lbl">Nearest Go-Live</div><div class="ps-val" id="ps-near-d" style="font-size:20px;padding-top:6px;letter-spacing:0">—</div><div class="ps-sub" id="ps-near-r">No go-live dates set</div></div>
     </div>
     <div style="margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye overline">Active Releases</div><div class="sec-ttl">Release Portfolio</div></div></div>
-      <div id="rel-grid-wrap" class="stagger-children"></div>
+      <details class="dz-details" id="rel-cards-sec"><summary><span class="dz-details-t">Release cards</span><span class="dz-details-s">Reorder, open, or remove releases</span></summary>
+      <div id="rel-grid-wrap" class="stagger-children"></div></details>
     </div>
     <!-- EXECUTIVE DASHBOARD -->
     <div id="exec-dash" style="display:none;margin-bottom:28px">
-      <div class="sec-head"><div><div class="sec-eye overline">Executive Summary</div><div class="sec-ttl">Portfolio Health Dashboard</div></div></div>
-      <div id="exec-rag-summary" style="margin-bottom:16px"></div>
+      <div class="sec-head"><div><div class="sec-eye overline">Supporting analysis</div><div class="sec-ttl">Readiness and risk detail</div></div></div>
+      <div id="exec-rag-summary" style="display:none"></div>
       <div class="exec-dash-grid stagger-children">
         <div class="exec-card">
           <div class="exec-card-title">Overall Readiness</div>
           <div class="exec-chart-wrap"><canvas id="chart-port-readiness" role="img" aria-label="Portfolio readiness donut chart"></canvas></div>
+          <p class="chart-cap" id="cap-port-readiness"></p>
         </div>
         <div class="exec-card">
           <div class="exec-card-title">Risk by Group</div>
           <div class="exec-chart-wrap"><canvas id="chart-port-risk" role="img" aria-label="Risk distribution donut chart"></canvas></div>
+          <p class="chart-cap" id="cap-port-risk"></p>
         </div>
-        <div class="exec-card exec-card-wide">
+        <div class="exec-card exec-card-wide" style="display:none">
           <div class="exec-card-title">Attention Required</div>
           <div id="exec-attention" class="exec-attention-list"></div>
         </div>
@@ -495,10 +475,12 @@
             <div class="exec-card-title">Readiness Trend</div>
             <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-gate" role="img" aria-label="Gate readiness trend line chart"></canvas></div>
             <div class="trend-chart-note">Dashed line = 80% go-live ready target</div>
+            <p class="chart-cap" id="cap-trend-gate"></p>
           </div>
           <div class="exec-card">
             <div class="exec-card-title">Open Issues Trend</div>
             <div class="exec-chart-wrap" style="height:180px"><canvas id="chart-trend-flags" role="img" aria-label="Risk flags trend line chart"></canvas></div>
+            <p class="chart-cap" id="cap-trend-flags"></p>
           </div>
           <div class="exec-card">
             <div class="exec-card-title" id="trend-adkar-title">ADKAR Score Trend</div>
@@ -588,7 +570,7 @@
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
                     <div>
                       <div class="sf-title">Saturation Forecast</div>
-                      <div class="sf-subtitle">AI-powered change load prediction &amp; sequencing</div>
+                      <div class="sf-subtitle">Readiness forecast: change-load prediction and sequencing</div>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                       <button class="sf-mode-btn sf-mode-active" id="sf-btn-forecast" onclick="switchSFMode('forecast')">Forecast</button>
@@ -599,9 +581,9 @@
                   <div id="sf-forecast-panel">
                     <div id="sf-forecast-content" class="sf-content-area">
                       <div class="sf-empty-state">
-                        <div style="font-size:28px;margin-bottom:8px">📊</div>
+                        
                         <div class="sf-title" style="font-size:13px;margin-bottom:4px">Forecast Change Load</div>
-                        <div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">AI analyzes your portfolio timeline to predict stakeholder saturation peaks</div>
+                        <div style="font-size:11px;color:var(--ink-60);margin-bottom:12px">Pattern-based observation: reads your portfolio timeline to predict stakeholder saturation peaks</div>
                         <button class="sf-analyze-btn" onclick="runSaturationForecast()">Generate Forecast</button>
                       </div>
                     </div>
@@ -612,7 +594,7 @@
                   <div id="sf-sequencing-panel" style="display:none">
                     <div id="sf-sequencing-content" class="sf-content-area"></div>
                   </div>
-                  <div class="sf-disclaimer">AI-generated analysis — verify recommendations with project stakeholders before making scheduling decisions.</div>
+                  <div class="sf-disclaimer">Assisted insight. Use professional judgment and validate recommendations with project stakeholders.</div>
                 </div>
               </div>
             </div>
@@ -621,6 +603,7 @@
       </details>
     </div>
   </div>
+  </div><!-- /#pf-initiatives -->
   <footer class="page-footer">© 2026 Providence Consulting Firm, LLC &nbsp;|&nbsp; AdoptIQ &nbsp;|&nbsp; Proprietary Methodology</footer>
 </div>
 
@@ -629,7 +612,7 @@
   <div class="modal-box" style="max-width:640px">
     <div class="modal-ttl">Audit Log</div>
     <div class="modal-sub">Last 50 actions across your portfolio</div>
-    <div id="audit-log-body" style="max-height:400px;overflow-y:auto;margin:16px 0"><div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet.</p></div></div>
+    <div id="audit-log-body" style="max-height:400px;overflow-y:auto;margin:16px 0"><div class="es"><div class="es-rule"></div><p class="es-txt">No activity recorded yet. Changes made in AdoptIQ appear here as an audit trail.</p></div></div>
     <div class="modal-acts">
       <button class="btn-ghost" onclick="renderAuditLog()">Refresh</button>
       <button class="btn-outline" onclick="exportAuditLog()">Export CSV</button>
@@ -658,7 +641,7 @@
         <input id="share-link-url" class="modal-inp" aria-label="Share link URL" readonly style="flex:1;font-size:11px;font-family:monospace">
         <button class="btn-gold" onclick="copyShareLink()" style="white-space:nowrap;padding:8px 16px">Copy</button>
       </div>
-      <div id="share-link-expires" style="font-size:10px;color:var(--ink-60);margin-top:6px"></div>
+      <div id="share-link-expires" style="font-size:11px;color:var(--ink-60);margin-top:6px"></div>
     </div>
     <div id="share-err" style="color:var(--red);font-size:12px;margin-bottom:8px"></div>
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:8px">
@@ -691,15 +674,15 @@
           <span id="theme-icon-r"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl-r">Dark</span>
         </button>
-        <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
-        <button id="demo-banner-r" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
+        <button class="btn-outline" onclick="openAuditLog()" style="font-size:11px;padding:6px 14px">Audit Log</button>
+        <button id="demo-banner-r" onclick="exitDemo()" style="display:none;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-r"></span><span id="avatar-name-r">Profile</span></button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </header>
   <div class="breadcrumb" role="navigation" aria-label="Breadcrumb">
-    <span class="bc-link" onclick="goPortfolio()" tabindex="0" onkeydown="if(event.key==='Enter')goPortfolio()">Portfolio</span>
+    <span class="bc-link" onclick="sbNav('initiatives')" tabindex="0" onkeydown="if(event.key==='Enter')sbNav('initiatives')">Initiatives</span>
     <span class="bc-sep">›</span>
     <span class="bc-cur" id="bc-rel">Release</span>
   </div>
@@ -758,7 +741,7 @@
         <div class="ib-stat-l">Days to Go-Live</div>
       </div>
       <div class="ib-stat">
-        <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Status</div>
+        <div class="ib-label" style="color:rgba(255,255,255,0.72);margin-bottom:8px">Status</div>
         <span class="st-pill on-track" id="rel-overall-st">On Track</span>
       </div>
     </div>
@@ -766,7 +749,9 @@
   <main class="pw">
     <!-- RELEASE OVERVIEW -->
     <div class="tab-sec active" id="rsec-overview">
-      <div class="rel-sum" id="rel-sum-bar">
+      <div id="rel-brief"></div>
+      <!-- Superseded by the release decision brief; kept so renderRelSumBar still runs -->
+      <div class="rel-sum" id="rel-sum-bar" style="display:none">
         <div>
           <div class="rsb-lbl">Release</div>
           <div class="rsb-val lg" id="rsb-name">—</div>
@@ -812,17 +797,17 @@
       <!-- Project overview cards -->
       <div class="tab-eye" style="margin-bottom:10px">Projects</div>
       <div class="proj-card-grid" id="rel-proj-cards">
-        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects added yet. Click Add Project to begin.</p></div>
+        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects in this release. Add the projects in this deployment wave to start a readiness record.</p></div>
       </div>
       <!-- Active flags preview -->
       <div class="two-col" style="margin-top:20px">
         <div class="panel">
           <div class="panel-hd"><div><div class="pt">Readiness by Project</div><div class="ps-text">Completion percentage per project</div></div></div>
-          <div class="pb" id="rel-ov-gates"><div class="es"><div class="es-rule"></div><p class="es-txt">Mark gate items within each project to see scores here.</p></div></div>
+          <div class="pb" id="rel-ov-gates"><div class="es"><div class="es-rule"></div><p class="es-txt">No gates have been assessed yet. Start a gate review in a project to create a traceable readiness record.</p></div></div>
         </div>
         <div class="panel">
           <div class="panel-hd"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent across all projects</div></div></div>
-          <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
+          <div class="pb" id="rel-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues. Gate items marked not met appear here, each traceable to its gate review.</p></div></div>
         </div>
         <div id="rel-craid-summary"></div>
       </div>
@@ -833,7 +818,7 @@
       <div class="tab-eye">Release Scope</div>
       <div class="tab-head">Projects Within This Release</div>
       <div class="proj-card-grid" id="rel-proj-list">
-        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects added yet.</p></div>
+        <div class="es"><div class="es-rule"></div><p class="es-txt">No projects in this release. Add the projects in this deployment wave to start a readiness record.</p></div>
       </div>
       <!-- Add project form -->
       <div class="add-proj-form" style="margin-top:20px">
@@ -886,15 +871,15 @@
           <span id="theme-icon-p"><i class="ph ph-sun"></i></span>
           <span id="theme-lbl-p">Dark</span>
         </button>
-        <button class="btn-outline" onclick="openAuditLog()" style="font-size:10px;padding:6px 14px">Audit Log</button>
-        <button id="demo-banner-proj" onclick="exitDemo()" style="display:none;background:#b8922a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
+        <button class="btn-outline" onclick="openAuditLog()" style="font-size:11px;padding:6px 14px">Audit Log</button>
+        <button id="demo-banner-proj" onclick="exitDemo()" style="display:none;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:0.07em;cursor:pointer" title="You're exploring AdoptIQ with sample data. No changes will be saved."><i class="ph ph-sign-out"></i> EXIT DEMO</button>
         <button class="btn-profile" onclick="openProfile()"><span class="profile-avatar" id="avatar-proj"></span><span id="avatar-name-proj">Profile</span></button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </header>
   <div class="breadcrumb" role="navigation" aria-label="Breadcrumb">
-    <span class="bc-link" onclick="goPortfolio()" tabindex="0" onkeydown="if(event.key==='Enter')goPortfolio()">Portfolio</span>
+    <span class="bc-link" onclick="sbNav('initiatives')" tabindex="0" onkeydown="if(event.key==='Enter')sbNav('initiatives')">Initiatives</span>
     <span class="bc-sep">›</span>
     <span class="bc-link" onclick="goRelease()" tabindex="0" onkeydown="if(event.key==='Enter')goRelease()" id="bc-rel-p">Release</span>
     <span class="bc-sep">›</span>
@@ -953,8 +938,8 @@
       <div class="ib-field" style="max-width:160px">
         <div class="ib-label">Training Required</div>
         <div style="display:flex;border:1px solid rgba(255,255,255,0.20);border-radius:var(--rs);overflow:hidden;margin-top:8px">
-          <button id="tr-yes" style="font-family:var(--font-b);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;transition:all .14s" onclick="setProjTR(true)">Yes</button>
-          <button id="tr-no"  style="font-family:var(--font-b);font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;border-left:1px solid rgba(255,255,255,0.20);transition:all .14s" onclick="setProjTR(false)">No</button>
+          <button id="tr-yes" style="font-family:var(--font-b);font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;transition:all .14s" onclick="setProjTR(true)">Yes</button>
+          <button id="tr-no"  style="font-family:var(--font-b);font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border:none;cursor:pointer;background:transparent;color:rgba(255,255,255,0.40);flex:1;border-left:1px solid rgba(255,255,255,0.20);transition:all .14s" onclick="setProjTR(false)">No</button>
         </div>
       </div>
       <div class="ib-field" id="ib-train-start" style="max-width:150px">
@@ -993,7 +978,7 @@
         </div>
       </div>
       <div class="ib-stat">
-        <div class="ib-label" style="color:rgba(255,255,255,0.32);margin-bottom:8px">Overall Readiness</div>
+        <div class="ib-label" style="color:rgba(255,255,255,0.72);margin-bottom:8px">Overall Readiness</div>
         <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="Composite score across ADKAR dimensions, gate completeness, and milestone health. 70+ is a solid baseline before go-live. Below 60 warrants a conversation with your sponsor." aria-label="How scoring works">ⓘ</button>
       </div>
     </div>
@@ -1001,7 +986,9 @@
   <main class="pw">
     <!-- PROJECT OVERVIEW -->
     <div class="tab-sec active" id="psec-overview">
-      <div class="kpi-strip">
+      <div id="proj-brief"></div>
+      <!-- Superseded by the project decision brief; kept so renderPKPIs still runs -->
+      <div class="kpi-strip" style="display:none">
         <div class="kc cn"><div class="kc-l">Overall Readiness</div><div class="kc-v" id="p-kpi-gate">—</div><div class="kc-s">Across all review checkpoints</div></div>
         <div class="kc cr"><div class="kc-l">Open Issues</div><div class="kc-v" id="p-kpi-flags">0</div><div class="kc-s">Needing attention</div></div>
         <div class="kc ca"><div class="kc-l">Highest Risk Group</div><div class="kc-v sm" id="p-kpi-rg">—</div><div class="kc-s" id="p-kpi-rg-s">Affected group</div></div>
@@ -1013,7 +1000,7 @@
         <div class="trajectory-hdr">
           <div>
             <div class="trajectory-title">Predicted Trajectory</div>
-            <div class="trajectory-sub">AI-powered readiness forecast based on current project data</div>
+            <div class="trajectory-sub">Readiness forecast based on current project data</div>
           </div>
           <div class="trajectory-actions">
             <div class="trajectory-confidence" id="traj-confidence" style="display:none">
@@ -1051,8 +1038,8 @@
       <div id="smart-recs-panel" class="smart-recs-panel" style="display:none">
         <div class="smart-recs-hdr">
           <div>
-            <div class="smart-recs-title">Smart Recommendations</div>
-            <div class="smart-recs-sub">AI-powered actions based on your project data</div>
+            <div class="smart-recs-title">Evidence-informed recommendations</div>
+            <div class="smart-recs-sub">Assisted insight: suggested interventions, each with the inputs it used</div>
           </div>
           <div class="smart-recs-actions">
             <span class="smart-recs-ts" id="smart-recs-ts"></span>
@@ -1060,7 +1047,7 @@
           </div>
         </div>
         <div id="smart-recs-list" class="smart-recs-list"></div>
-        <div class="smart-recs-disclaimer">Recommendations generated by AI based on current project data. Use professional judgment when prioritizing actions.</div>
+        <div class="smart-recs-disclaimer">Use professional judgment and validate recommendations with project stakeholders.</div>
       </div>
       <!-- DATA CONFIDENCE + SO WHAT -->
       <div id="p-data-confidence-bar"></div>
@@ -1070,7 +1057,7 @@
       <div id="p-proof-points-wrap"></div>
       <div class="panel">
         <div class="panel-hd"><div><div class="pt">Open Issues</div><div class="ps-text">Most recent items requiring action</div></div></div>
-        <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues at this time.</p></div></div>
+        <div class="pb" id="p-ov-flags"><div class="es"><div class="es-rule"></div><p class="es-txt">No open issues. Gate items marked not met appear here, each traceable to its gate review.</p></div></div>
       </div>
       <div class="panel">
         <div class="panel-hd"><div><div class="pt">Assigned Resources</div><div class="ps-text">Edit full resource details in the Resources tab</div></div></div>
@@ -1137,7 +1124,7 @@
             <button class="btn-outline" onclick="bulkClear('stakeholders')" title="Clear all stakeholder groups" style="color:var(--red-bright);border-color:var(--red-bright)"><i class="ph ph-trash"></i> Clear All</button>
           </div>
         </div>
-        <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">Add the groups of people affected by this change to begin tracking their readiness.</p></div></div></div>
+        <div class="pb"><div id="p-sh-wrap"><div class="es"><div class="es-rule"></div><p class="es-txt">No stakeholder groups are being monitored. Add affected groups to assess readiness, adoption risk, and change impact.</p></div></div></div>
       </div>
     </div>
     <!-- ADOPTION MAP -->
@@ -1172,9 +1159,9 @@
           <div class="hm-leg">
             <span class="hm-leg-l">Legend</span>
             <span class="leg-i"><span class="leg-sw" style="background:var(--bg-deep);border:1px dashed var(--border-md)"></span>Not Started</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--green-bg);border:1px solid #A8D5B8"></span>Complete</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--amber-bg);border:1px solid #E0C97A"></span>Partial</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--red-bg);border:1px solid #DCA8A8"></span>Blocking</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--green-bg);border:1px solid var(--color-success)"></span>Complete</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--amber-bg);border:1px solid var(--color-warning)"></span>Partial</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--red-bg);border:1px solid var(--color-critical)"></span>Blocking</span>
           </div>
         </div>
       </div>
@@ -1248,7 +1235,7 @@
       <div class="panel">
         <div class="panel-hd"><div><div class="pt">Where Adoption Is Slipping, and Why</div><div class="ps-text">Each group is diagnosed from post-launch observations, pulse surveys, and reinforcement planning as a Knowledge, Ability, or Reinforcement gap, with a targeted intervention instead of blanket retraining.</div></div></div>
         <div class="pb" id="ptab-sustain">
-          <div class="es"><div class="es-rule"></div><p class="es-txt">Add stakeholder groups and log adoption observations to diagnose gaps.</p></div>
+          <div class="es"><div class="es-rule"></div><p class="es-txt">No adoption observations have been recorded. Post-launch signals will show whether gaps relate to knowledge, ability, or reinforcement.</p></div>
         </div>
       </div>
     </div>
@@ -1381,7 +1368,7 @@
       <div class="alert-desc">Controls your default landing view and available actions.</div>
     </div>
     <div id="brand-section" style="display:none">
-    <div class="profile-section-title">Methodology Branding <span style="font-size:9px;font-weight:400;color:var(--ink-60);letter-spacing:0">(Administrator only)</span></div>
+    <div class="profile-section-title">Methodology Branding <span style="font-size:10.5px;font-weight:400;color:var(--ink-60);letter-spacing:0">(Administrator only)</span></div>
     <div class="profile-field">
       <label for="brand-firm">Firm / Company Name</label>
       <input id="brand-firm" type="text" class="modal-inp" placeholder="Your firm name" aria-label="Firm name">
@@ -1411,7 +1398,7 @@
       </select>
     </div>
     <div class="profile-field">
-      <label for="brand-dims-grid">Dimension Labels <span style="font-size:9px;font-weight:400;color:var(--ink-60)">(set by framework or customize)</span></label>
+      <label for="brand-dims-grid">Dimension Labels <span style="font-size:10.5px;font-weight:400;color:var(--ink-60)">(set by framework or customize)</span></label>
       <div id="brand-dims-grid" style="display:flex;flex-direction:column;gap:6px"></div>
       <button class="btn-sm" onclick="addFrameworkDim()" style="margin-top:8px">+ Add Dimension</button>
     </div>
