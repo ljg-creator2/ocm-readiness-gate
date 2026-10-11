@@ -34,6 +34,24 @@ Change colours in `css/system.css` only. The other files read its variables.
 | `--slate` | #687280 | Secondary text |
 | `--light-border` | #E7E5E1 | Dividers and card borders |
 
+### Brand surfaces (mandatory)
+
+Use these tokens; never write the hex directly in a component.
+
+| Surface | Token | Hex |
+|---|---|---|
+| Landing hero and dark bands | `--bg-landing-hero` | #071B33 |
+| Landing secondary sections | `--bg-landing-section` | #F7F2E9 |
+| Sign-in left panel | `--bg-signin-brand` | #071B33 |
+| Sign-in right panel | `--bg-signin-form` | #F7F2E9 |
+| Command Center and app main background | `--bg-app` | #FCFBF9 |
+| App sidebar | `--bg-sidebar` | #071B33 |
+| Dashboard cards | `--bg-card` | #FFFFFF |
+| Greeting banner | `--bg-greeting` | #F7F2E9 |
+| Primary brand accent | `--brand-accent` | #C95628 |
+
+The approved brand look is the combination of editorial serif type, dark branded surfaces, warm light backgrounds and the signature wave artwork. Colour alone is not enough.
+
 ### Status (never orange)
 
 | Meaning | Token | Hex | Shape | Text variant |
@@ -64,11 +82,12 @@ Change colours in `css/system.css` only. The other files read its variables.
 
 | Use | Font |
 |---|---|
-| Wordmark | Approved logo asset (typeset placeholder until uploaded) |
-| Greeting, page titles, editorial headings | Playfair Display 500–600 |
-| UI, body, navigation, tables, forms, charts | Inter 400–600 |
+| Wordmark | Supplied SVG logo assets in `img/brand/` (`adoptiq-logo-dark.svg` on navy, `adoptiq-logo-light.svg` on light) |
+| Display headings, greeting, page titles, editorial lines | Playfair Display 600–700 (`--fw-display`, `--fw-display-strong`) |
+| UI, body, navigation, tables, forms, charts | Inter 400–700 |
 | KPI values | Inter 700, tabular numerals |
 
+- Both fonts are self-hosted in `fonts/` (variable WOFF2, SIL Open Font License) and declared with `@font-face` at the top of `css/system.css`, so they load without Google Fonts. Do not add other font families.
 - Do not use Playfair in tables, navigation, form fields or charts.
 - Avoid all-caps except small section labels and table headers.
 
@@ -76,6 +95,13 @@ Change colours in `css/system.css` only. The other files read its variables.
 - **Radii:** cards and panels 12px; buttons and inputs 8px; chips and status labels 6px.
 - **Spacing:** 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48.
 - **Card shadow:** `--shadow-card` (very light). Pop-ups, menus and drawers use `--shadow-pop`.
+
+## Sign-in (approved layout)
+- **Left panel** (`--bg-signin-brand`): logo (links back to the landing page), "People. Readiness. Real progress." in Playfair with a burnt-orange rule, and the wave artwork.
+- **Right panel** (`--bg-signin-form`): "Welcome back.", email, password with show/hide, Keep me signed in, Forgot password?, a navy Sign In button, an "or" divider, Sign in with Microsoft, and "New to AdoptIQ? Request a demo".
+- **Microsoft sign-in** uses Supabase's Azure provider. Until Azure is enabled in Supabase (Authentication → Providers), the button says so instead of failing.
+- **Keep me signed in:** checked keeps the normal persistent session; unchecked signs the browser out when the tab or window closes.
+- Create account, reset password and email verification use the same panel and the same Supabase calls.
 
 ## App shell
 - **Sidebar:** midnight-navy, fixed, 232px wide. Wordmark at the top, eight sections, and profile, theme, role and sign-out at the bottom.

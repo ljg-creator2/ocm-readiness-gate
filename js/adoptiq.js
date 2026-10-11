@@ -146,6 +146,45 @@ function showVerify(email){hideAllLoginPanels();document.getElementById('login-v
 
 let pendingVerifyEmail='';
 
+// Sign-in page helpers (approved split-screen layout)
+function togglePwVisibility(id,btn){
+  const el=document.getElementById(id);if(!el)return;
+  const show=el.type==='password';el.type=show?'text':'password';
+  btn.setAttribute('aria-pressed',show?'true':'false');btn.setAttribute('aria-label',show?'Hide password':'Show password');
+  const i=btn.querySelector('i');if(i)i.className='ph '+(show?'ph-eye-slash':'ph-eye');
+}
+// "Keep me signed in": checked (default) keeps the normal persistent session.
+// Unchecked signs this browser out once the tab or window is closed.
+function rememberSignInChoice(){
+  const keep=document.getElementById('signin-remember')?.checked!==false;
+  try{
+    if(keep){localStorage.removeItem('adoptiq_session_only');}
+    else{localStorage.setItem('adoptiq_session_only','1');sessionStorage.setItem('adoptiq_tab_alive','1');}
+  }catch(e){}
+}
+async function enforceSessionOnly(){
+  try{
+    if(localStorage.getItem('adoptiq_session_only')==='1'&&!sessionStorage.getItem('adoptiq_tab_alive')){
+      localStorage.removeItem('adoptiq_session_only');
+      await _supabase.auth.signOut({scope:'local'});
+    }
+  }catch(e){}
+}
+// Microsoft (Azure AD) sign-in through Supabase. Works once the Azure provider
+// is enabled in Supabase (Authentication > Providers); until then it says so.
+async function signInMicrosoft(){
+  const err=document.getElementById('login-err');err.textContent='';
+  try{
+    const r=await fetch(SUPABASE_URL+'/auth/v1/settings',{headers:{apikey:SUPABASE_ANON_KEY}});
+    const j=await r.json();
+    if(!j||!j.external||!j.external.azure){err.textContent="Microsoft sign-in isn't enabled yet. Please use your email and password for now.";return;}
+  }catch(e){err.textContent="Microsoft sign-in isn't available right now. Please use your email and password.";return;}
+  rememberSignInChoice();
+  const{error}=await _supabase.auth.signInWithOAuth({provider:'azure',options:{scopes:'email',redirectTo:location.origin+location.pathname}});
+  if(error)err.textContent=error.message;
+}
+
+
 async function signIn(){
   document.getElementById('login-err').textContent='';
   const email=document.getElementById('signin-email').value.trim();
@@ -160,6 +199,7 @@ async function signIn(){
     return;
   }
   currentUserId=data.user.id;
+  rememberSignInChoice();
   hideLogin();await bootApp();updateAvatars();
 }
 
@@ -282,6 +322,7 @@ async function initAuth(){
     await loadSharedView(shareToken);
     return;
   }
+  await enforceSessionOnly();
   const{data:{session}}=await _supabase.auth.getSession();
   if(session&&session.user){
     if(!session.user.email_confirmed_at){await _supabase.auth.signOut();return;}

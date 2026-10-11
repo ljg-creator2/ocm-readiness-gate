@@ -79,11 +79,10 @@
 </script>
 
 <!-- Preconnect for performance -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" href="fonts/playfair-display-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://unpkg.com">
 
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
@@ -134,7 +133,7 @@
           <button class="ld-btn-ghost" onclick="landingWatchOverview()"><span class="ld-play" aria-hidden="true"><i class="ph ph-play"></i></span>Watch Overview</button>
         </div>
       </div>
-      <div class="ld-hero-media"><img src="img/brand/adoptiq-product-showcase.webp" alt="The AdoptIQ Command Center on a laptop: active initiatives, overall readiness, at-risk initiatives, training completion, readiness trend, action items, and upcoming milestones" width="1920" height="1250"></div>
+      <div class="ld-hero-media"><img src="img/brand/adoptiq-product-showcase-hero.webp" alt="The AdoptIQ Command Center on a laptop: active initiatives, overall readiness, at-risk initiatives, training completion, readiness trend, action items, and upcoming milestones" width="1920" height="1250"></div>
     </div>
     <ul class="ld-pillars" id="ld-pillars" aria-label="What AdoptIQ does">
       <li><i class="ph ph-users-three" aria-hidden="true"></i><strong>Unify</strong><span>People, data, and plans</span></li>
@@ -197,88 +196,93 @@
      LOGIN SCREEN
 ══════════════════════════════════════════ -->
 <div id="v-login">
-  <div class="login-card">
-    <div class="login-logo">A</div>
-    <div class="login-title">AdoptIQ</div>
-    <div class="login-sub">Adoption Intelligence for Practitioners Who Need More Than a Gut Feeling</div>
+  <!-- Approved sign-in: "Split-Screen Authentication" (design-reference/adoptiq-approved-command-center.png) -->
+  <div class="si">
+    <section class="si-brand" aria-label="AdoptIQ">
+      <button type="button" class="si-logo" onclick="showLanding()" aria-label="Back to the AdoptIQ home page"><img src="img/brand/adoptiq-logo-dark.svg" alt="AdoptIQ, Change Intelligence" width="260" height="98"></button>
+      <p class="si-motto">People.<br>Readiness.<br>Real progress.</p>
+      <img class="si-wave" src="img/brand/adoptiq-wave.svg" alt="" aria-hidden="true">
+    </section>
 
-    <!-- SIGN IN FORM -->
-    <div id="login-signin">
-      <div class="login-field">
-        <label for="signin-email">Email</label>
-        <input id="signin-email" type="email" placeholder="you@agency.gov" autocomplete="email" aria-label="Email address">
-      </div>
-      <div class="login-field">
-        <label for="signin-pw">Password</label>
-        <input id="signin-pw" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()" aria-label="Password">
-      </div>
-      <button class="btn-gold" style="width:100%" onclick="signIn()">Sign In</button>
-      <div style="text-align:center;margin-top:12px;font-size:11px">
-        <span role="button" tabindex="0" onclick="showForgot()" onkeydown="if(event.key==='Enter')showForgot()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Forgot password?</span>
-      </div>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
-        Don't have an account? <span role="button" tabindex="0" onclick="showSignup()" onkeydown="if(event.key==='Enter')showSignup()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Create one</span>
-      </div>
-      <div style="margin-top:20px;padding:14px;border-top:1px solid var(--border);text-align:center">
-        <div style="font-size:11px;color:var(--ink-60);margin-bottom:10px">Want to explore first?</div>
-        <button class="btn-outline" style="width:100%" onclick="(async()=>{await loadDemoData();hideLogin();document.getElementById('v-portfolio').classList.add('active');setDemoMode(true);})()">Try Demo</button>
-        <div style="font-size:11px;color:var(--ink-35);margin-top:8px">Sample data for exploration only</div>
-      </div>
-      <div class="login-err" id="login-err"></div>
-    </div>
+    <main class="si-main" id="main-login">
+      <div class="si-card">
 
-    <!-- CREATE ACCOUNT FORM -->
-    <div id="login-signup" style="display:none">
-      <div class="login-field">
-        <label for="signup-email">Email</label>
-        <input id="signup-email" type="email" placeholder="you@agency.gov" autocomplete="email" aria-label="Email address">
-      </div>
-      <div class="login-field">
-        <label for="signup-pw">Password</label>
-        <input id="signup-pw" type="password" placeholder="Min 12 chars, uppercase, number, special char" autocomplete="new-password" oninput="checkPasswordStrength()" onkeydown="if(event.key==='Enter')createAccount()" aria-label="Password">
-        <div id="pw-strength" style="font-size:11px;color:var(--amber);margin-top:4px;min-height:16px"></div>
-      </div>
-      <div class="login-field">
-        <label for="signup-confirm">Confirm Password</label>
-        <input id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')createAccount()" aria-label="Confirm password">
-      </div>
-      <button class="btn-gold" style="width:100%" onclick="createAccount()">Create Account</button>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
-        Already have an account? <span role="button" tabindex="0" onclick="showSignin()" onkeydown="if(event.key==='Enter')showSignin()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Sign in</span>
-      </div>
-      <div class="login-err" id="signup-err"></div>
-    </div>
+        <!-- SIGN IN FORM -->
+        <div id="login-signin">
+          <h1 class="si-h">Welcome back.</h1>
+          <p class="si-sub">Sign in to your AdoptIQ workspace.</p>
+          <div class="login-field">
+            <label for="signin-email">Email address</label>
+            <input id="signin-email" type="email" placeholder="name@organization.gov" autocomplete="email">
+          </div>
+          <div class="login-field">
+            <label for="signin-pw">Password</label>
+            <div class="si-pw">
+              <input id="signin-pw" type="password" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()">
+              <button type="button" class="si-eye" onclick="togglePwVisibility('signin-pw',this)" aria-label="Show password" aria-pressed="false"><i class="ph ph-eye" aria-hidden="true"></i></button>
+            </div>
+          </div>
+          <div class="si-row">
+            <label class="si-check"><input type="checkbox" id="signin-remember" checked> Keep me signed in</label>
+            <button type="button" class="si-link" onclick="showForgot()">Forgot password?</button>
+          </div>
+          <button type="button" class="si-btn" onclick="signIn()">Sign In</button>
+          <div class="si-or"><span>or</span></div>
+          <button type="button" class="si-ms" onclick="signInMicrosoft()">
+            <svg width="20" height="20" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+            Sign in with Microsoft
+          </button>
+          <div class="login-err" id="login-err" role="alert"></div>
+          <p class="si-new">New to AdoptIQ? <button type="button" class="si-accent" onclick="landingBookWalkthrough()">Request a demo <i class="ph ph-arrow-right" aria-hidden="true"></i></button></p>
+          <p class="si-alt"><button type="button" onclick="showSignup()">Create an account</button><span aria-hidden="true">·</span><button type="button" onclick="(async()=>{await loadDemoData();hideLogin();document.getElementById('v-portfolio').classList.add('active');setDemoMode(true);})()">Try the demo</button></p>
+        </div>
 
-    <!-- FORGOT PASSWORD FORM -->
-    <div id="login-forgot" style="display:none">
-      <p style="font-size:12px;color:var(--ink-60);margin-bottom:16px">Enter your email to receive a password reset link.</p>
-      <div class="login-field">
-        <label for="forgot-email">Email</label>
-        <input id="forgot-email" type="email" placeholder="you@agency.gov" autocomplete="email" onkeydown="if(event.key==='Enter')sendPasswordReset()" aria-label="Email address">
-      </div>
-      <button class="btn-gold" style="width:100%" onclick="sendPasswordReset()">Send Reset Link</button>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-60)">
-        <span role="button" tabindex="0" onclick="showSignin()" onkeydown="if(event.key==='Enter')showSignin()" style="color:var(--gold);cursor:pointer;text-decoration:underline">Back to sign in</span>
-      </div>
-      <div class="login-err" id="forgot-err"></div>
-    </div>
+        <!-- CREATE ACCOUNT FORM -->
+        <div id="login-signup" style="display:none">
+          <h1 class="si-h">Create your account.</h1>
+          <p class="si-sub">Set up your AdoptIQ workspace.</p>
+          <div class="login-field">
+            <label for="signup-email">Email address</label>
+            <input id="signup-email" type="email" placeholder="name@organization.gov" autocomplete="email">
+          </div>
+          <div class="login-field">
+            <label for="signup-pw">Password</label>
+            <input id="signup-pw" type="password" placeholder="Min 12 chars, uppercase, number, special char" autocomplete="new-password" oninput="checkPasswordStrength()" onkeydown="if(event.key==='Enter')createAccount()">
+            <div id="pw-strength" class="si-hint"></div>
+          </div>
+          <div class="login-field">
+            <label for="signup-confirm">Confirm password</label>
+            <input id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')createAccount()">
+          </div>
+          <button type="button" class="si-btn" onclick="createAccount()">Create Account</button>
+          <div class="login-err" id="signup-err" role="alert"></div>
+          <p class="si-new">Already have an account? <button type="button" class="si-accent" onclick="showSignin()">Sign in</button></p>
+        </div>
 
-    <!-- EMAIL VERIFICATION PENDING -->
-    <div id="login-verify" style="display:none">
-      <div style="text-align:center;padding:8px 0 4px">
-        <div style="font-size:36px;margin-bottom:10px"><i class="ph ph-envelope"></i></div>
-        <div style="font-family:var(--font-d);font-size:18px;color:var(--ink);margin-bottom:8px">Check Your Email</div>
-        <p style="font-size:12.5px;color:var(--ink-60);line-height:1.7;margin-bottom:20px">
-          We sent a verification link to <strong id="verify-email-display"></strong>.<br>
-          Click the link in the email to activate your account, then return here to sign in.
-        </p>
-        <button class="btn-gold" style="width:100%" onclick="showSignin()">Back to Sign In</button>
-        <div style="margin-top:12px;font-size:11px;color:var(--ink-35)">Didn't receive it? Check spam, or <span role="button" tabindex="0" onclick="resendVerification()" onkeydown="if(event.key==='Enter')resendVerification()" style="color:var(--gold);cursor:pointer;text-decoration:underline">resend</span></div>
-        <div class="login-err" id="verify-err"></div>
+        <!-- FORGOT PASSWORD FORM -->
+        <div id="login-forgot" style="display:none">
+          <h1 class="si-h">Reset your password.</h1>
+          <p class="si-sub">Enter your email to receive a password reset link.</p>
+          <div class="login-field">
+            <label for="forgot-email">Email address</label>
+            <input id="forgot-email" type="email" placeholder="name@organization.gov" autocomplete="email" onkeydown="if(event.key==='Enter')sendPasswordReset()">
+          </div>
+          <button type="button" class="si-btn" onclick="sendPasswordReset()">Send Reset Link</button>
+          <div class="login-err" id="forgot-err" role="alert"></div>
+          <p class="si-new"><button type="button" class="si-accent" onclick="showSignin()"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to sign in</button></p>
+        </div>
+
+        <!-- EMAIL VERIFICATION PENDING -->
+        <div id="login-verify" style="display:none">
+          <h1 class="si-h">Check your email.</h1>
+          <p class="si-sub">We sent a verification link to <strong id="verify-email-display"></strong>. Click the link in the email to activate your account, then return here to sign in.</p>
+          <button type="button" class="si-btn" onclick="showSignin()">Back to Sign In</button>
+          <p class="si-new">Didn't receive it? Check spam, or <button type="button" class="si-accent" onclick="resendVerification()">resend</button></p>
+          <div class="login-err" id="verify-err" role="alert"></div>
+        </div>
       </div>
-    </div>
+    </main>
   </div>
-  <div class="login-footer">Providence Consulting Firm</div>
 </div>
 
 <!-- ══════════════════════════════════════════
