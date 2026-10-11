@@ -8,8 +8,10 @@ const SUITES=['training','uat','command-center','jira','sweep'];
 (async()=>{
   const only=process.argv[2];let failed=0;const lines=[];
   if(!only||only==='engine'){
-    try{execFileSync(process.execPath,[path.join(__dirname,'engine.test.js')],{stdio:'inherit'});lines.push('engine: passed');}
-    catch(e){failed++;lines.push('engine: FAILED');}
+    for(const u of ['engine.test.js','tracker.test.js']){
+      try{execFileSync(process.execPath,[path.join(__dirname,u)],{stdio:'inherit'});lines.push(u.replace('.test.js','')+': passed');}
+      catch(e){failed++;lines.push(u.replace('.test.js','')+': FAILED');}
+    }
   }
   for(const s of SUITES){
     if(only&&only!==s)continue;

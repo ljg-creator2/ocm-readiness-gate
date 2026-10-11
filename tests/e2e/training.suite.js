@@ -186,6 +186,45 @@ module.exports=async function(t){
     await pg.context().close();
   }
 
+  // ── Delivery tracker import (fictional workbook) ──
+  {
+    const XLSX=require('xlsx');const {sheets}=require('../fixtures/tracker-sample.js');
+    const wb=XLSX.utils.book_new();const sh=sheets();Object.keys(sh).forEach(n=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sh[n],{cellDates:true}),n.slice(0,31)));
+    const buffer=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+    pg=await t.page({wait:2000});
+    const okT=(n,c,d)=>ok('Tracker import',n,c,d);
+    await ev(pg,()=>landingToDemo());await wait(2500);
+    // Leaving view-only without a reload: clear the demo's disabled buttons as a fresh page would have them.
+    await ev(pg,()=>{setDemoMode(false);isReadOnly=false;document.body.classList.remove('readonly-mode');document.querySelectorAll('button[disabled]').forEach(x=>{x.disabled=false;x.style.opacity='';x.style.cursor='';});sbNav('initiatives');});await wait(600);
+    const before=await ev(pg,()=>({rel:releases.length,proj:releases.reduce((a,r)=>a+r.projects.length,0)}));
+    await pg.click('text=Import delivery tracker');await wait(300);
+    okT('Apply is disabled until a file is read',await ev(pg,()=>document.getElementById('tr-dlg-save').disabled));
+    await pg.setInputFiles('#trk-file',{name:'tracker.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer});
+    await pg.waitForSelector('#trk-plan h3');
+    const pv=await ev(pg,()=>({txt:document.getElementById('trk-plan').innerText,sel:document.querySelectorAll('#trk-plan select').length,save:document.getElementById('tr-dlg-save').disabled}));
+    okT('Preview lists new releases and projects before anything changes',/2 new releases/.test(pv.txt)&&/3 new projects/.test(pv.txt)&&!pv.save,pv.txt.slice(0,200));
+    okT('Nothing is saved by the preview',await ev(pg,b=>releases.length===b.rel,before));
+    okT('Unmatched rows ask for a project, with a suggestion',pv.sel===2&&/Use suggestion: Benefit Notices P1/.test(pv.txt));
+    await pg.click('#trk-plan >> text=Use suggestion: Benefit Notices P1');
+    await pg.click('#tr-dlg-save');await wait(500);
+    const after=await ev(pg,()=>{const r=releases.find(x=>x.name==='FY2027R1101');const p=r&&r.projects.find(x=>x.name==='Benefit Notices P1');
+      return{rel:releases.length,hold:!!releases.find(x=>x.name==='Release TBD'&&x.holding),golive:p&&p.golive,poc:p&&p.resources.ocm_train.map(x=>x.name).join(','),lead:p&&p.tracker.leadReviewPct,del:p&&p.training.deliverables.map(d=>d.title+':'+d.state).sort().join('|'),alias:p&&p.tracker.aliases.length};});
+    okT('Applied: releases, holding area, go-live, owners and lead review %',after.rel===before.rel+2&&after.hold&&after.golive==='2026-11-01'&&after.poc==='Alex Rivera,Sam Lee'&&after.lead===50,JSON.stringify(after));
+    okT('Learning deliverables added with tracker status, and the chosen match remembered',after.del==='job aid:in_review|micro-learning:draft'&&after.alias===1,JSON.stringify(after));
+    await ev(pg,()=>{const r=releases.find(x=>x.name==='FY2027R1101');openProjectFromPortfolio(r.id,r.projects.find(x=>x.name==='Benefit Notices P1').id,'milestones');});await pg.waitForSelector('#psec-milestones.active',{timeout:10000});await wait(300);
+    okT('Milestones shows the tracker checklist with sign-off gates',await ev(pg,()=>{const t=document.getElementById('tr-milestones').innerText;return /Training plan checklist/.test(t)&&/Lead review: 50%/.test(t)&&/Signed/.test(t)&&!/Review Jiras/.test(t);}));
+    await ev(pg,()=>showPGroup('brief'));await wait(300);
+    okT('Decision brief shows the lead review % separately from the readiness measures',await ev(pg,()=>/Lead review \(delivery tracker\): 50%/.test(document.getElementById('proj-brief').innerText)));
+    await ev(pg,()=>{sbNav('initiatives');trTrackerImport();});await wait(300);
+    await pg.setInputFiles('#trk-file',{name:'tracker.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer});await pg.waitForSelector('#trk-plan h3');
+    okT('Importing the same file again creates nothing new',await ev(pg,()=>{const t=document.getElementById('trk-plan').innerText;return !/new release|new project/.test(t)&&/3 unchanged/.test(t)&&document.querySelectorAll('#trk-plan select').length===1;}));
+    await ev(pg,()=>trCloseDialog());
+    await ev(pg,()=>{enableReadOnly();applyReadOnlyRestrictions();});
+    okT('View-only cannot import',await ev(pg,()=>{const b=document.querySelector('.tr-trk-btn');trTrackerImport();return b.disabled&&document.getElementById('tr-dlg').hidden!==false;}));
+    okT('No JS errors',pg._errs.length===0,pg._errs.join(' | '));
+    await pg.context().close();
+  }
+
   // ── Sign-in drawer over the landing page ──
   pg=await t.page({wait:1500});
   await pg.focus('.ld-signin');await pg.click('.ld-signin');await wait(400);

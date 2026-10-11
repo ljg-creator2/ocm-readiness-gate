@@ -53,6 +53,11 @@ Open it from **Initiatives → Benefits Modernization → Benefits Renewal Notic
   - a scenario passed only in QA or UAT
   - delivery is planned on a maintenance day
 
+## Delivery tracker import (signed-in workspace)
+1. On **Initiatives**, select **Import delivery tracker** and choose your workbook.
+2. Review what will change: new releases and projects, updated go-live dates, sizes, owners and status, learning deliverables, and your lead review %. Pick a project for any Delivery Tracker row whose name doesn't match. AdoptIQ remembers each choice.
+3. Select **Apply changes**. Each project's checklist appears under **Delivery & Capacity → Milestones**, and your lead review % shows on the decision brief, separate from the readiness measures.
+
 ## Try it with editing on
 Sign in to a workspace, or use a copy of the demo with editing enabled. Then:
 1. Add a dependency.

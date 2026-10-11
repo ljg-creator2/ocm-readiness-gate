@@ -102,7 +102,7 @@ function renderProjBrief(){
     +'<h2 class="erb-pos" id="trb-h">'+esc(b.rec.label)+(String(b.rec.label).toLowerCase()===String((TE.READY_STATES[b.rec.state]||{}).label||'').toLowerCase()?'':' '+trChip(b.rec.state))+'</h2>'
     +'<p class="trb-narr"><strong>Material development</strong> <button type="button" class="trb-state" onclick="goPTab(\'milestones\')">'+trChip(b.dev.state,b.dev.label)+'</button> <strong>Training delivery</strong> <button type="button" class="trb-state" onclick="trExplain(\'delivery\')">'+trChip(b.del.state)+'</button></p>'
     +'<p class="ev-line"><strong>Decision needed:</strong> '+esc(b.decision)+' <strong>Decision authority:</strong> '+esc(b.authority)+'</p>'
-    +'<p class="ev-line"><strong>Evidence last updated:</strong> '+trD(b.lastEvidence)+' · <strong>Last review:</strong> '+trD(b.lastReview)+(trCanEdit()?' <button type="button" class="btn-text" onclick="trMarkReviewed()">Mark reviewed today</button>':'')+'</p></div>'
+    +'<p class="ev-line"><strong>Evidence last updated:</strong> '+trD(b.lastEvidence)+' · <strong>Last review:</strong> '+trD(b.lastReview)+(trCanEdit()?' <button type="button" class="btn-text" onclick="trMarkReviewed()">Mark reviewed today</button>':'')+'</p>'+(p.tracker&&p.tracker.leadReviewPct!=null?'<p class="ev-line"><strong>Lead review (delivery tracker):</strong> '+p.tracker.leadReviewPct+'% of sign-off gates · imported '+trD(p.tracker.importedAt)+'</p>':'')+'</div>'
     +'<div class="trb-measures">'+['input','material','delivery','ability'].map(k=>trMeasureMini(m[k])).join('')+'</div></div>'
     +'<div class="trb-grid">'
     +'<div><h3 class="erb-h">What is blocked and why</h3>'+li(b.blocked,r=>'<li><button type="button" class="trb-link" onclick="'+open(r.kind,r.id)+'">'+trChip('blocked','Blocked')+' <span>'+esc(r.text)+'</span></button></li>','No critical condition is blocking delivery.')
@@ -473,7 +473,7 @@ function trRenderMilestones(){
   const head=TE.GATED_ACTIVITIES.map(k=>'<th scope="col">'+esc((TE.ACTIVITIES.find(x=>x.key===k)||{}).label)+'</th>').join('');
   const cell=a=>'<td title="'+esc(a.blockers.map(b=>b.text).join('; '))+'">'+trChip(a.ok?(a.conditional?'conditional':'ready'):'blocked',a.ok?(a.conditional?'Conditions':'Can start'):'Blocked')+(a.ok?'':'<div class="tr-sub">'+esc(a.blockers.map(b=>b.text).slice(0,1).join(''))+'</div>')+'</td>';
   const rules=t.entryRules||TE.defaultEntryRules();
-  el.innerHTML='<p class="tr-help tr-lead">Each deliverable moves through these activities on its own schedule. A blocked exercise does not hold up unrelated materials, and development can proceed while delivery waits.</p>'
+  el.innerHTML=trTrackerChecklist(p)+'<p class="tr-help tr-lead">Each deliverable moves through these activities on its own schedule. A blocked exercise does not hold up unrelated materials, and development can proceed while delivery waits.</p>'
     +(ms.risks.length?'<div class="tr-flag" role="status"><strong>Proposed schedule changes for your review</strong><ul class="tr-ul">'+ms.risks.map(r=>'<li>'+esc(r.text)+'</li>').join('')+'</ul></div>':'')
     +(ms.rows.length?'<div class="dt-wrap"><table class="dt tr-table tr-ms"><thead><tr><th scope="col">Deliverable</th>'+head+'<th scope="col">Planned</th><th scope="col">Actual</th></tr></thead><tbody>'+ms.rows.map(r=>
       '<tr><td><button type="button" class="tr-rowlink" onclick="trEditDeliverable('+trQ(r.d.id)+')">'+esc(r.d.title)+'</button><div class="tr-sub">'+trChip(r.d.state,TE.delivStateLabel(r.d.state))+'</div></td>'+r.acts.map(cell).join('')
@@ -645,4 +645,59 @@ function trEnvChainDialog(){
     const deps=TE.envChain(v.envName,v.neededBy,v.scenarioIds);deps.forEach(d=>{d.created=trToday();t.dependencies.push(d);});
     TE.log(p,{type:'dependency',text:'Readiness steps added for '+v.envName+' (needed by '+v.neededBy+')'},trCtx(p));
     trSaved('Five readiness steps added under Dependencies & Evidence.');},{saveLabel:'Add five steps'});
+}
+
+// ════════════ DELIVERY TRACKER IMPORT ════════════
+// Upload the lead's tracker workbook, review every change, then apply. Rules live in js/tracker-import.js.
+let _trk=null;
+function trTrackerImport(){
+  if(!trCanEdit())return;_trk=null;
+  trDialog('Import delivery tracker','<p class="tr-help">Choose your delivery tracker workbook (.xlsx). AdoptIQ reads the Projects tab, each project tab and the Delivery Tracker tab, then shows every change before anything is saved. Your tracker owns dates, owners, status and sign-offs; AdoptIQ keeps its own evidence. Nothing is deleted.</p>'
+    +'<div class="tr-f"><label for="trk-file">Tracker workbook</label><input type="file" id="trk-file" accept=".xlsx,.xlsm,.xls" onchange="trTrkFile(this.files[0])"></div><div id="trk-plan" aria-live="polite"></div>',trTrkApply,{saveLabel:'Apply changes'});
+  const b=document.getElementById('tr-dlg-save');if(b)b.disabled=true;
+}
+async function trTrkFile(file){
+  const out=document.getElementById('trk-plan');if(!file||!out)return;
+  if(!window.XLSX){out.innerHTML='<p class="tr-dlg-err">The spreadsheet reader is still loading. Try again in a moment.</p>';return;}
+  out.innerHTML='<p class="tr-help">Reading '+esc(file.name)+'…</p>';
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});const sheets={};
+    wb.SheetNames.forEach(n=>{sheets[n]=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''});});
+    const parsed=TI.read(sheets);_trk=TI.plan(parsed,releases);_trk.file=file.name;
+    out.innerHTML=trTrkRender(_trk);const b=document.getElementById('tr-dlg-save');if(b)b.disabled=!(_trk.projects.length||_trk.deliverables.length);
+  }catch(e){_trk=null;out.innerHTML='<p class="tr-dlg-err">Could not read that file: '+esc(e.message)+'</p>';}
+}
+function trTrkRender(pl){
+  const c=pl.counts;const projOpts=[...new Set(pl.projects.map(p=>p.name).concat([].concat(...releases.map(r=>(r.projects||[]).map(p=>p.name)))))].sort();
+  const proj=pl.projects.filter(p=>p.isNew||p.move||p.changes.length).map(p=>'<li><strong>'+esc(p.name)+'</strong> <span class="tr-sub">'+(p.isNew?'New project in '+esc(p.release):p.move?'Moves from '+esc(p.existing.relName)+' to '+esc(p.release):esc(p.release))+'</span>'
+    +(p.changes.length?'<ul class="tr-ul">'+p.changes.map(x=>{const fv=v=>x.field==='golive'&&v?trD(v):v;return'<li>'+esc(x.label)+': '+(x.from?esc(fv(x.from))+' → ':'')+'<strong>'+esc(fv(x.to))+'</strong></li>';}).join('')+'</ul>':p.isNew?'':'<span class="tr-sub">No changes</span>')+'</li>').join('');
+  const changed=pl.projects.filter(p=>p.isNew||p.move||p.changes.length);const same=pl.projects.length-changed.length;
+  const un=pl.unmatched.map((u,i)=>'<li class="trk-un"><label for="trk-u-'+i+'"><strong>'+esc(u.row)+'</strong>'+(u.adhoc?' <span class="tr-sub">Ad-hoc work, skipped unless you choose a project</span>':'')+'</label>'
+    +'<select id="trk-u-'+i+'"><option value="">Skip this row</option>'+projOpts.map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('')+'</select>'
+    +(u.suggest?' <button type="button" class="btn-text" onclick="document.getElementById(\'trk-u-'+i+'\').value='+esc(trQ(u.suggest))+'">Use suggestion: '+esc(u.suggest)+'</button>':'')+'</li>').join('');
+  return'<h3 class="tr-fs">What will change</h3><p>'+[c.newReleases?c.newReleases+' new release'+(c.newReleases===1?'':'s'):'',c.newProjects?c.newProjects+' new project'+(c.newProjects===1?'':'s'):'',
+      c.changedProjects?c.changedProjects+' project'+(c.changedProjects===1?'':'s')+' updated':'',c.deliverables?c.deliverables+' learning deliverable'+(c.deliverables===1?'':'s')+' matched':'',same?same+' unchanged':''].filter(Boolean).join(' · ')+'</p>'
+    +(pl.warnings.length?'<div class="tr-flag"><strong>Could not read everything</strong><ul class="tr-ul">'+pl.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')+'</ul></div>':'')
+    +(changed.length?'<details open><summary>Projects ('+changed.length+')</summary><ul class="tr-ul">'+pl.projects.filter(p=>p.isNew||p.move||p.changes.length).map(p=>proj.split('</li><li>')[0]&&'').join('')+proj+'</ul></details>':'<p class="tr-help">No project changes.</p>')
+    +(pl.deliverables.length?'<details><summary>Learning deliverables matched to a project ('+pl.deliverables.length+')</summary><ul class="tr-ul">'+pl.deliverables.map(d=>'<li>'+esc(d.row)+' → '+esc(d.project)+'</li>').join('')+'</ul></details>':'')
+    +(pl.unmatched.length?'<h3 class="tr-fs">Choose a project for these rows</h3><p class="tr-help">These Delivery Tracker rows use a name that does not match a project. Pick the project once and AdoptIQ remembers it for next time.</p><ul class="tr-ul trk-unlist">'+un+'</ul>':'');
+}
+function trTrkApply(){
+  if(!_trk)return'Choose your tracker workbook first.';if(!trCanEdit())return'View-only.';
+  const choices={};_trk.unmatched.forEach((u,i)=>{const v=(document.getElementById('trk-u-'+i)||{}).value;if(v)choices[u.key]=v;});
+  const res=TI.apply(_trk,releases,{newRelease:n=>newRelease(n,[],'',''),newProject:n=>newProject(n,[],0),migrate:p=>migrateResources(p),TE,ctx:{by:(window._cc&&_cc.userName)||''},today:trToday()},choices);
+  releases.forEach(r=>{r.modified=new Date().toISOString();});schedSave();
+  if(typeof renderPortfolio==='function')try{renderPortfolio();}catch(e){}
+  if(document.getElementById('v-project').classList.contains('active'))trRefresh();
+  _trk=null;
+  showSuccess('Tracker imported: '+[res.releases?res.releases+' release'+(res.releases===1?'':'s')+' added':'',res.projects?res.projects+' project'+(res.projects===1?'':'s')+' added':'',res.updated?res.updated+' updated':'',res.moved?res.moved+' moved':'',(res.deliverables+res.deliverablesUpdated)?(res.deliverables+res.deliverablesUpdated)+' deliverable'+((res.deliverables+res.deliverablesUpdated)===1?'':'s'):''].filter(Boolean).join(', ')+'.');
+}
+// The lead's checklist from the tracker, shown under Delivery & Capacity → Milestones.
+function trTrackerChecklist(p){
+  const tk=p.tracker;if(!tk||!Array.isArray(tk.gates)||!tk.gates.length)return'';
+  const rows=tk.gates.filter(g=>!/^n\/?a$/i.test(g.status));
+  return'<section class="panel tr-panel"><div class="panel-hd"><div><div class="pt">Training plan checklist</div><div class="ps-text">From your delivery tracker, imported '+trD(tk.importedAt)+'. Lead review: '+(tk.leadReviewPct!=null?tk.leadReviewPct+'% of sign-off gates':'not given')+'. Update it in the tracker and import again.</div></div></div><div class="pb">'
+    +'<div class="dt-wrap"><table class="dt tr-table"><thead><tr><th scope="col">Item</th><th scope="col">Planned due</th><th scope="col">Status</th><th scope="col">Lead reviewed</th></tr></thead><tbody>'
+    +rows.map(g=>'<tr><td>'+esc(g.name)+(g.gate?'<div class="tr-sub">Sign-off gate</div>':'')+'</td><td class="mono'+(g.due&&g.due<trToday()&&!/complete/i.test(g.status)?' tr-late':'')+'">'+trD(g.due)+'</td><td>'+esc(g.status||'—')+'</td><td>'+(g.gate?(g.reviewed?trChip('ready','Signed'):trChip('awaiting','Not yet')):'—')+'</td></tr>').join('')
+    +'</tbody></table></div></div></section>';
 }

@@ -23,6 +23,7 @@ All UI work must follow `docs/ADOPTIQ_DESIGN_SYSTEM.md` and the approved mockups
 - An accepted exception needs rationale, approver and date and is never shown as Satisfied. A dependency or workflow change flags linked work for review; nothing is ever validated automatically.
 - Training gives a recommendation; release governance decides. Entry conditions are suggested defaults, not SOP mandates.
 - Environments are settings, not code: each release keeps its list (`r.trEnv`) and recorded deployments and refreshes. A deployment or refresh marks earlier passing scenario runs in that environment for a re-run. A pass in QA or UAT never validates a learner scenario. Do not hard-code one client's environment names, teams or maintenance windows.
+- Delivery tracker import (`js/tracker-import.js`, pure): the lead's tracker owns dates, owners, status and sign-offs; AdoptIQ owns evidence, which the import never touches. Every change is previewed before it applies, nothing is deleted, "TBD" releases go to a "Release TBD" holding area, and unmatched rows are chosen by a person (choices are remembered). Never commit a real tracker.
 - Gate completion (share of criteria marked met) is labelled "Gate completion (legacy)" and must not be presented as readiness.
 - Project navigation has eight primary tabs (`TR_GROUPS` in `js/training-ui.js`); every legacy tab id still works through `goPTab` and `openProjectFromPortfolio`.
 
