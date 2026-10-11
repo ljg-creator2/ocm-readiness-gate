@@ -57,11 +57,13 @@ async function openPage(browser,base,opts={}){
     if(/supabase-js/.test(u))return route.fulfill({status:200,contentType:'application/javascript',body:'/* stubbed in tests */'});
     return route.abort();
   });
+  // Smooth scrolling moves click targets mid-click; tests scroll instantly.
+  await pg.addInitScript(()=>{document.addEventListener('DOMContentLoaded',()=>{const st=document.createElement('style');st.textContent='html,body,*{scroll-behavior:auto!important}';document.head.appendChild(st);});});
   if(opts.theme)await pg.addInitScript(th=>{try{localStorage.setItem('ocm_theme',th);}catch(e){}},opts.theme);
   // Bring each click target to the middle of the screen first, so fixed elements at the
   // screen edge (the floating help button, toasts) never sit on top of it.
   const click=pg.click.bind(pg);
-  pg.click=async(sel,o)=>{await pg.locator(sel).first().evaluate(e=>e.scrollIntoView({block:'center',inline:'center'})).catch(()=>{});return click(sel,o);};
+  pg.click=async(sel,o)=>{await pg.locator(sel).first().evaluate(e=>e.scrollIntoView({block:'center',inline:'center',behavior:'instant'})).catch(()=>{});return click(sel,o);};
   await pg.goto(base+'/index.html');await pg.waitForTimeout(opts.wait||1200);
   return pg;
 }
