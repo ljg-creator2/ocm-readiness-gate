@@ -227,12 +227,12 @@ async function resendVerification(){
 }
 
 async function sendPasswordReset(){
-  document.getElementById('forgot-err').textContent='';
+  document.getElementById('forgot-err').textContent='';document.getElementById('forgot-err').classList.remove('is-ok');
   const email=document.getElementById('forgot-email').value.trim();
   if(!email){document.getElementById('forgot-err').textContent='Please enter your email.';return;}
   const{error}=await _supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'?reset=true'});
   if(error){document.getElementById('forgot-err').textContent=error.message;return;}
-  document.getElementById('forgot-err').textContent='Check your email for a password reset link.';
+  const fe=document.getElementById('forgot-err');fe.textContent='Check your email for a password reset link.';fe.classList.add('is-ok');
   setTimeout(()=>showSignin(),2000);
 }
 
@@ -1464,7 +1464,15 @@ function showProjTab(id,btn){
   if(id==='adopthm')renderPAHM();
   if(id==='impact')renderPImpact();
   if(id==='gaps')renderPGaps();
-  if(id==='postlaunch')renderPPostLaunch();
+  if(id==='postlaunch'){
+    // Post-launch tracking is hidden until go-live; links from the Command Center and section pages can still land here.
+    const sec=document.getElementById('psec-postlaunch'),p=getProj(),gl=p&&projGoLive(p);
+    if(sec&&sec.style.display==='none'){
+      sec.style.display='';
+      const el=document.getElementById('ptab-postlaunch');
+      if(el)el.innerHTML='<div class="es"><div class="es-rule"></div><p class="es-txt">Post-launch tracking starts after go-live'+(gl?' on '+esc(ccFmt(gl))+', '+esc(String(gl).slice(0,4)):'')+'. Set or confirm the go-live date on the Overview tab.</p></div>';
+    }else renderPPostLaunch();
+  }
   if(id==='sustain')renderPSustain();
   if(id==='trainplan')renderPTrainPlan();
   if(id==='pulse')renderPPulse();
@@ -2685,8 +2693,8 @@ function removeProjAgency(a){
 function updateTRButtons(){
   const p=getProj();if(!p)return;
   const yes=document.getElementById('tr-yes');const no=document.getElementById('tr-no');
-  if(yes){yes.style.background=p.trainingRequired?'var(--green)':'transparent';yes.style.color=p.trainingRequired?'#fff':'rgba(255,255,255,0.40)';}
-  if(no){no.style.background=!p.trainingRequired?'var(--red)':'transparent';no.style.color=!p.trainingRequired?'#fff':'rgba(255,255,255,0.40)';}
+  if(yes){yes.style.background=p.trainingRequired?'var(--green)':'transparent';yes.style.color=p.trainingRequired?'#fff':'rgba(255,255,255,0.72)';}
+  if(no){no.style.background=!p.trainingRequired?'var(--red)':'transparent';no.style.color=!p.trainingRequired?'#fff':'rgba(255,255,255,0.72)';}
   const tsField=document.getElementById('ib-train-start');
   if(tsField)tsField.style.display=p.trainingRequired?'':'none';
 }

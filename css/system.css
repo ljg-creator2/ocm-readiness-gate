@@ -83,7 +83,7 @@
   --color-border:var(--light-border);
   --color-text-primary:var(--charcoal-navy);
   --color-text-secondary:var(--slate);
-  --color-text-muted:#8A929D;
+  --color-text-muted:var(--slate);  /* was #8A929D (3.1:1); Slate passes AA */
   --color-success:var(--teal-text); --color-success-bg:var(--teal-tint);
   --color-watch:var(--ochre-gold); --color-watch-text:var(--ochre-text); --color-watch-bg:var(--ochre-tint);
   --color-risk:var(--brick-red); --color-risk-text:var(--brick-red); --color-risk-bg:var(--brick-tint);
@@ -105,7 +105,7 @@
   --bg:var(--bg-app); --bg-deep:var(--bg-app); --bg-dark:var(--light-border);
   --surface:var(--bg-card); --surface-2:#F8F6F2;
   --border:var(--light-border); --border-md:#D6D3CC;
-  --ink:var(--charcoal-navy); --ink-60:var(--slate); --ink-35:#8A929D;
+  --ink:var(--charcoal-navy); --ink-60:var(--slate); --ink-35:var(--slate);
   --shadow:var(--shadow-card); --shadow-lg:var(--shadow-pop);
   --nav-bg:var(--midnight-navy); --nav-text:rgba(255,255,255,0.82); --nav-active:#fff;
 }
@@ -513,3 +513,94 @@ button.cc-li-t:hover{text-decoration:underline}
 :root:not([data-theme="dark"]) body.app-shell #pf-section,
 :root:not([data-theme="dark"]) body.app-shell .proj-body,
 :root:not([data-theme="dark"]) body.app-shell .rel-body{background:var(--bg-app)}
+
+/* Toasts sit above the "What should I do next?" button instead of on top of it */
+.toast{bottom:92px}
+@media (max-width:760px){.toast{bottom:84px;left:16px;right:16px}}
+
+/* ════════════════════════════════════════════════════════════════════════
+   DARK MODE (app pages). The landing and sign-in pages are fixed brand
+   surfaces and keep their approved colours in both themes.
+   Inside the app, navy text tokens flip to light tones and the brand
+   surfaces become the dark-theme surfaces.
+   ════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"]{
+  --bg-app:#06131F; --bg-card:#0C2034; --bg-greeting:#0C2034;
+}
+[data-theme="dark"] #v-portfolio,[data-theme="dark"] #v-release,[data-theme="dark"] #v-project,
+[data-theme="dark"] .modal,[data-theme="dark"] .modal-overlay,[data-theme="dark"] .cc-pop,[data-theme="dark"] .cc-results,[data-theme="dark"] .sb-tools{
+  --midnight-navy:#F2F4F8; --deep-navy:#C9D6E6; --charcoal-navy:#E8EAF0; --ink:#E8EAF0; --slate:#A9B3C1;
+  --light-border:rgba(255,255,255,0.12);
+  --navy-tint:rgba(201,214,230,0.10); --orange-tint:rgba(201,86,40,0.18); --teal-tint:rgba(23,139,135,0.20);
+  --brick-tint:rgba(166,63,50,0.24); --purple-tint:rgba(117,101,217,0.22); --ochre-tint:rgba(213,163,61,0.16);
+  --teal-text:#4FC1BC; --ochre-text:#E2BA62; --purple-text:#A79BF0;
+  --color-watch-bg:rgba(213,163,61,0.16); --color-risk-bg:rgba(166,63,50,0.24); --color-success-bg:rgba(23,139,135,0.20);
+  /* re-declare derived tokens here so they resolve against the dark values above */
+  --gold-text:var(--deep-navy); --color-ink:var(--charcoal-navy); --color-text-primary:var(--charcoal-navy);
+  --color-text-secondary:var(--slate); --color-text-muted:var(--slate); --color-border:var(--light-border);
+  --color-success:var(--teal-text); --color-watch-text:var(--ochre-text); --color-warning-text:var(--ochre-text);
+  --color-info:var(--deep-navy); --color-info-bg:var(--navy-tint); --color-warning-bg:var(--ochre-tint);
+  --color-critical-bg:var(--brick-tint); --color-fulani-blue-light:var(--navy-tint); --color-fulani-orange-light:var(--orange-tint);
+  --color-navy-ghost:var(--navy-tint); --green:var(--teal-text); --green-bg:var(--teal-tint); --amber:var(--ochre-text);
+  --amber-bg:var(--ochre-tint); --red-bg:var(--brick-tint); --ink-60:var(--slate); --ink-35:var(--slate);
+}
+[data-theme="dark"] body.app-shell,[data-theme="dark"] body.app-shell #v-portfolio,[data-theme="dark"] body.app-shell #v-release,
+[data-theme="dark"] body.app-shell #v-project,[data-theme="dark"] #v-portfolio[data-page="command"]{background:var(--bg-app)}
+[data-theme="dark"] .cc-av{background:#F2F4F8;color:#071B33}
+[data-theme="dark"] .cc-tl-i.uat .cc-tl-pin{background:#5E8FC7}
+[data-theme="dark"] .cc-search input{background:#0C2034;border-color:rgba(255,255,255,0.14);color:#E8EAF0}
+[data-theme="dark"] .cc-search input::placeholder{color:#A9B3C1}
+[data-theme="dark"] .cc-month,[data-theme="dark"] .cc-btn-o,[data-theme="dark"] .cc-tl-next{background:#0C2034;border-color:rgba(255,255,255,0.14)}
+[data-theme="dark"] .cc-month select option{background:#0C2034;color:#E8EAF0}
+[data-theme="dark"] .cc-tl-track::before{background:rgba(255,255,255,0.18)}
+[data-theme="dark"] .cc-kpi,[data-theme="dark"] .cc-card{box-shadow:none}
+[data-theme="dark"] .cc-activity .cc-li-ic.r{background:rgba(166,63,50,0.24)}
+[data-theme="dark"] .cc-li-ic.r,[data-theme="dark"] .cc-kpi-ic.r{color:#E58374}
+[data-theme="dark"] .cc-kpi-v.r{color:#E58374}
+[data-theme="dark"] .cc-kpi-s .down,[data-theme="dark"] .cc-li-d.late{color:#E58374}
+[data-theme="dark"] .smart-fab{background:#0C2034;color:#F2F4F8;border:1px solid rgba(255,255,255,0.22)}
+
+[data-theme="dark"] .page-footer{color:rgba(232,234,240,0.7)}
+/* Severity "High" badge: dark text on ochre in both themes (white on ochre is 2.3:1) */
+.sev-badge.sev-high{color:#16213A}
+/* Success toast uses the darker teal so white text passes AA */
+.toast.toast--success{background:var(--teal-text,#127370)}
+[data-theme="dark"] .toast.toast--success{background:#127370}
+
+/* QA contrast fixes (WCAG AA), using existing brand colours only */
+.info-band .ib-label{color:rgba(255,255,255,0.72)}
+.ak-sum-l{color:rgba(255,255,255,0.72)}
+.pc-name .size-badge{color:#FFFFFF;border-color:rgba(255,255,255,0.55)}
+.craid-type-badge[style*="#D5A33D"]{color:#16213A}
+.craid-add-btn[style*="#D5A33D"]{color:#8A6514!important}
+[data-theme="dark"] .craid-add-btn[style*="#D5A33D"]{color:#E2BA62!important}
+[data-theme="dark"] .craid-add-btn[style*="#0B2545"]{color:#C9D6E6!important;border-color:#C9D6E6!important}
+.erb-h,.ai-note,.alert-toggle-btn{color:var(--charcoal-navy)}
+/* QA: executive cards could not shrink below chart width (20px overflow at tablet) */
+.exec-dash-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.exec-card{min-width:0}
+@media (max-width:900px){.exec-dash-grid{grid-template-columns:minmax(0,1fr)}}
+#v-login .login-err.is-ok{color:var(--teal-text)}
+
+/* QA: landing page cards keep their approved white in both themes */
+#v-landing .ld-card{background:var(--pure-white)}
+/* QA dark-mode fixes for coloured text on dark cards */
+[data-theme="dark"] .craid-add-btn[style*="#A63F32"],[data-theme="dark"] .sig-redNote{color:#E58374!important;border-color:#E58374!important}
+[data-theme="dark"] .sig-redNote{border-color:transparent!important}
+[data-theme="dark"] .craid-add-btn[style*="#5A6B85"],[data-theme="dark"] .craid-add-btn[style*="#6b7280"]{color:#C3CAD5!important;border-color:#8C96A6!important}
+[data-theme="dark"] #v-project .btn-outline,[data-theme="dark"] #v-release .btn-outline{border-color:rgba(255,255,255,0.3)}
+[data-theme="dark"] .aiq-go{background:var(--brand-accent);color:#fff}
+[data-theme="dark"] .ic-source{color:rgba(255,255,255,0.7)}
+[data-theme="dark"] .craid-field label{color:rgba(255,255,255,0.72)}
+/* Dark mode: teal/ochre fills keep the darker shades so their white or navy labels stay legible */
+[data-theme="dark"] #tr-yes[style*="var(--green)"],[data-theme="dark"] .ss-btn.sc,[data-theme="dark"] .sev-badge.sev-low{background:#127370!important;color:#fff}
+[data-theme="dark"] .ss-btn.sp{background:var(--ochre-gold);color:#16213A}
+[data-theme="dark"] .ct-chip.active{background:#C9D6E6;border-color:#C9D6E6;color:#071B33}
+[data-theme="dark"] .ic-link,[data-theme="dark"] .sh-tab.active{color:#C9D6E6;border-bottom-color:#C9D6E6}
+[data-theme="dark"] .lh-score-val[style*="--gold"]{color:#C9D6E6!important}
+[data-theme="dark"] .lh-score-val[style*="--red"]{color:#E58374!important}
+[data-theme="dark"] .ahm-cell.high,[data-theme="dark"] .ahm-cell.high span{color:#F2F4F8}
+[data-theme="dark"] .impact-level.high,[data-theme="dark"] .hmc.r{color:#E58374}
+[data-theme="dark"] .btn-outline[style*="--red-bright"]{color:#E58374!important;border-color:#E58374!important}
+/* QA: on narrow screens the page top bar wraps; let it grow instead of spilling over the breadcrumb and tabs */
+@media (max-width:900px){.top-bar-i{height:auto;min-height:56px;flex-wrap:wrap;row-gap:8px;padding-top:8px;padding-bottom:8px}}
