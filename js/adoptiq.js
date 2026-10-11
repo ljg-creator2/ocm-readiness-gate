@@ -2026,14 +2026,14 @@ function ccActionItems(){
 }
 function ccActivity(){
   const ev=[];
-  (_cc.audit||[]).forEach(a=>ev.push({t:a.created_at,ic:'n',icon:'ph-clock-counter-clockwise',title:String(a.action||'Updated').replace(/_/g,' ')+(a.entity_type?' '+a.entity_type:''),sub:a.entity_name||''}));
+  (_cc.audit||[]).forEach(a=>ev.push({t:a.created_at,ic:'o',icon:'ph-file-text',title:String(a.action||'Updated').replace(/_/g,' ')+(a.entity_type?' '+a.entity_type:''),sub:a.entity_name||''}));
   releases.forEach(r=>{
-    (r.jiraLog||[]).forEach(j=>ev.push({t:j.at,ic:'n',icon:'ph-kanban',title:'Jira export imported',sub:r.name+(j.rows?' · '+j.rows+' issues':'')}));
+    (r.jiraLog||[]).forEach(j=>ev.push({t:j.at,ic:'o',icon:'ph-file-text',title:'Jira export imported',sub:r.name+(j.rows?' · '+j.rows+' issues':'')}));
     (r.projects||[]).forEach(p=>{
-      (p.proofPoints||[]).forEach(pp=>{if(pp.when)ev.push({t:pp.when,ic:'t',icon:'ph-seal-check',title:'Proof point logged',sub:p.name+(pp.what?' · '+pp.what:'')});});
-      (p.stakeholders||[]).forEach(sh=>{(sh.touchpoints||[]).forEach(tp=>{if(tp.date)ev.push({t:tp.date,ic:'o',icon:'ph-chat-circle-text',title:'Stakeholder feedback received',sub:sh.name+' · '+p.name});});
-        (((p.sustainment||{})[sh.id]||{}).interventions||[]).forEach(iv=>{if(iv.date)ev.push({t:iv.date,ic:'p',icon:'ph-graduation-cap',title:'Intervention '+String(iv.status||'logged').toLowerCase(),sub:sh.name+' · '+p.name});});});
-      if(p.modified)ev.push({t:p.modified,ic:'n',icon:'ph-pencil-simple',title:'Initiative status updated',sub:p.name+' · '+(p.status||'')});
+      (p.proofPoints||[]).forEach(pp=>{if(pp.when)ev.push({t:pp.when,ic:'t',icon:'ph-chart-bar',title:'Proof point logged',sub:p.name+(pp.what?' · '+pp.what:'')});});
+      (p.stakeholders||[]).forEach(sh=>{(sh.touchpoints||[]).forEach(tp=>{if(tp.date)ev.push({t:tp.date,ic:'b',icon:'ph-chat-centered',title:'Stakeholder feedback received',sub:sh.name+' · '+p.name});});
+        (((p.sustainment||{})[sh.id]||{}).interventions||[]).forEach(iv=>{if(iv.date)ev.push({t:iv.date,ic:'r',icon:'ph-warning',title:'Intervention '+String(iv.status||'logged').toLowerCase(),sub:sh.name+' · '+p.name});});});
+      if(p.modified)ev.push({t:p.modified,ic:'t',icon:'ph-chart-bar',title:'Initiative status updated',sub:p.name+' · '+(p.status||'')});
     });
   });
   const now=Date.now()+60000;
