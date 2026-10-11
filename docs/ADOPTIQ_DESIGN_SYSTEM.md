@@ -125,7 +125,7 @@ The approved brand look is the combination of editorial serif type, dark branded
 ## Command Center (approved layout; do not add sections)
 Match `design-reference/adoptiq-approved-command-center-screen.png`. Five rows:
 1. **Header:** search (releases, initiatives, stakeholder groups), month, notifications (from the alert rules), help, avatar.
-2. **Row 1, greeting and banner:** left, "GOOD MORNING, {FIRST NAME}." (Inter, burnt orange) over "Here's where your change / initiatives stand today." (Playfair 700). Right, the supplied banner `img/brand/adoptiq-greeting-banner.png` on `--bg-greeting`. Same row.
+2. **Row 1, greeting and banner:** left, "GOOD MORNING, {FIRST NAME}." (Inter, burnt orange) over "Here's where your change / initiatives stand today." (Playfair 700). Right, the signature wave as fine-line art (`img/brand/adoptiq-greeting-wave.svg`, drawn from `adoptiq-wave.svg`), transparent, no tagline. LaKenya chose to drop "People. Readiness. Real progress." here because the landing and sign-in pages already carry it. Same row.
 3. **Row 2, four KPI cards in one row:**
    - Active Initiatives (projects not Complete / On Hold)
    - Overall Readiness (average gate readiness)

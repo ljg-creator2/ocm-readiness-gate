@@ -2110,7 +2110,7 @@ function renderCommandCenter(){
     +'<button class="cc-av" id="cc-av" onclick="openProfile()" aria-label="'+(isDemoMode?'Demo workspace':'Your profile')+'">'+esc(isDemoMode?'D':(document.getElementById('sb-av')?.textContent||'·'))+'</button>'
     +'</div></header>';
   html+='<div class="cc-top"><div class="cc-greet"><div class="cc-eyebrow">'+greet+(first?', '+esc(first):'')+'.</div><h1 class="cc-h1" id="cc-h1">Here’s where your change<br>initiatives stand today.</h1></div>'
-    +'<div class="cc-banner" aria-hidden="true"><img src="img/brand/adoptiq-greeting-banner.png" alt="" width="1920" height="600"></div></div>';
+    +'<div class="cc-banner" aria-hidden="true"><img src="img/brand/adoptiq-greeting-wave.svg" alt="" width="1800" height="400"></div></div>';
   if(!releases.length){
     el.innerHTML=html+'<div class="dz-empty"><div class="dz-empty-t">No initiatives yet.</div><div class="dz-empty-d">Add a release and its projects to see readiness, risk, training, and milestones here.</div><button class="btn-gold" onclick="sbNav(\'initiatives\');openAddRelease()">Add a release</button></div>';
     return;

@@ -246,8 +246,8 @@ body.app-shell .top-bar-i{justify-content:flex-end}
 .cc-greet{padding-top:4px}
 .cc-eyebrow{font:700 15px var(--font-ui);letter-spacing:0.06em;text-transform:uppercase;color:var(--brand-accent);margin-bottom:4px}
 .cc-h1{font-family:var(--font-display);font-size:clamp(30px,3.05vw,48px);font-weight:var(--fw-display-strong);line-height:1.0;letter-spacing:-0.015em;color:var(--midnight-navy);margin:0}
-.cc-banner{background:var(--bg-greeting);border-radius:10px;overflow:hidden;height:clamp(96px,8.6vw,132px);box-shadow:var(--shadow-card)}
-.cc-banner img{display:block;width:100%;height:100%;object-fit:cover;object-position:100% 46%}
+.cc-banner{overflow:hidden;height:clamp(96px,8.6vw,132px)}
+.cc-banner img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%}
 /* Row 2: KPI cards */
 .cc-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
 .cc-kpi{background:var(--bg-card);border:1px solid var(--light-border);border-radius:8px;box-shadow:0 1px 3px rgba(7,27,51,.05);padding:11px 14px;display:flex;gap:22px;align-items:center;min-height:92px}
