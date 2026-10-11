@@ -16,6 +16,15 @@ All UI work must follow `docs/ADOPTIQ_DESIGN_SYSTEM.md` and the approved mockups
 - Never show fabricated metrics. Use real data or an empty state that says what is missing.
 - Keep AI features off for live (non-demo) data unless the client approves.
 
+## Training-led OCM model (required)
+- Training records live in `p.training` (workflows, objectives, scenarios, deliverables, dependencies, checkpoints, actions, outcomes, history). All rules are in `js/training-engine.js` (pure, no DOM); screens are in `js/training-ui.js`; the fictional demo is in `js/training-demo.js`. Run `node tests/engine.test.js` after any engine change.
+- Migration is additive and idempotent (`TE.migrate`, called from `migrateResources`). Never remove or rename legacy fields (`gateState`, `depHM`, `craid`, `postLaunch`, `sustainment`).
+- Never blend measures into one readiness score. The seven measures stay separate; a critical unmet condition always makes delivery readiness Blocked; an ADKAR Ability gap caps learner ability at Conditional. Unrated ADKAR dimensions are "Not assessed", never 3.
+- An accepted exception needs rationale, approver and date and is never shown as Satisfied. A dependency or workflow change flags linked work for review; nothing is ever validated automatically.
+- Training gives a recommendation; release governance decides. Entry conditions are suggested defaults, not SOP mandates.
+- Gate completion (share of criteria marked met) is labelled "Gate completion (legacy)" and must not be presented as readiness.
+- Project navigation has eight primary tabs (`TR_GROUPS` in `js/training-ui.js`); every legacy tab id still works through `goPTab` and `openProjectFromPortfolio`.
+
 ## Working rules
 - Build, then publish a preview. Push to GitHub only after LaKenya approves the preview.
-- Stack: a single-page app (`index.html`, `js/adoptiq.js`), no build step. Run a syntax check with `node -e "new Function(require('fs').readFileSync('js/adoptiq.js','utf8'))"`.
+- Stack: a single-page app (`index.html`, `js/adoptiq.js`, plus `js/training-*.js` and `css/training.css`), no build step. Syntax-check each script with `node -e "new Function(require('fs').readFileSync('js/adoptiq.js','utf8'))"` (repeat for the training files).

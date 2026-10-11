@@ -99,6 +99,7 @@
 <link rel="stylesheet" href="css/adoptiq.css?v=20261011qa">
 <link rel="stylesheet" href="css/brand.css?v=20261011qa">
 <link rel="stylesheet" href="css/system.css?v=20261011qa">
+<link rel="stylesheet" href="css/training.css?v=20261011t">
 </head>
 <body data-density="comfortable">
 <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -127,7 +128,7 @@
     <div class="ld-hero-i" id="ld-top">
       <div class="ld-hero-text">
         <p class="ld-eyebrow">People. Readiness. Real progress.</p>
-        <h1 class="ld-h1" id="ld-h1">Turn<br>change plans<br>into <em>real results.</em></h1>
+        <h1 class="ld-h1" id="ld-h1">Know where<br>change stands.<br><em>Know what to do next.</em></h1>
         <p class="ld-lead">AdoptIQ brings people, readiness, training, risk, and adoption into one connected workspace for change teams.</p>
         <div class="ld-ctas">
           <button class="ld-btn" onclick="landingToDemo()">Explore the Platform <i class="ph ph-arrow-right" aria-hidden="true"></i></button>
@@ -205,6 +206,7 @@
       <img class="si-wave" src="img/brand/adoptiq-wave.svg" alt="" aria-hidden="true">
     </section>
 
+    <button type="button" class="si-close" onclick="showLanding()" aria-label="Close sign-in and return to the home page"><i class="ph ph-x" aria-hidden="true"></i></button>
     <main class="si-main" id="main-login">
       <div class="si-card">
 
@@ -408,7 +410,7 @@
       <div id="exec-rag-summary" style="display:none"></div>
       <div class="exec-dash-grid stagger-children">
         <div class="exec-card">
-          <div class="exec-card-title">Overall Readiness</div>
+          <div class="exec-card-title">Gate Completion (legacy)</div>
           <div class="exec-chart-wrap"><canvas id="chart-port-readiness" role="img" aria-label="Portfolio readiness donut chart"></canvas></div>
           <p class="chart-cap" id="cap-port-readiness"></p>
         </div>
@@ -885,24 +887,39 @@
     <span class="bc-sep">›</span>
     <span class="bc-cur" id="bc-proj">Project</span>
   </div>
-  <div class="sub-nav">
+  <div class="sub-nav pg-sub-nav">
+      <nav class="pg-row" id="proj-groups" aria-label="Project areas">
+        <button type="button" class="pg-btn active" data-group="brief" onclick="showPGroup('brief')">Overview &amp; Decision Brief</button>
+        <button type="button" class="pg-btn" data-group="people" onclick="showPGroup('people')">People &amp; Learning Impacts</button>
+        <button type="button" class="pg-btn" data-group="deps" onclick="showPGroup('deps')">Dependencies &amp; Evidence</button>
+        <button type="button" class="pg-btn" data-group="learn" onclick="showPGroup('learn')">Learning Development</button>
+        <button type="button" class="pg-btn" data-group="ready" onclick="showPGroup('ready')">Readiness &amp; Gates</button>
+        <button type="button" class="pg-btn" data-group="actions" onclick="showPGroup('actions')">Actions &amp; Risks</button>
+        <button type="button" class="pg-btn" data-group="delivery" onclick="showPGroup('delivery')">Delivery &amp; Capacity</button>
+        <button type="button" class="pg-btn" data-group="adoption" onclick="showPGroup('adoption')">Adoption &amp; Sustainment</button>
+      </nav>
     <div class="sub-nav-i">
-      <nav class="nav-tabs" id="proj-nav-tabs" aria-label="Project navigation">
-        <button class="nav-btn active" onclick="showProjTab('overview',this)">Overview</button>
-        <button class="nav-btn" onclick="showProjTab('trainplan',this)">Training Timeline</button>
-        <button class="nav-btn" onclick="showProjTab('impact',this)">Impact</button>
-        <button class="nav-btn" onclick="showProjTab('gaps',this)">Gaps</button>
-        <button class="nav-btn" id="nav-adkar-btn" onclick="showProjTab('adkar',this)">ADKAR</button>
-        <button class="nav-btn" onclick="showProjTab('adoption',this)">Adoption Scoring</button>
-        <button class="nav-btn" onclick="showProjTab('adopthm',this)">Adoption Map</button>
-        <button class="nav-btn" onclick="showProjTab('gates',this)">Gate Tracker</button>
+      <nav class="nav-tabs" id="proj-nav-tabs" aria-label="Views in this area">
+        <button class="nav-btn active" onclick="showProjTab('overview',this)">Decision Brief</button>
         <button class="nav-btn" onclick="showProjTab('lifecycle',this)">Lifecycle Signals</button>
-        <button class="nav-btn" onclick="showProjTab('flags',this)">Open Issues</button>
+        <button class="nav-btn" onclick="showProjTab('impact',this)">Impact</button>
+        <button class="nav-btn" onclick="showProjTab('adoption',this)">Adoption Scoring</button>
+        <button class="nav-btn" onclick="showProjTab('deps',this)">Dependency Records</button>
         <button class="nav-btn" onclick="showProjTab('heatmap',this)">Dependency Map</button>
+        <button class="nav-btn" onclick="showProjTab('gaps',this)">Gaps</button>
+        <button class="nav-btn" onclick="showProjTab('learndev',this)">Learning Development</button>
+        <button class="nav-btn" onclick="showProjTab('readiness',this)">Readiness Measures</button>
+        <button class="nav-btn" onclick="showProjTab('gates',this)">Gate Criteria</button>
+        <button class="nav-btn" id="nav-adkar-btn" onclick="showProjTab('adkar',this)">ADKAR</button>
+        <button class="nav-btn" onclick="showProjTab('adopthm',this)">Adoption Map</button>
+        <button class="nav-btn" onclick="showProjTab('actions',this)">Actions</button>
+        <button class="nav-btn" onclick="showProjTab('flags',this)">Unmet Criteria</button>
         <button class="nav-btn" onclick="showProjTab('craid',this)">CRAID Log</button>
+        <button class="nav-btn" onclick="showProjTab('milestones',this)">Milestones</button>
+        <button class="nav-btn" onclick="showProjTab('trainplan',this)">Standard-Duration Estimate</button>
         <button class="nav-btn" onclick="showProjTab('resources',this)">Resources</button>
+        <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)">Outcomes</button>
         <button class="nav-btn" onclick="showProjTab('pulse',this)">Pulse</button>
-        <button class="nav-btn" id="nav-postlaunch" onclick="showProjTab('postlaunch',this)" style="display:none">Post-Launch</button>
         <button class="nav-btn" onclick="showProjTab('sustain',this)">Sustainment</button>
       </nav>
       <button class="btn-outline btn-pilot" id="pilot-toggle" onclick="togglePilotView()">All tabs</button>
@@ -978,18 +995,20 @@
         </div>
       </div>
       <div class="ib-stat">
-        <div class="ib-label" style="color:rgba(255,255,255,0.72);margin-bottom:8px">Overall Readiness</div>
-        <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="Composite score across ADKAR dimensions, gate completeness, and milestone health. 70+ is a solid baseline before go-live. Below 60 warrants a conversation with your sponsor." aria-label="How scoring works">ⓘ</button>
+        <div class="ib-label" style="color:rgba(255,255,255,0.72);margin-bottom:8px">Gate completion (legacy)</div>
+        <span style="font-family:var(--font-d);font-size:24px;font-weight:700;color:var(--gold-light)" id="p-gate-score">—</span><button class="score-info-btn" onclick="openScoreExplainer()" title="Share of gate criteria marked complete. This is not a readiness rating; see Readiness &amp; Gates for the separate measures." aria-label="How scoring works">ⓘ</button>
       </div>
     </div>
   </div>
   <main class="pw">
     <!-- PROJECT OVERVIEW -->
     <div class="tab-sec active" id="psec-overview">
-      <div id="proj-brief"></div>
+      <div id="proj-brief" class="tr-view"></div>
+      <details class="tr-legacy" id="p-legacy-overview">
+        <summary>Earlier overview panels <span>Gate-completion charts, forecasts and assisted recommendations. Kept for reference; the decision brief above uses recorded evidence only.</span></summary>
       <!-- Superseded by the project decision brief; kept so renderPKPIs still runs -->
       <div class="kpi-strip" style="display:none">
-        <div class="kc cn"><div class="kc-l">Overall Readiness</div><div class="kc-v" id="p-kpi-gate">—</div><div class="kc-s">Across all review checkpoints</div></div>
+        <div class="kc cn"><div class="kc-l">Gate completion (legacy)</div><div class="kc-v" id="p-kpi-gate">—</div><div class="kc-s">Across all review checkpoints</div></div>
         <div class="kc cr"><div class="kc-l">Open Issues</div><div class="kc-v" id="p-kpi-flags">0</div><div class="kc-s">Needing attention</div></div>
         <div class="kc ca"><div class="kc-l">Highest Risk Group</div><div class="kc-v sm" id="p-kpi-rg">—</div><div class="kc-s" id="p-kpi-rg-s">Affected group</div></div>
         <div class="kc cg"><div class="kc-l">Groups Monitored</div><div class="kc-v" id="p-kpi-grps">0</div><div class="kc-s">Affected populations</div></div>
@@ -1063,6 +1082,7 @@
         <div class="panel-hd"><div><div class="pt">Assigned Resources</div><div class="ps-text">Edit full resource details in the Resources tab</div></div></div>
         <div class="pb"><div class="res-qv" id="p-res-qv"><div class="es" style="padding:16px"><div class="es-rule"></div><p class="es-txt">No resources assigned. Add assignments in the Resources tab.</p></div></div></div>
       </div>
+      </details>
     </div>
     <!-- CHANGE IMPACT ASSESSMENT -->
     <div class="tab-sec" id="psec-impact">
@@ -1142,6 +1162,31 @@
       <div class="tab-head">OCM Readiness Gate Tracker</div>
       <div class="gates-grid" id="p-gates-container"></div>
     </div>
+    <div class="tab-sec" id="psec-deps">
+      <div class="tab-eye">Upstream inputs</div>
+      <div class="tab-head">Dependencies &amp; Evidence</div>
+      <div id="tr-deps" class="tr-view"></div>
+    </div>
+    <div class="tab-sec" id="psec-learndev">
+      <div class="tab-eye">Workflow to materials</div>
+      <div class="tab-head">Learning Development</div>
+      <div id="tr-learndev" class="tr-view"></div>
+    </div>
+    <div class="tab-sec" id="psec-readiness">
+      <div class="tab-eye">Separate measures, explicit states</div>
+      <div class="tab-head">Readiness Measures</div>
+      <div id="tr-readiness" class="tr-view"></div>
+    </div>
+    <div class="tab-sec" id="psec-actions">
+      <div class="tab-eye">One record per piece of work</div>
+      <div class="tab-head">Actions</div>
+      <div id="tr-actions" class="tr-view"></div>
+    </div>
+    <div class="tab-sec" id="psec-milestones">
+      <div class="tab-eye">Dependency-based schedule</div>
+      <div class="tab-head">Delivery Milestones</div>
+      <div id="tr-milestones" class="tr-view"></div>
+    </div>
     <!-- LIFECYCLE SIGNALS -->
     <div class="tab-sec" id="psec-lifecycle">
       <div class="tab-eye">SDLC Intelligence</div>
@@ -1153,15 +1198,15 @@
       <div class="tab-eye">Workstream Intelligence</div>
       <div class="tab-head">Upstream Dependency Heat Map</div>
       <div class="panel">
-        <div class="panel-hd"><div><div class="pt">Readiness Dependencies by Gate and Workstream</div><div class="ps-text">Click any cell to cycle status. Shift-click to add a note.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Dependencies by Phase and Workstream</div><div class="ps-text">A summary of the dependency records. Select a cell to open its record, or to add one for that phase and workstream.</div></div></div>
         <div class="pb">
-          <div class="hm-scroll"><table class="hm-tbl" id="p-dep-hm"></table></div>
+          <div class="hm-scroll tr-view"><table class="hm-tbl" id="p-dep-hm"></table></div>
           <div class="hm-leg">
             <span class="hm-leg-l">Legend</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--bg-deep);border:1px dashed var(--border-md)"></span>Not Started</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--green-bg);border:1px solid var(--color-success)"></span>Complete</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--amber-bg);border:1px solid var(--color-warning)"></span>Partial</span>
-            <span class="leg-i"><span class="leg-sw" style="background:var(--red-bg);border:1px solid var(--color-critical)"></span>Blocking</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--bg-deep);border:1px dashed var(--border-md)"></span>None recorded or awaiting</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--green-bg);border:1px solid var(--color-success)"></span>Satisfied</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--amber-bg);border:1px solid var(--color-warning)"></span>Partial or accepted exception</span>
+            <span class="leg-i"><span class="leg-sw" style="background:var(--red-bg);border:1px solid var(--color-critical)"></span>Blocked</span>
           </div>
         </div>
       </div>
@@ -1202,7 +1247,7 @@
       <div class="tab-eye">Training Delivery</div>
       <div class="tab-head">Training Timeline by Size</div>
       <div class="panel">
-        <div class="panel-hd"><div><div class="pt">UAT Complete to Last Cohort</div><div class="ps-text">Build, review, edits, Train the Trainer, trainer readiness, and delivery in business days, calculated from the project's size, course length, and audiences in scope. Planning baselines, not commitments.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">Standard-duration estimate</div><div class="ps-text">A sizing estimate only. Dependency-based milestones are under Delivery &amp; Capacity → Milestones. Build, review, edits, Train the Trainer, trainer readiness, and delivery in business days, calculated from the project's size, course length, and audiences in scope. Planning baselines, not commitments.</div></div></div>
         <div class="pb" id="ptab-trainplan"></div>
       </div>
     </div>
@@ -1218,11 +1263,12 @@
       </div>
     </div>
     <!-- POST-LAUNCH -->
-    <div class="tab-sec" id="psec-postlaunch" style="display:none">
-      <div class="tab-eye">Post-Deployment</div>
-      <div class="tab-head">Post-Launch Adoption Tracker</div>
+    <div class="tab-sec" id="psec-postlaunch">
+      <div class="tab-eye">Adoption outcomes</div>
+      <div class="tab-head">Outcomes</div>
+      <div id="tr-outcomes" class="tr-view"></div>
       <div class="panel">
-        <div class="panel-hd"><div><div class="pt">Post-Go-Live Monitoring</div><div class="ps-text">Track adoption metrics at 30, 60, and 90-day intervals per stakeholder group. Compare predicted readiness against actual adoption outcomes.</div></div></div>
+        <div class="panel-hd"><div><div class="pt">30/60/90-day adoption tracker</div><div class="ps-text">The earlier per-group tracker. Values entered here were imported once as observations of the “Adoption score (earlier tracker)” measure.</div></div></div>
         <div class="pb" id="ptab-postlaunch">
           <div class="es"><div class="es-rule"></div><p class="es-txt">Post-launch tracking activates after the project's go-live date.</p></div>
         </div>
@@ -1378,6 +1424,13 @@
       <input id="brand-subtitle" type="text" class="modal-inp" placeholder="Your tagline">
     </div>
     <div class="profile-field">
+      <label for="brand-orgterm">Organization term</label>
+      <select id="brand-orgterm" class="modal-inp">
+        <option value="agency">Agency</option><option value="department">Department</option><option value="business unit">Business unit</option><option value="client">Client</option>
+      </select>
+      <p class="tr-help" style="margin:4px 0 0">The word used in labels for the organizations a release or project serves. Names you have entered are not changed.</p>
+    </div>
+    <div class="profile-field">
       <label for="brand-g1">Gate Labels</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <input id="brand-g1" type="text" class="modal-inp" aria-label="Gate 1 label" placeholder="Gate 1">
@@ -1529,6 +1582,9 @@
   <span class="print-header__brand">AdoptIQ — Providence Consulting Firm</span>
   <span class="print-header__meta">Confidential</span>
 </div>
+<script src="js/training-engine.js?v=20261011t"></script>
 <script src="js/adoptiq.js"></script>
+<script src="js/training-ui.js?v=20261011t"></script>
+<script src="js/training-demo.js?v=20261011t"></script>
 </body>
 </html>
