@@ -21,6 +21,17 @@ module.exports=async function(t){
   await pg.setViewportSize({width:1536,height:1024});
   await pg.click('#v-landing .ld-nav .ld-btn-sm');await wait(400);
   ok('Landing','Request a Demo opens booking form',await pg.isVisible('#booking-modal'));
+  // Booking: if both delivery routes fail the visitor sees an error, never a false "Request Received".
+  const fillBooking=async()=>{await pg.fill('#booking-form [name=firstName]','Test');await pg.fill('#booking-form [name=lastName]','Visitor');await pg.fill('#booking-form [name=email]','test@example.gov');await pg.fill('#booking-form [name=organization]','Example Agency');};
+  await pg.route(t.base+'/',route=>route.request().method()==='POST'?route.fulfill({status:404,body:'Not found'}):route.continue());
+  await fillBooking();await pg.click('#booking-form button[type=submit]');await wait(600);
+  ok('Landing','Booking: failed delivery shows an error, not success',await pg.isVisible('#booking-error')&&!await pg.isVisible('#booking-success'));
+  let w3=null;
+  await pg.route('https://api.web3forms.com/submit',route=>{w3=JSON.parse(route.request().postData()||'{}');route.fulfill({status:200,contentType:'application/json',body:'{"success":true}'});});
+  await pg.click('#booking-form button[type=submit]');await wait(600);
+  ok('Landing','Booking: emailed request shows Request Received',await pg.isVisible('#booking-success'));
+  ok('Landing','Booking: email carries the access key, subject and fields',!!w3&&w3.access_key&&w3.subject==='New AdoptIQ walkthrough request'&&w3.email==='test@example.gov'&&w3.organization==='Example Agency'&&!('bot-field' in w3),JSON.stringify(w3));
+  await pg.unroute('https://api.web3forms.com/submit');await pg.unroute(t.base+'/');
   await ev(pg,()=>document.getElementById('booking-modal')?.remove());
   await pg.click('.ld-icon');await wait(2200);
   ok('Landing','Search icon opens demo and focuses search',await ev(pg,()=>document.activeElement?.id==='cc-q'));
