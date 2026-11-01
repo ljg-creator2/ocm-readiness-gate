@@ -121,8 +121,9 @@ function openBookingModal(){
       <h2>Book a Walkthrough</h2>
       <p>Tell us about your organization and we'll schedule a personalized demo of AdoptIQ.</p>
     </div>
-    <form id="booking-form" name="walkthrough-request" method="POST" data-netlify="true" onsubmit="return submitBooking(event)">
+    <form id="booking-form" name="walkthrough-request" method="POST" data-netlify="true" netlify-honeypot="bot-field" onsubmit="return submitBooking(event)">
       <input type="hidden" name="form-name" value="walkthrough-request">
+      <p hidden><label>Leave this empty <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
       <div class="lp-booking-fields">
         <div class="lp-booking-row">
           <div class="lp-booking-field"><label>First Name *</label><input type="text" name="firstName" required placeholder="First name" autocomplete="given-name" aria-label="First name"></div>
@@ -142,6 +143,7 @@ function openBookingModal(){
       </div>
       <button type="submit" class="lp-btn-primary" style="width:100%;margin-top:16px">Request Walkthrough</button>
       <p class="lp-booking-note">We typically respond within 1–3 business days.</p>
+      <p id="booking-error" class="lp-booking-error" role="alert" style="display:none"><i class="ph ph-warning-circle" aria-hidden="true"></i><span><strong>Not sent.</strong> Your request didn't go through. Please try again, or email info@provconsultingfirm.com.</span></p>
     </form>
     <div id="booking-success" style="display:none" class="lp-booking-success">
       <div class="lp-booking-check"><i class="ph ph-check-circle"></i></div>
@@ -154,13 +156,27 @@ function openBookingModal(){
   requestAnimationFrame(()=>modal.classList.add('open'));
   modal.addEventListener('click',function(e){if(e.target===this)this.remove();});
 }
+// Walkthrough requests are saved in Netlify Forms and emailed to info@provconsultingfirm.com
+// through Web3Forms (public key, made for client-side use). A request counts as received if
+// either one accepts it; if both fail, the visitor is told and shown the email address instead.
+const WEB3FORMS_KEY='0a162289-d6f1-4357-8e0c-db8d1b46b090';
 function submitBooking(e){
   e.preventDefault();
   const form=document.getElementById('booking-form');
-  const data=new FormData(form);
-  fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(data).toString()})
-    .then(()=>{form.style.display='none';document.getElementById('booking-success').style.display='block';})
-    .catch(()=>{form.style.display='none';document.getElementById('booking-success').style.display='block';});
+  const err=document.getElementById('booking-error');
+  const btn=form.querySelector('button[type="submit"]');
+  const fields=Object.fromEntries(new FormData(form));
+  if(fields['bot-field']){form.style.display='none';document.getElementById('booking-success').style.display='block';return false;}
+  err.style.display='none';btn.disabled=true;btn.textContent='Sending...';
+  const saved=fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(new FormData(form)).toString()}).then(r=>r.ok);
+  delete fields['form-name'];delete fields['bot-field'];
+  const emailed=fetch('https://api.web3forms.com/submit',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},
+    body:JSON.stringify(Object.assign({access_key:WEB3FORMS_KEY,subject:'New AdoptIQ walkthrough request',from_name:'AdoptIQ website'},fields))}).then(r=>r.json()).then(j=>j.success===true);
+  Promise.allSettled([saved,emailed]).then(rs=>{
+    btn.disabled=false;btn.textContent='Request Walkthrough';
+    if(rs.some(r=>r.status==='fulfilled'&&r.value===true)){form.style.display='none';document.getElementById('booking-success').style.display='block';}
+    else err.style.display='flex';
+  });
   return false;
 }
 function hideAllLoginPanels(){['login-signin','login-signup','login-forgot','login-verify'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}

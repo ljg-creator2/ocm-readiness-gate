@@ -875,6 +875,8 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--ink);font-siz
 .lp-booking-pref{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-60);cursor:pointer}
 .lp-booking-pref input[type="radio"]{accent-color:var(--gold)}
 .lp-booking-note{font-size:11px;color:var(--ink-60);text-align:center;margin-top:12px}
+.lp-booking-error{display:flex;align-items:flex-start;gap:8px;margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--red-bg);color:var(--red);font-size:12.5px;line-height:1.45}
+.lp-booking-error i{font-size:16px;flex:none;margin-top:1px}
 .lp-booking-success{text-align:center;padding:20px 0}
 .lp-booking-check{width:56px;height:56px;border-radius:50%;background:rgba(23,139,135,0.12);color:var(--green);font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
 .lp-booking-success h3{font-family:var(--font-display);font-size:20px;color:var(--ink);margin-bottom:8px}
